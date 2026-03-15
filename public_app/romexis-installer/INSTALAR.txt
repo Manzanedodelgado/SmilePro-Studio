@@ -1,0 +1,38 @@
+INSTALACIÓN DEL PROTOCOLO romexis:// — SmilePro
+================================================
+Instalar UNA VEZ en cada ordenador de la clínica.
+Después SmilePro abrirá Romexis automáticamente al
+seleccionar cualquier estudio DICOM.
+
+─── WINDOWS ─────────────────────────────────────
+
+1. Copia la carpeta "Romexis Viewer" al PC, p.ej.:
+      C:\Romexis\
+
+2. Edita  windows\launch_romexis.bat
+   Cambia la línea:
+      SET ROMEXIS_PATH=C:\Romexis\data
+   a la ruta real donde está RomexisViewer.jar
+
+3. Copia  windows\launch_romexis.bat  →  C:\Romexis\
+
+4. Doble clic en  windows\install.reg  → Sí → Aceptar
+
+5. Listo. SmilePro abrirá Romexis automáticamente.
+
+─── macOS ────────────────────────────────────────
+
+1. Abre Terminal y ejecuta:
+      bash macos/install.sh /ruta/a/datos/romexis
+
+   (la ruta es la carpeta "data" del Romexis Viewer,
+    donde está el archivo RomexisViewer.jar)
+
+2. Listo. SmilePro abrirá Romexis automáticamente.
+
+─── PRUEBA ───────────────────────────────────────
+
+Abre el navegador y escribe en la barra de direcciones:
+   romexis:///\\SERVIDOR-CLINICA\Romexis\test.dcm
+
+Debe abrirse Planmeca Romexis Viewer.

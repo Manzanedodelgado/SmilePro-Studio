@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120" fill="currentColor">
+  <!-- Tooth crown -->
+  <path d="M50 5 C35 5, 25 8, 18 15 C10 23, 8 35, 12 45 C14 50, 16 55, 18 60 C20 66, 22 72, 24 78 C26 84, 28 90, 30 96 C32 102, 34 108, 37 110 C40 112, 42 110, 43 106 C44 102, 45 97, 46 92 C47 88, 48 84, 50 82 C52 84, 53 88, 54 92 C55 97, 56 102, 57 106 C58 110, 60 112, 63 110 C66 108, 68 102, 70 96 C72 90, 74 84, 76 78 C78 72, 80 66, 82 60 C84 55, 86 50, 88 45 C92 35, 90 23, 82 15 C75 8, 65 5, 50 5Z"/>
+  <!-- Root lines (horizontal grooves on lower left) -->
+  <path d="M22 70 L38 70" stroke="white" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <path d="M24 76 L36 76" stroke="white" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <path d="M26 82 L34 82" stroke="white" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <path d="M28 88 L33 88" stroke="white" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <path d="M30 94 L34 94" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+</svg>

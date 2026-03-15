@@ -1,0 +1,3194 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email     String    @unique
+  password  String
+  name      String
+  role      UserRole  @default(auxiliary)
+  avatar    String?
+  specialty String?
+  active    Boolean   @default(true)
+  lastLogin DateTime? @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("users")
+}
+
+model ATMT_Plantillas {
+  IdPlantilla         Int       @id @default(autoincrement())
+  Descripcion         String
+  IdMotivo            Int
+  IdFormato           Int
+  PlantillaSMS        String?
+  IdDoc               Int?
+  fechareg            DateTime  @map("_fechareg")
+  AsuntoEmail         String?
+  MarcarCitaRecordada Boolean?
+  NombrePlantillaMeta String?
+  URLImagen           String?
+  IdPlantillaDefault  String?
+  Inactiva            DateTime?
+}
+
+model ATMT_Plantillas_ConectoresParams {
+  Id               Int       @id @default(autoincrement())
+  version          Int       @map("_version")
+  fechaReg         DateTime  @map("_fechaReg")
+  idUserReg        Int       @map("_idUserReg")
+  fechaModif       DateTime? @map("_fechaModif")
+  idUserModif      Int?      @map("_idUserModif")
+  Id_Plantilla     Int
+  Id_ConectorParam Int
+  Comodin          String?
+  Inactivo         DateTime?
+}
+
+model ATMT_Protocolos {
+  Id          Int      @id @default(autoincrement())
+  Nombre      String
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+  version     Int      @map("_version")
+}
+
+model ATMT_Tareas {
+  IdTarea             Int       @id @default(autoincrement())
+  IdMotivo            Int
+  IdTipoControlRecall Int?
+  IdMotivoRecall      Int?
+  IgnorarSiCita       Int
+  PrgCantidad         Int
+  PrgUnidad           Int?
+  PrgCuando           Int?
+  IdMedio             Int
+  IdPlantilla         Int
+  fechareg            DateTime  @map("_fechareg")
+  Descripcion         String
+  Inactivo            DateTime?
+  Pausado             Boolean
+  version             Int       @map("_version")
+  IdProtocolo         Int?
+  IdTareaDefault      String?
+}
+
+model Accesos {
+  IdPerfil  Int
+  Accion    String
+  Acceso    Int?
+  Limitador Int?
+  Permiso   String?
+
+  @@id([IdPerfil, Accion])
+}
+
+model AgdAccesos {
+  IdPerfil Int
+  IdUsu    Int
+  Acceso   Int?
+  Permiso  String?
+
+  @@id([IdPerfil, IdUsu])
+}
+
+model AgdNotas {
+  IdNota   Int     @id @default(autoincrement())
+  Nota     String?
+  Fecha    Int?
+  IdUsu    Int?
+  IdCentro Int?
+}
+
+model AgrupacionesFormaPago {
+  Id          Int      @id @default(autoincrement())
+  Descripcion String
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+  Guid_Tenant String
+}
+
+model AlertPac {
+  IdCentro    Int
+  IdPac       Int
+  NumAlerta   Int
+  Texto       String?
+  Marcado     Boolean
+  Id          Int      @id @default(autoincrement())
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+  Guid_Tenant String
+}
+
+model BancoMov {
+  Apunte      Int       @id @default(autoincrement())
+  IdBanco     Int?
+  Fecha       DateTime?
+  Importe     Float?
+  Concepto    String?
+  Guid_Tenant String
+}
+
+model Bancos {
+  IdBanco     Int     @id @default(autoincrement())
+  Descripcio  String?
+  IdPoblacio  Int?
+  CP          String?
+  Direccion   String?
+  Tel1        String?
+  Tel2        String?
+  TelMovil    String?
+  Fax         String?
+  Email       String?
+  Web         String?
+  Notas       String?
+  Entidad     String?
+  Oficina     String?
+  DC          String?
+  Cuenta      String?
+  Clinica     Boolean
+  SCCodSCta   String?
+  SCCodDept   String?
+  SCCodProd   String?
+  SCCodProy   String?
+  IdCentro    Int?
+  CodIBAN     String?
+  CodBIC      String?
+  Guid_Tenant String
+}
+
+model CPPoblacio {
+  CP          String
+  IdPoblacio  Int
+  Id          Int    @id @default(autoincrement())
+  Guid_Tenant String
+}
+
+model CajaFuerte {
+  IdCajaFuerte  Int      @id @default(autoincrement())
+  IdCentro      Int
+  Descripcio    String?
+  SaldoEfectivo Decimal
+  SaldoTalon    Decimal
+  version       Int      @map("_version")
+  fechareg      DateTime @map("_fechareg")
+  Guid_Tenant   String
+}
+
+model CajaFuerteDia {
+  IdCajaFuerteDia       Int       @id @default(autoincrement())
+  IdCajaFuerte          Int
+  FechaApertura         DateTime
+  FechaCierre           DateTime?
+  SaldoInicialEfectivo  Decimal
+  SaldoFinalEfectivo    Decimal
+  SaldoInicialTalon     Decimal
+  SaldoFinalTalon       Decimal
+  SaldoInicialRecepcion Decimal
+  SaldoFinalRecepcion   Decimal
+  fechareg              DateTime  @map("_fechareg")
+  version               Int       @map("_version")
+  Guid_Tenant           String
+}
+
+model Centros {
+  IdCentro                      Int       @id @default(autoincrement())
+  CodCentro                     String
+  Descripcio                    String
+  Direccion                     String?
+  IdPoblacio                    Int?
+  CP                            String?
+  Tel1                          String?
+  Tel2                          String?
+  Fax                           String?
+  Email                         String?
+  Web                           String?
+  CIF                           String?
+  Fecha_Corte                   DateTime?
+  CodSerie                      String?
+  ExpConta                      Int?
+  Delegacion                    String?
+  DescCorta                     String?
+  Comodin1                      String?
+  Comodin2                      String?
+  Comodin3                      String?
+  Comodin4                      String?
+  Comodin5                      String?
+  Comodin6                      String?
+  RutaFichMutuas                String?
+  IdClasificacionCentro         Int?
+  CodigoEmpresaPedidos          String?
+  RutFichPedidos                String?
+  version                       Int       @map("_version")
+  fechaReg                      DateTime  @map("_fechaReg")
+  idUserReg                     Int       @map("_idUserReg")
+  fechaModif                    DateTime  @map("_fechaModif")
+  idUserModif                   Int       @map("_idUserModif")
+  AOAgdGUID                     String?
+  ActivacionLiqTrabajosProtesis DateTime?
+  Guid                          String
+  TipoDocIdent                  Int
+  Id_GDPRProfile                Int
+  Id_UserDirector               Int?
+  Gestionable                   Int
+  Guid_Tenant                   String
+}
+
+model Centros_Conectores {
+  Id               Int       @id @default(autoincrement())
+  IdCentro         Int
+  IdCentroConector String?
+  IdConector       Int
+  IdUser           Int
+  fechareg         DateTime  @map("_fechareg")
+  fechamod         DateTime? @map("_fechamod")
+  Inactivo         DateTime?
+  Comodin          String?
+}
+
+model Centros_TColabos {
+  IdCentro               Int
+  IdCol                  Int
+  FechaBaja              DateTime?
+  Inactivo               String?
+  fechareg               DateTime? @map("_fechareg")
+  isRegisteredInClinipad Boolean?
+  Guid_Tenant            String
+
+  @@id([IdCentro, IdCol])
+}
+
+model Centros_TProte {
+  IdCentro    Int
+  IdProte     Int
+  FechaBaja   DateTime?
+  Inactivo    String?
+  fechareg    DateTime? @map("_fechareg")
+  Id          Int       @id @default(autoincrement())
+  Guid_Tenant String
+}
+
+model Centros_TUsers_S1_Roles {
+  Id           Int    @id @default(autoincrement())
+  Guid_Centro  String
+  Guid_Usuario String
+  Guid_Rol     String
+  Guid_Tenant  String
+}
+
+model Centros_Tarifas {
+  IdCentroTarifa Int       @id @default(autoincrement())
+  IdCentro       Int
+  IdTarifa       Int
+  Inactivo       DateTime?
+  Desde          DateTime
+  Hasta          DateTime?
+  fechareg       DateTime  @map("_fechareg")
+  version        Int       @map("_version")
+  Guid_Tenant    String
+  idUserReg      Int       @map("_idUserReg")
+  fechaModif     DateTime  @map("_fechaModif")
+  idUserModif    Int       @map("_idUserModif")
+}
+
+model CfgDatos {
+  IdCentro    Int?
+  IdCfg       Int
+  Valor       String
+  IdCfgDatos  Int       @id @default(autoincrement())
+  Guid_Tenant String
+  version     Int       @map("_version")
+  fechaReg    DateTime  @map("_fechaReg")
+  idUserReg   Int       @map("_idUserReg")
+  fechaModif  DateTime? @map("_fechaModif")
+  idUserModif Int?      @map("_idUserModif")
+}
+
+model Clientes {
+  IdCli                 Int       @id @default(autoincrement())
+  TipoCli               String?
+  Nombre                String?
+  Apellidos             String?
+  Direccion             String?
+  IdPoblacio            Int?
+  CP                    String?
+  NIF                   String?
+  Antecedent            String?
+  Tel1                  String?
+  Tel2                  String?
+  TelMovil              String?
+  Fax                   String?
+  Email                 String?
+  Web                   String?
+  Comodin1              String?
+  Comodin2              String?
+  IdTrato               Int?
+  Cuenta                String?
+  Mailing               Boolean
+  Notas                 String?
+  Entidad               String?
+  Oficina               String?
+  DC                    String?
+  IdBanco               Int?
+  FecAlta               DateTime?
+  SISTEMA               String?
+  TARIFA                String?
+  FecTarifa             DateTime?
+  Inactivo              String?
+  FecBaja               DateTime?
+  CodCli                String?
+  fechareg              DateTime? @map("_fechareg")
+  IdEmisor              Int?
+  IdCIA                 Int?
+  IdAuxPTarj            Int?
+  DiaFact               Int?
+  Modelo                Int?
+  ModoFact              Int?
+  OrdenFactura          Int?
+  DesglosarModalidad    String?
+  RazonSocial           String?
+  DiasCaducidad         Int?
+  SCCodSCta             String?
+  SCCodDept             String?
+  SCCodProd             String?
+  SCCodProy             String?
+  SCCodSCtaANT          String?
+  DiaFactTalon          Int?
+  IdCentro              Int?
+  TipoDocIdent          Int
+  CodIBAN               String?
+  CodTar                Int?
+  CodImgRC              String?
+  IdIdioma              Int?
+  FecNacim              DateTime?
+  TipoEntidad           Int
+  IdentPS               String?
+  IdPaisIdent           Int?
+  LecturaDocIdentEstado Int
+  LecturaDocIdentFecha  DateTime
+  LecturaDocIdentIdUser Int
+  ExternalId            String
+  Id_TipoCliente        Int?
+  version               Int       @map("_version")
+  idUserReg             Int       @map("_idUserReg")
+  fechaModif            DateTime  @map("_fechaModif")
+  idUserModif           Int       @map("_idUserModif")
+  Guid_Tenant           String
+}
+
+model ContFormato {
+  IdFormato   Int    @id @default(autoincrement())
+  Descripcio  String
+  Formato     String
+  Contador    String
+  IdCentro    Int?
+  Guid_Tenant String
+}
+
+model Contadores {
+  Tabla       String
+  Valor       Int?
+  Ciclico     String?
+  MinValor    Int?
+  MaxValor    Int?
+  MaxAviso    Int?
+  IdCentro    Int
+  Guid_Tenant String
+
+  @@id([Tabla, IdCentro, Guid_Tenant])
+}
+
+model DCitas {
+  IdUsu               Int
+  IdOrden             Int
+  Fecha               Int?
+  Hora                Int?
+  Duracion            Int?
+  IdSitC              Int?
+  Texto               String?
+  FlgBloqueo          String?
+  Contacto            String?
+  Movil               String?
+  IdPac               Int?
+  HorLlegada          Int?
+  Retraso             Int?
+  BOX                 String?
+  HorConsul           Int?
+  HorFinal            Int?
+  NOTAS               String?
+  NUMPAC              String?
+  AgStats             String?
+  FecAlta             DateTime?
+  Recordada           Int
+  Confirmada          Int
+  IdBox               Int?
+  IdCitasP            Int?
+  NumOcur             Int?
+  DCitasGrp           String?
+  CantIntegGrp        Int?
+  Gratuita            Boolean?
+  IdUserIns           Int?
+  IdCli               Int?
+  MotivoAnulacion     String?
+  NumAuto             String?
+  IdRef               Int?
+  IdProced            Int?
+  IdPartner           Int?
+  FecNacim            DateTime?
+  NIF                 String?
+  IdPacExt            String?
+  IdOpc               String?
+  Email               String?
+  IdCita              BigInt
+  IdCia               Int?
+  IdTipoEspec         Int?
+  IdCol               Int?
+  IdCentro            Int?
+  Comodin1            String?
+  Comodin2            String?
+  Aceptada            DateTime?
+  IdCitaConector      String?
+  HorSitCita          DateTime?
+  IdGrAgdOpc          Int?
+  IdMotivoAnulacion   Int?
+  IdIcono             Int?
+  NumActos1Tto        Int?
+  IdTarifa            Int?
+  OrigenExt           String?
+  SolicitanteNUMPAC   String?
+  SolicitanteDesc     String?
+  TipoDocIdent        Int
+  IdPaisIdent         Int?
+  Id_MotivoCitacion   Int?
+  IdOrigenIns         Int
+  IdOrden_Bloqueado   Int?
+  EnviarRecordatorio  DateTime?
+  EnviarConfirmacion  DateTime?
+  OrigenAnulacion     Int?
+  AnulacionGestionada DateTime?
+
+  @@id([IdUsu, IdOrden])
+}
+
+model DCitasF {
+  IdUsu   Int
+  IdOrden Int
+  IdOpc   String
+  IdPac   Int
+  Fecha   Int
+  Hora    Int
+  Notas   String?
+
+  @@id([IdUsu, IdOrden])
+}
+
+model DCitasLogSit {
+  IdCitasLogSit     Int      @id @default(autoincrement())
+  IdUsu             Int
+  IdOrden           Int
+  IdSitC            Int
+  HorSitCita        DateTime
+  HorFinSit         DateTime
+  IdUserLog         Int
+  IdMotivoAnulacion Int?
+  MotivoAnulacion   String?
+  fechaReg          DateTime @map("_fechaReg")
+  IdOrigenSitCita   Int
+}
+
+model DCitasOp {
+  IdUsu   Int
+  IdOrden Int
+  IdOpc   String
+
+  @@id([IdUsu, IdOrden, IdOpc])
+}
+
+model DCitasPeriod {
+  IdCitasP     Int       @id @default(autoincrement())
+  IdUsu        Int?
+  IdOpc        String
+  FechaInicio  DateTime?
+  FechaFinal   DateTime?
+  Inactiva     Boolean?
+  Hora         Int?
+  Duracion     Int?
+  Texto        String
+  Contacto     String
+  Movil        String
+  IdPac        Int?
+  IdBox        Int?
+  Box          String
+  Notas        String
+  NumPac       String
+  FecAlta      DateTime?
+  Frecuencia   Int?
+  Periodicidad Int?
+  DiaSem       String
+  DiaMes       Int?
+  Mes          Int?
+  DCitasGrp    String?
+  CantIntegGrp Int?
+  NumeroCitas  Int?
+}
+
+model DCitasTto {
+  IdCitasTto  Int       @id @default(autoincrement())
+  IdUsu       Int?
+  IdOrden     Int?
+  IdentTM     Int?
+  IdTto       Int?
+  IdTipoOdg   Int?
+  Realizado   String
+  fechareg    DateTime? @map("_fechareg")
+  IdCol       Int?
+  IdProced    Int?
+  IdRef       Int?
+  Notas       String?
+  Duracion    Int
+  Guid_Tenant String
+}
+
+model Desktops {
+  Id             Int      @id @default(autoincrement())
+  version        Int      @map("_version")
+  fechaReg       DateTime @map("_fechaReg")
+  idUserReg      Int      @map("_idUserReg")
+  fechaModif     DateTime @map("_fechaModif")
+  idUserModif    Int      @map("_idUserModif")
+  JsonProperties String
+  JsonVersion    Int
+  ExternalId     String
+  Custom         Boolean
+  Description    String?
+  Orden          Int
+  Restorable     Boolean
+  Guid_Tenant    String
+}
+
+model DeudaCli {
+  IdDeudaCli           Int       @id @default(autoincrement())
+  IdCli                Int
+  IdPac                Int?
+  NumTto               Int?
+  NumFase              Int?
+  FecPlazo             DateTime
+  Adeudo               Float
+  Liquidado            Boolean
+  Docs                 String
+  NFactura             String?
+  NNotaTto             String?
+  fechareg             DateTime? @map("_fechareg")
+  Modalidad            Int?
+  IdAnulado            Int?
+  SCFecExpo            DateTime?
+  IdCentro             Int?
+  Incobrable           DateTime?
+  Pendiente            Float?
+  IdentTM              Int?
+  IdMotivoIncobrable   Int?
+  DescMotivoIncobrable String?
+  IdLiqComisionDet     Int?
+  FechaImport          DateTime?
+  Guid_Tenant          String
+}
+
+model DeudaPago {
+  IdDeudaCli       Int
+  IdPagoCli        Int
+  Pagado           Float
+  FecPago          DateTime
+  EditTtos         Int?
+  FecExpoCP        DateTime?
+  fechareg         DateTime? @map("_fechareg")
+  IdDeudaPago      Int       @id @default(autoincrement())
+  IdDocAdminDeuda  Int?
+  SubTipoPago      Int
+  IdLiqComisionDet Int?
+  Guid_Tenant      String
+  CId              String?
+}
+
+model Dispositivo {
+  IdDisp     Int       @id @default(autoincrement())
+  TipoDisp   Int
+  Descripcio String?
+  GID        String?
+  KeyDisp    Int?
+  IdPac      Int?
+  FecAsig    DateTime?
+  IdCentro   Int?
+  IdApp      String?
+}
+
+model DispositivoPac {
+  IdPac   Int
+  Tipo    Int
+  IdTipo  String
+  AFirmar Boolean?
+
+  @@id([IdPac, Tipo, IdTipo])
+}
+
+model DocAdmin {
+  Doc                     String
+  IdEmisor                Int
+  Serie                   String
+  NumDoc                  Int
+  Anyo                    Int
+  FecDoc                  DateTime?
+  IdCli                   Int?
+  Nombre                  String?
+  Apellidos               String?
+  Direccion               String?
+  NIF                     String?
+  Modelo                  Int?
+  FecExpoCP               DateTime?
+  ConceptoG               String?
+  FecImpreso              DateTime?
+  NumImpres               Int?
+  Ident                   Int       @id @default(autoincrement())
+  IdUser                  Int?
+  Abonado                 Int?
+  Abono                   Int?
+  fechareg                DateTime? @map("_fechareg")
+  Hash                    String?
+  HashControl             Int?
+  RazonSocial             String?
+  ContabSC                String?
+  IdIdioma                Int?
+  IdSerieOficial          Int?
+  SerieOficial            String?
+  NumDocOficial           Int?
+  IdMotivo                Int?
+  version                 Int       @map("_version")
+  NIFTutor                String?
+  IdCliTutor              Int?
+  IdTalon                 Int?
+  TipoDocumento           Int
+  NumTransaccion          Int?
+  IdDevolucionTransaccion Int?
+  IdDocAdminOrigen        Int?
+  NumDocExenta            Int?
+  NumDocAfecta            Int?
+  IdTalonAfecta           Int?
+  CId                     String?
+  IdPaisIdent             Int?
+  TipoDocIdent            Int
+  TipoFactura             String?
+  CP                      String?
+  CodigoQR                String?
+  CodigoATCUD             String?
+  Guid_Tenant             String
+  origen                  String?   @map("_origen")
+  Anulacion               Boolean
+  Type                    String?   @map("_Type")
+}
+
+model DocsFirmados {
+  IdDocFirma         Int       @id @default(autoincrement())
+  FechaDoc           DateTime
+  FechaIns           DateTime
+  TipoDoc            Int
+  TipoFirma          Int
+  Descripcion        String?
+  Original           String?
+  Firmado            DateTime?
+  FirmaIdUsu         Int?
+  IdOrigen           Int?
+  IdPac              Int?
+  IdColFirma         Int?
+  Estado             Int?
+  FechaPublicado     DateTime?
+  NumRefPublicado    String?
+  Id_Pluggin         Int?
+  Guid_Tenant        String
+  FirmadoColaborador DateTime?
+}
+
+model EdDocs {
+  IdDoc                 Int       @id @default(autoincrement())
+  IdGrupo               Int?
+  IdSubGrupo            Int?
+  FecCreado             DateTime?
+  FecModific            DateTime?
+  Titulo                String?
+  IdUsu                 Int?
+  IdTipoEspec           Int?
+  Publico               String?
+  Firmado               DateTime?
+  FirmaIdUsu            Int?
+  IdentTM               Int?
+  IdCol                 Int?
+  IdIdioma              Int?
+  IdCentro              Int?
+  Estado                Int?
+  CamposVariablesUsados String?
+}
+
+model EdGrupos {
+  IdGrupo     Int
+  Titulo      String?
+  IdCentro    Int?
+  Id          Int      @id @default(autoincrement())
+  idUserReg   Int      @map("_idUserReg")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserModif Int      @map("_idUserModif")
+  fechaModif  DateTime @map("_fechaModif")
+  version     Int      @map("_version")
+}
+
+model EdMail {
+  IdRun     Int       @id @default(autoincrement())
+  FecPrintI DateTime
+  FecPrintF DateTime?
+  IdUser    Int
+  IdDoc     Int?
+  Notas     String?
+  Filtro    String?
+  IdCentro  Int?
+}
+
+model EdMailL {
+  gen_id   Int  @id @default(autoincrement()) @map("_gen_id")
+  Contador Int
+  IdRun    Int
+  IdPac    Int?
+  IdCli    Int?
+  IdUsu    Int?
+  IdOrden  Int?
+}
+
+model EdSubGrp {
+  IdGrupo     Int
+  IdSubGrupo  Int
+  Titulo      String?
+  Id          Int
+  idUserReg   Int      @map("_idUserReg")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserModif Int      @map("_idUserModif")
+  fechaModif  DateTime @map("_fechaModif")
+  version     Int      @map("_version")
+
+  @@id([IdGrupo, IdSubGrupo])
+}
+
+model Emisores {
+  IdEmisor       Int       @id @default(autoincrement())
+  Descripcio     String?
+  SubNombre1     String?
+  SubNombre2     String?
+  Serie          String?
+  Direccion      String?
+  IdPoblacio     Int?
+  CP             String?
+  Tel1           String?
+  Tel2           String?
+  TelMovil       String?
+  Fax            String?
+  Email          String?
+  Web            String?
+  NIF            String?
+  SerieAF        String?
+  SerieR         String?
+  SerieAR        String?
+  IdCol          Int?
+  IdCentro       Int?
+  CodSubCta      String?
+  version        Int       @map("_version")
+  fechaReg       DateTime  @map("_fechaReg")
+  idUserReg      Int       @map("_idUserReg")
+  fechaModif     DateTime  @map("_fechaModif")
+  idUserModif    Int       @map("_idUserModif")
+  SerieFRect     String?
+  SerieAFRect    String?
+  TipoDocIdent   Int
+  IdPaisIdent    Int?
+  TipoEntidad    Int
+  Inactivo       DateTime?
+  Capital_Social String?
+  IBAN           String?
+  Guid_Tenant    String
+}
+
+model ExplPerio {
+  IdPac       Int
+  IdExplPer   Int
+  NDent       Int
+  borsa1      Int?
+  borsa2      Int?
+  borsa3      Int?
+  borsa4      Int?
+  borsa5      Int?
+  borsa6      Int?
+  recessio1   Int?
+  recessio2   Int?
+  recessio3   Int?
+  recessio4   Int?
+  recessio5   Int?
+  recessio6   Int?
+  sangrat1    String?
+  sangrat2    String?
+  sangrat3    String?
+  sangrat4    String?
+  placa1      String?
+  placa2      String?
+  placa3      String?
+  placa4      String?
+  movilitat1  Int?
+  movilitat2  String?
+  Id          Int      @id @default(autoincrement())
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+  Id_PacPerio Int
+  Guid_Tenant String
+}
+
+model FTX_00000088_Dental {
+  gen_id               Int       @id @default(autoincrement()) @map("_gen_id")
+  Guid                 String
+  IdPac                Int
+  IdFicha              Int
+  fecha                DateTime?
+  recomendo            String?
+  representante        String?
+  tratpsi              String?
+  trapsi_text          String?
+  medicamento          String?
+  antibioticos         String?
+  hormonas             String?
+  aspirina             String?
+  insulina             String?
+  anticoagulantes      String?
+  tension              String?
+  corazon              String?
+  bifosfonatos         String?
+  anticonceptivos      String?
+  tranquilizantes      String?
+  cortisona            String?
+  medica_otros         String?
+  medica_otros_text    String?
+  hospitalizado        String?
+  hospitalizado_text   String?
+  cardiacos            String?
+  cardi_corazon        String?
+  cardi_sangre_baja    String?
+  cardi_sangre_alta    String?
+  cardi_dolor_pecho    String?
+  cardi_angina         String?
+  cardi_infarto        String?
+  cardi_soplo          String?
+  cardi_respi          String?
+  cardi_otros          String?
+  cardi_otros_text     String?
+  enfermedad_contagios String?
+  hepatitis            String?
+  tuberculosis         String?
+  sifilis              String?
+  vih                  String?
+  alteraciones         String?
+  cerebral             String?
+  pulmonares           String?
+  cancer               String?
+  ictericia            String?
+  tos                  String?
+  epilepsia            String?
+  anemia               String?
+  artritis             String?
+  depresiones          String?
+  glaucoma             String?
+  diabetes             String?
+  ulcera               String?
+  mareos               String?
+  higado               String?
+  rinones              String?
+  dolores_cabeza       String?
+  radio_quimio         String?
+  radio_quimio_text    String?
+  sangrado             String?
+  transfusion_sangre   String?
+  fecha_transfusion    DateTime?
+  alergico             String?
+  penicilina           String?
+  calmantes_sedantes   String?
+  tetraciclinas        String?
+  anestesia_dental     String?
+  codeina              String?
+  aler_aspirina        String?
+  otros_antibioticos   String?
+  otros_antibioticos2  String?
+  otros_anti_text      String?
+  otros_anti_text2     String?
+  alergia_a            String?
+  asma                 String?
+  urticaria            String?
+  polen                String?
+  sinusitis            String?
+  alergia_a_otros      String?
+  alergia_a_otros_text String?
+  familia_enfermedad   String?
+  familia_cardiacas    String?
+  familia_diabetes     String?
+  familia_cancer       String?
+  familia_alergias     String?
+  familia_otras        String?
+  familia_otras_text   String?
+  embarazada           String?
+  embarazada_mes       String?
+  lactancia            String?
+  gravemente_enfermo   String?
+  sulfamidas           String?
+  EsFumador            String?
+  NumCigarrillos       Int?
+  TxtMotivoDent        String?
+  TxtFechDentista      String?
+  TxtAspectoDientes    String?
+  CkRegular            String?
+  CkIntermitente       String?
+  CkInfrecuente        String?
+  CkHigiene1           String?
+  CkHigiene2           String?
+  CkHigiene3           String?
+  CkHigieneNunca       String?
+  CkRevision1          String?
+  CkRevision2          String?
+  CkRevision3          String?
+  CkRevisionNunca      String?
+  CkAfec1              String?
+  CkAfec2              String?
+  CkAfec3              String?
+  CkAfec4              String?
+  CkAfec5              String?
+  CkAfec6              String?
+  CkAfec7              String?
+  CkAfec8              String?
+  CkEncia1             String?
+  CkEncia2             String?
+  CkEncia3             String?
+  CkEncia4             String?
+  CkSens1              String?
+  CkSens2              String?
+  CkSens3              String?
+  CkSens4              String?
+  CkCepilla1           String?
+  CkCepilla2           String?
+  CkCepilla3           String?
+  CkCepilla4           String?
+  CkUsoHigiene1        String?
+  CkUsoHigiene2        String?
+  CkUsoHigiene3        String?
+  CkUsoHigiene4        String?
+  CkUsoHigiene5        String?
+  CkUsoHigiene6        String?
+  CkUsoHigiene7        String?
+  CkUsoHigiene8        String?
+  CkTrat1              String?
+  CkTrat2              String?
+  CkTrat3              String?
+  CkTrat4              String?
+  RadProt              String?
+  RadFerula            String?
+  RadRonca             String?
+  RadAprieta           String?
+  RadBlanqueo          String?
+  RadOrto              String?
+  RadAspecto           String?
+}
+
+model FormasPago {
+  gen_id        Int     @id @default(autoincrement()) @map("_gen_id")
+  IDFPago       Int
+  Codigo        String
+  Nombre        String?
+  FormaPago     String?
+  DescFormaPago String?
+}
+
+model GDPRProfiles {
+  Id             Int      @id @default(autoincrement())
+  version        Int      @map("_version")
+  fechaReg       DateTime @map("_fechaReg")
+  idUserReg      Int      @map("_idUserReg")
+  fechaModif     DateTime @map("_fechaModif")
+  idUserModif    Int      @map("_idUserModif")
+  Description    String
+  CodExt         String?
+  LegalName      String?
+  Address        String?
+  CommercialName String?
+  HealthURL      String?
+  GDPRURL        String?
+  HCCWarn        String?
+  ShowIC         Boolean
+  Guid_Tenant    String
+}
+
+model GDPR_FTX_00000001 {
+  gen_id   Int       @id @default(autoincrement()) @map("_gen_id")
+  IdPac    Int
+  IdFicha  Int
+  Fecha    DateTime?
+  CONS_001 String?
+  CONS_002 String?
+  CONS_003 String?
+  CONS_004 String?
+}
+
+model GDPR_FTX_Consentimientos {
+  Id          Int      @id @default(autoincrement())
+  Descripcion String
+  TextoAyuda  String
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+}
+
+model GDPR_FTX_Fichas {
+  Id          Int      @id @default(autoincrement())
+  Titulo      String
+  TextoLegal  String
+  SQLInforme  String
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+}
+
+model GDPR_FTX_Fichas_Consentimientos {
+  Id               Int      @id @default(autoincrement())
+  IdFicha          Int
+  IdConsentimiento Int
+  Orden            Int
+  version          Int      @map("_version")
+  fechaReg         DateTime @map("_fechaReg")
+  idUserReg        Int      @map("_idUserReg")
+  fechaModif       DateTime @map("_fechaModif")
+  idUserModif      Int      @map("_idUserModif")
+}
+
+model IconoTratAgenda {
+  IdIcono     Int    @id @default(autoincrement())
+  Descripcion String
+  ImagenTxt   String
+}
+
+model Idioma {
+  IdIdioma    Int    @id @default(autoincrement())
+  Codi        String
+  Descripcio  String
+  Actiu       Int
+  Guid_Tenant String
+}
+
+model LinAdmin {
+  NumLinea        Int
+  IdDeudaCli      Int?
+  IdPagoCli       Int?
+  Importe         Float?
+  Concepto        String?
+  IdPac           Int?
+  Abonado         Int?
+  Abono           Int?
+  fechareg        DateTime? @map("_fechareg")
+  BaseImponible   Float?
+  IdTipoIVA       Int?
+  TpcIVA          Float?
+  ImporteIVA      Float?
+  identTM         Int?
+  IdLinAdmin      Int       @id @default(autoincrement())
+  IdDocAdmin      Int
+  IdDeudaPago     Int?
+  version         Int       @map("_version")
+  IdRegPendContab Int?
+  Actos           Int
+  Dto             Int?
+  ImporteDto      Decimal?
+  Guid_Tenant     String
+}
+
+model LogErrores {
+  IdLog           Int       @id @default(autoincrement())
+  ApplicationName String?
+  VersionInfo     String?
+  ExceptClassName String?
+  ExceptMenssage  String?
+  LogException    String?
+  LogAdicional    String?
+  FechaReg        DateTime? @map("_FechaReg")
+  ScreenShot      Bytes?
+}
+
+model OrigenCita {
+  Id          Int      @id @default(autoincrement())
+  fechaReg    DateTime @map("_fechaReg")
+  OrigenExt   String
+  Descripcion String
+}
+
+model PacCli {
+  IdPac            Int
+  IdCli            Int
+  Poliza           String?
+  Tarjeta          String?
+  Comodin1         Int?
+  Comodin2         String?
+  FecAlta          DateTime?
+  FecCaduc         DateTime?
+  Inactivo         String?
+  FecBaja          DateTime?
+  Texto            String?
+  FecUltPase       DateTime?
+  Version_TS       String?
+  Tarjeta24        String?
+  Certificado      Int?
+  NOrden           Int?
+  IdProdModTarifa  Int?
+  MotivoAsignacion String?
+  IdUser           Int?
+  Pista1           String?
+  Pista2           String?
+  Cobertura        String?
+  Localizador      String?
+  FechaLocalizador DateTime?
+  Id               Int       @id @default(autoincrement())
+  Guid_Tenant      String
+}
+
+model PacMensajes {
+  IdMsg             Int       @id @default(autoincrement())
+  IdPac             Int?
+  FechaHoraCreacion DateTime?
+  IdUsuDe           Int?
+  Mensaje           String?
+  Leido             String?
+  Guid_Tenant       String
+}
+
+model PacPerio {
+  IdPac       Int
+  IdExplPer   Int
+  Fecha       DateTime?
+  NotasSup    String?
+  NotasInf    String?
+  Id          Int       @id @default(autoincrement())
+  version     Int       @map("_version")
+  fechaReg    DateTime  @map("_fechaReg")
+  idUserReg   Int       @map("_idUserReg")
+  fechaModif  DateTime  @map("_fechaModif")
+  idUserModif Int       @map("_idUserModif")
+  Guid_Tenant String
+}
+
+model Pacientes {
+  IdPac                 Int       @id @default(autoincrement())
+  IdCli                 Int?
+  IdCliPac              Int?
+  NumPac                String
+  IdMutDefec            Int?
+  IdCliDefec            Int?
+  Nombre                String?
+  Apellidos             String?
+  NIF                   String?
+  Direccion             String?
+  IdPoblacio            Int?
+  CP                    String?
+  Tel1                  String?
+  Tel2                  String?
+  TelMovil              String?
+  Fax                   String?
+  Email                 String?
+  Web                   String?
+  FecNacim              DateTime?
+  Comodin1              String?
+  Comodin2              String?
+  Comodin3              String?
+  Comodin4              String?
+  Comodin5              String?
+  Comodin6              String?
+  IdRefOri              Int?
+  RefOriTxt             String?
+  IdRefDes              Int?
+  Descuento             Int?
+  IdProfesio            Int?
+  IdEcivil              Int?
+  NumHijos              Int?
+  Sexo                  String?
+  IdTrato               Int?
+  Foto                  Int?
+  IdEstado              Int?
+  Mailing               Boolean
+  Notas                 String?
+  FecAlta               DateTime?
+  TipoOdg               Int?
+  AceptaLOPD            Boolean?
+  AceptaInfo            Boolean
+  AceptaSMS             Boolean
+  IdCol                 Int?
+  IdColAux              Int?
+  AgNumVis              Int?
+  AgTpoTotE             Int?
+  AgTpoTotR             Int?
+  AgTpoTotAt            Int?
+  fechareg              DateTime? @map("_fechareg")
+  IdProced              Int?
+  CIP                   String?
+  AgNumFallos           Int?
+  Comodin7              String?
+  IdIdioma              Int?
+  GrupoSanguineo        String?
+  IdCentro              Int?
+  TipoDocIdent          Int
+  NumSS                 String?
+  Exitus                DateTime?
+  ExitusObs             String?
+  Inactivo              DateTime?
+  MotivoInactivo        String?
+  IdPacReferidor        Int?
+  AceptaEmail           Boolean?
+  AceptaPostal          Boolean?
+  IdPaisIdent           Int?
+  IdCliTutor            Int?
+  version               Int       @map("_version")
+  fechaModif            DateTime  @map("_fechaModif")
+  idUserModif           Int       @map("_idUserModif")
+  LecturaDocIdentEstado Int
+  LecturaDocIdentFecha  DateTime
+  LecturaDocIdentIdUser Int
+  IdUserAsesor          Int?
+  AceptaGDPR            Boolean?
+  IdTipoDireccion       Int
+  SeccionCensal         String?
+  CoordenadasX          String?
+  CoordenadasY          String?
+  NoContactable         Boolean
+  Derivado              Boolean
+  ExternalId            String
+  Guid_Tenant           String
+  AceptaBots            Boolean
+  AceptaWhatsApp        Boolean
+}
+
+model PacientesLog {
+  Id            Int      @id @default(autoincrement())
+  fechaReg      DateTime @map("_fechaReg")
+  idUserReg     Int      @map("_idUserReg")
+  IdPac         Int
+  AceptaGDPR    Boolean?
+  Derivado      Boolean
+  NoContactable Boolean
+}
+
+model PacientesPublic {
+  IdPac           Int       @id @default(autoincrement())
+  FecCreacion     DateTime?
+  FecModificacion DateTime?
+  Direccion       String?
+  CP              String?
+  Poblacion       String?
+  Provincia       String?
+  Tel1            String?
+  Tel2            String?
+  TelMovil        String?
+  Fax             String?
+  Email           String?
+  FecNacim        DateTime?
+  Sexo            String?
+  EstadoCivil     String?
+  Profesion       String?
+  NumHijos        Int?
+  NIF             String?
+  RefOriTxt       String?
+  Nombre          String?
+  Apellidos       String?
+  Mailing         Boolean?
+  AceptaLOPD      Boolean?
+  AceptaInfo      Boolean?
+  AceptaSMS       Boolean?
+  Comodin1        String?
+  Comodin2        String?
+  Comodin3        String?
+  Comodin4        String?
+  Comodin5        String?
+  Comodin6        String?
+  Comodin7        String?
+  AceptaEmail     Boolean?
+  AceptaPostal    Boolean?
+  AceptaGDPR      Boolean?
+}
+
+model Pacientes_Tarifas {
+  IdPacienteTarifa Int       @id @default(autoincrement())
+  IdPac            Int
+  IdTarifa         Int
+  Poliza           String?
+  Tarjeta          String?
+  FecAlta          DateTime
+  FecCaduc         DateTime?
+  FecUltPase       DateTime?
+  Texto            String?
+  Version_TS       String?
+  Tarjeta24        String?
+  Certificado      Int?
+  NOrden           Int?
+  MotivoAsignacion String?
+  IdProdModTarifa  Int?
+  IdUser           Int?
+  Comodin1         Int?
+  Comodin2         String?
+  Inactivo         DateTime?
+  fechareg         DateTime  @map("_fechareg")
+  version          Int       @map("_version")
+  Localizador      String?
+  FechaLocalizador DateTime?
+  Pista1           String?
+  Pista2           String?
+  Cobertura        String?
+  Guid_Tenant      String
+}
+
+model Pacientes_Tarifas_log {
+  IdLog            Int      @id @default(autoincrement())
+  Accion           Int
+  IdPacienteTarifa Int
+  IdPac            Int
+  IdTarifa         Int
+  MotivoAsignacion String?
+  fechareg         DateTime @map("_fechareg")
+  iduser           Int      @map("_iduser")
+  Guid_Tenant      String
+}
+
+model PagoCli {
+  IdPagoCli               Int       @id @default(autoincrement())
+  IdCli                   Int
+  Pagado                  Float
+  FecPago                 DateTime
+  IdForPago               Int
+  Oficina                 String?
+  Entidad                 String?
+  NumIngre                String?
+  IdBanco                 Int?
+  IdUser                  Int?
+  Docs                    String?
+  NRecibo                 String?
+  NCPago                  String?
+  FecExpoCP               DateTime?
+  IdAnulado               Int?
+  fechareg                DateTime? @map("_fechareg")
+  ContabSC                String?
+  IdCentro                Int?
+  CodIBAN                 String?
+  IdMotivo                Int?
+  NoDisponible            DateTime?
+  Cuotas                  Int?
+  FechaCuota              DateTime?
+  IdentTM                 Int?
+  NFactura                String?
+  Tipo                    Int
+  IdentPS                 Int?
+  FP_Codigo1              String?
+  FP_Codigo2              String?
+  FP_Codigo3              String?
+  IdLiqComisionDet        Int?
+  Automatico              Boolean
+  NumTransaccion          Int?
+  IdDevolucionTransaccion Int?
+  IdPasarelaPago          Int?
+  IdRemesaBancaria        Int?
+  IdPlanEcoCuota          Int?
+  IdPagoCliRelacionado    Int?
+  FechaImport             DateTime?
+  CId                     String?
+  Id_SolicitudDevolucion  Int?
+  Guid_Tenant             String
+}
+
+model PlanEco {
+  IdPac         Int
+  NumPlan       Int
+  Titulo        String?
+  Importe       Float?
+  Entrada       Float?
+  Cuotas        Int?
+  CuotaImpor    Float?
+  Periodo       Int?
+  DiscoBanco    Boolean
+  IdForPago     Int?
+  IdEmisor      Int?
+  Serie         String?
+  IdBanco       Int?
+  IdCol         Int?
+  GenerarDoc    String?
+  IdCli         Int?
+  FecEntrada    DateTime?
+  FecInicio     DateTime?
+  FecActiva     DateTime?
+  Notas         String?
+  GenAdeudo     Boolean?
+  IdTto         Int?
+  Estado        Int?
+  FirmadoSEPA   Boolean
+  Id            Int       @id @default(autoincrement())
+  version       Int       @map("_version")
+  fechaReg      DateTime  @map("_fechaReg")
+  idUserReg     Int       @map("_idUserReg")
+  fechaModif    DateTime  @map("_fechaModif")
+  idUserModif   Int       @map("_idUserModif")
+  Id_TtoEntrada Int?
+  Guid_Tenant   String
+}
+
+model PlanEcoL {
+  IdPac       Int
+  NumPlan     Int
+  NumCuota    Int
+  FecAdeudo   DateTime?
+  FecPago     DateTime?
+  Importe     Float?
+  Id          Int       @id @default(autoincrement())
+  version     Int       @map("_version")
+  fechaReg    DateTime  @map("_fechaReg")
+  idUserReg   Int       @map("_idUserReg")
+  fechaModif  DateTime  @map("_fechaModif")
+  idUserModif Int       @map("_idUserModif")
+  Id_PlanEco  Int
+  Guid_Tenant String
+}
+
+model Presu {
+  IdPac                     Int
+  NumSerie                  Int
+  NumPre                    Int
+  Titulo                    String?
+  Notas                     String?
+  Direccion                 String?
+  IdPoblacio                Int?
+  CP                        String?
+  Tel1                      String?
+  Tel2                      String?
+  TelMovil                  String?
+  Fax                       String?
+  Email                     String?
+  Web                       String?
+  FecPresup                 DateTime?
+  FecAcepta                 DateTime?
+  IdCol                     Int?
+  Emisor                    Int?
+  Ident                     Int
+  FecRechaz                 DateTime?
+  ObsRechaz                 String?
+  IdUserElabora             Int?
+  IdCentro                  Int?
+  IdUserPresentacion        Int?
+  UniqueID                  Int?
+  IdPresuOrigen             Int?
+  IdTipoPresupuesto         Int?
+  Estado                    Int
+  AceptadoFueraValidez      Int
+  Financiacion              Int
+  fechareg                  DateTime  @map("_fechareg")
+  version                   Int       @map("_version")
+  RechazadoPorAlternativa   Boolean
+  AlternativaDe             Int?
+  EsAlternativa             Int
+  IdCanastaDiagnostico      Int?
+  Id_UserDesbloqueo         Int?
+  FechaDesbloqueo           DateTime?
+  Id_UserResponsable        Int?
+  ContratoFinanciacion      String?
+  Id_MotivoRechaz           Int?
+  Id_UserRechaz             Int?
+  Id_PresuOriginal          Int?
+  FechaEntregaDigitalmente  DateTime?
+  FechaRecibidoCliente      DateTime?
+  RecibidoDigitalmente      Boolean
+  Guid_Tenant               String
+  Serie                     String?
+  NumSeriePresu             Int?
+  Hash                      String?
+  HashControl               Int?
+  CodigoATCUD               String?
+  CodigoQR                  String?
+  FechaAceptadoDigitalmente DateTime?
+
+  @@id([IdPac, NumPre])
+}
+
+model PresuTipo {
+  IdPresuTipo       Int      @id @default(autoincrement())
+  Titulo            String
+  Notas             String?
+  IdCol             Int?
+  Emisor            Int?
+  IdTipoPresupuesto Int?
+  version           Int      @map("_version")
+  fechaReg          DateTime @map("_fechaReg")
+  idUserReg         Int      @map("_idUserReg")
+  fechaModif        DateTime @map("_fechaModif")
+  idUserModif       Int      @map("_idUserModif")
+  Guid_Tenant       String
+  TipoHallazgo      String?
+}
+
+model PresuTipoTto {
+  IdPresuTipo Int
+  IdTto       Int
+  IdCol       Int?
+  Notas       String
+  Id          Int      @id @default(autoincrement())
+  Orden       Int
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+  LinPre      Int
+  Actos       Int
+  Guid_Tenant String
+}
+
+model PresuTto {
+  IdPac         Int
+  NumSerie      Int
+  NumPre        Int
+  LinPre        Int
+  IdTto         Int?
+  ZonasBoca     Int?
+  PiezasAdu     Decimal?
+  PiezasLec     Decimal?
+  PiezasNum     Decimal?
+  ZonasPieza    Decimal?
+  DespX         Int?
+  DespY         Int?
+  Rotacion      Int?
+  StaTto        Int?
+  FecIni        DateTime?
+  FecFin        DateTime?
+  IdCol         Int?
+  IdCli         Int?
+  Unidades      Int?
+  ImportePre    Float?
+  Dto           Int?
+  Notas         String?
+  IdTipoOdg     Int?
+  Tiempo        Int?
+  FecAcepta     DateTime?
+  BaseImponible Float?
+  IdTipoIVA     Int?
+  TpcIVA        Float?
+  ImporteIVA    Float?
+  ImporteUni    Float?
+  IdColAux      Int?
+  ImporteDto    Float?
+  Ident         Int       @id @default(autoincrement())
+  Orden         Int?
+  IdTratamiento Int?
+  version       Int       @map("_version")
+  IdTtoMedOrig  Int?
+  Cuadrantes    Decimal?
+  Arcadas       Decimal?
+  Id_Presu      Int
+  Guid_Tenant   String
+}
+
+model Recalls {
+  IdPac               Int
+  NumRec              Int
+  Fecha               DateTime?
+  IdMotivo            Int?
+  Comentario          String?
+  Hora                DateTime?
+  Telefono            Boolean
+  Carta               Boolean
+  EMail               Boolean
+  SMS                 Boolean
+  Asistido            Boolean
+  IdCol               Int?
+  Citado              Boolean
+  IdCentro            Int?
+  FechaContacto       DateTime?
+  IdColRevisa         Int?
+  IdEstado            Int
+  Observaciones       String?
+  IdResultado         Int?
+  IdUsuRealiza        Int?
+  iduser              Int       @map("_iduser")
+  fechareg            DateTime  @map("_fechareg")
+  IdOpc               String?
+  Id                  Int
+  version             Int       @map("_version")
+  fechaModif          DateTime  @map("_fechaModif")
+  idUserModif         Int       @map("_idUserModif")
+  IdUsuCita           Int?
+  IdOrdenCita         Int?
+  IdRecallOrigen      Int?
+  IdUsuCitaOrigen     Int?
+  IdOrdenCitaOrigen   Int?
+  Id_Presu            Int?
+  Id_Sch_Appointments Int?
+  Guid_Tenant         String
+  Id_TtosMed          Int?
+
+  @@id([IdPac, NumRec])
+}
+
+model RecallsLog {
+  Id                  Int       @id @default(autoincrement())
+  version             Int       @map("_version")
+  fechaReg            DateTime  @map("_fechaReg")
+  idUserReg           Int       @map("_idUserReg")
+  fechaModif          DateTime  @map("_fechaModif")
+  idUserModif         Int       @map("_idUserModif")
+  IdRecall            Int
+  Fecha               DateTime?
+  IdMotivo            Int?
+  Comentario          String?
+  Hora                DateTime?
+  Telefono            Boolean
+  Carta               Boolean
+  EMail               Boolean
+  SMS                 Boolean
+  Asistido            Boolean
+  IdCol               Int?
+  Citado              Boolean
+  IdCentro            Int?
+  FechaContacto       DateTime?
+  IdColRevisa         Int?
+  IdEstado            Int?
+  Observaciones       String?
+  IdResultado         Int?
+  IdUsuRealiza        Int?
+  IdOpc               String?
+  IdUsuCita           Int?
+  IdOrdenCita         Int?
+  IdRecallOrigen      Int?
+  Id_Presu            Int?
+  Id_Sch_Appointments Int?
+  Guid_Tenant         String
+  Id_TtosMed          Int?
+}
+
+model RecetasCab {
+  IdPac             Int
+  IdUsu             Int
+  IdTipoEspec       Int?
+  Fecha             DateTime?
+  Descripcio        String?
+  FecIns            DateTime?
+  IdEmisor          Int?
+  IdCol             Int
+  Publico           String?
+  FechaImpresion    DateTime?
+  Notas             String?
+  IdCentro          Int?
+  IdVisita          Int?
+  IdTalonRecetaCVE  Int?
+  NotasFarmaceutico String?
+  Diagnostico       String?
+  TipoReceta        Int
+  IdRecetaIdent     Int       @id @default(autoincrement())
+  CVE               String?
+  Dispensada        DateTime?
+  NumImpresiones    Int
+  Anulada           DateTime?
+  Guid_Tenant       String
+}
+
+model RecetasDet {
+  IdPac       Int
+  IdReceta    Int
+  IdTrat      Int?
+  DescFarmaco String?
+  DispPrev    DateTime?
+  Duracion    String?
+  Envases     Int?
+  OrdenDisp   Int?
+  Pauta       String?
+  Posologia   String?
+  Unidades    String?
+  IdRecetaDet Int       @id @default(autoincrement())
+  Guid_Tenant String
+}
+
+model RegApun {
+  IdRegApun   Int       @id @default(autoincrement())
+  FecReg      DateTime?
+  IdUser      Int?
+  FecOperaci  DateTime?
+  IdTRegApun  Int?
+  IdForPago   Int?
+  Importe     Float?
+  IdPac       Int?
+  IdCli       Int?
+  IdProveed   Int?
+  IdCol       Int?
+  Notas       String?
+  IdCentro    Int?
+  Guid_Tenant String
+}
+
+model RptDefec {
+  IdCentro   Int
+  IdUser     Int
+  IdAccionRp Int
+  IdInforme  Int
+  IdTemplate Int
+
+  @@id([IdCentro, IdUser, IdAccionRp, IdInforme, IdTemplate])
+}
+
+model RptTempl {
+  IdTemplate Int       @id @default(autoincrement())
+  IdInforme  Int
+  Descripcio String?
+  Modificado DateTime?
+  IdCentro   Int?
+}
+
+model SeriesOficiales {
+  IdSerieOficial Int     @id @default(autoincrement())
+  SerieOficial   String
+  Descripcion    String?
+  Formato        String?
+  IdCentro       Int?
+  TipoSerie      Int?
+}
+
+model TAlmacen {
+  IdAlmacen     Int     @id @default(autoincrement())
+  Descripcio    String?
+  IdCentro      Int?
+  AceptaPedidos Int
+  Inventariable Int
+  DeDeposito    Int
+  Guid_Tenant   String
+}
+
+model TAuxFarmacos {
+  IdFarmaco    Int     @id @default(autoincrement())
+  CodFarmaco   String?
+  Descripcion  String?
+  Presentacion String?
+  VD_IdEspec   Int?
+  VD_IdPack    Int?
+  VD_CodATC    String?
+  VD_NomATC    String?
+  VD_Precio    Float?
+  VD_PrecioLab Float?
+  Posologia    String?
+  Composicion  String?
+  Indicacion   String?
+  Inactivo     String
+  VD_CodNal    String?
+  VD_NomLab    String?
+  Guid_Tenant  String
+}
+
+model TAuxPaseTarjeta {
+  gen_id           Int     @id @default(autoincrement()) @map("_gen_id")
+  Id               Int
+  Codigo           String
+  MascTarjeta      String?
+  FormatoTitular   String?
+  SeparadorTitular String?
+  REXP_Dato        String?
+  REXP_Control     String?
+  POS_Texto        String?
+  POS_Nombre       String?
+  POS_Tarjeta      String?
+  POS_FInicio      String?
+  POS_FExp         String?
+  POS_Cobertura    String?
+}
+
+model TAuxTipoExpComp {
+  IdTipoEC    Int     @id @default(autoincrement())
+  Descripcion String?
+  Guid_Tenant String
+}
+
+model TCalCa {
+  IdCal      Int     @id @default(autoincrement())
+  Descripcio String?
+  Inactivo   String?
+  IdCentro   Int?
+}
+
+model TCalDias {
+  IdCal Int
+  IdDia Int
+  IdUsu Int
+  IdSit Int?
+
+  @@id([IdCal, IdDia, IdUsu])
+}
+
+model TCalHor {
+  IdCal    Int
+  IdDia    Int
+  HIni     Int
+  HFin     Int
+  AOOnLine String?
+
+  @@id([IdCal, IdDia, HIni, HFin])
+}
+
+model TColabos {
+  IdCol          Int       @id @default(autoincrement())
+  Codigo         String?
+  Alias          String?
+  Apellidos      String?
+  Nombre         String?
+  IdPoblacio     Int?
+  CP             String?
+  Direccion      String?
+  NIF            String?
+  Tel1           String?
+  Tel2           String?
+  TelMovil       String?
+  Fax            String?
+  EMail          String?
+  Web            String?
+  FecBaja        DateTime?
+  Activo         String
+  Horario        String?
+  Notas          String?
+  Comision       Int?
+  ReComision     String
+  Cobro          String?
+  CodInt         String?
+  FecAlta        DateTime?
+  ReGastos       String?
+  TpcGastos      Int?
+  Gasto          String?
+  PrecioFijo     String?
+  TpcPFijo       Int?
+  IdTipoColab    Int?
+  NumColeg       String?
+  CobPropios     String?
+  TipoRealizado  String?
+  IdGrpColab     Int?
+  IRPF           Int?
+  TipoComision   String?
+  JefeGrupo      Int?
+  IdColJefeGrupo Int?
+  IdRef          Int?
+  IdProced       Int?
+  IdEmisor       Int?
+  PIN            String?
+  FechaPIN       DateTime?
+  InicioEspecCM  DateTime?
+  TipoContrato   Int
+  TipoDocIdent   Int
+  IdPaisIdent    Int?
+  ExternalId     String
+  ExternalLogin  String?
+  ExternalPwd    String?
+  Guid_Tenant    String
+}
+
+model TConectorParams {
+  Id              Int      @id @default(autoincrement())
+  IdConector      Int
+  IdEmisor        Int?
+  IdCol           Int?
+  Area            Int?
+  Servicio        Int?
+  Descrip         String?
+  Terminal        String?
+  Usuario         String?
+  LoginPass       String?
+  URL_WS          String?
+  Path_XSD        String?
+  version         Int      @map("_version")
+  fechaReg        DateTime @map("_fechaReg")
+  idUserReg       Int      @map("_idUserReg")
+  fechaModif      DateTime @map("_fechaModif")
+  idUserModif     Int      @map("_idUserModif")
+  IdCentro        Int?
+  Comodin1        String?
+  PathCertificado String?
+  PreShared_Key   String?
+}
+
+model TConectores {
+  IdConector        Int       @id @default(autoincrement())
+  Descrip           String?
+  Timeout           Int?
+  Log_Request       Boolean?
+  Log_Response      Boolean?
+  Demo              Boolean?
+  Demo_ContadorNRef Int?
+  Frecuencia        Int?
+  version           Int       @map("_version")
+  fechaReg          DateTime  @map("_fechaReg")
+  idUserReg         Int       @map("_idUserReg")
+  fechaModif        DateTime  @map("_fechaModif")
+  idUserModif       Int       @map("_idUserModif")
+  Inactivo          DateTime?
+  Comodin           String?
+  UsarProxy         Boolean
+  Guid_Tenant       String
+}
+
+model TCtasGen {
+  IdCta       String
+  Descripcio  String
+  Id          Int      @id @default(autoincrement())
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+  Guid_Tenant String
+}
+
+model TDocumentosPac {
+  IdDocPac    Int       @id @default(autoincrement())
+  IdPac       Int
+  FechaDoc    DateTime?
+  FechaIns    DateTime?
+  Descripcion String?
+  Original    String?
+  Notas       String?
+  IdUsu       Int
+  TipoDoc     Int?
+  Firmado     DateTime?
+  FirmaIdUsu  Int?
+  Guid_Tenant String
+}
+
+model TECivil {
+  IdECivil    Int      @id @default(autoincrement())
+  Descripcio  String?
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+  Guid_Tenant String
+}
+
+model TEspecOMC {
+  IdTipoEspec Int      @id @default(autoincrement())
+  CodigoOMC   String?
+  Descripcio  String
+  Dental      Int?
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+  Guid_Tenant String
+}
+
+model TEstados {
+  IdEstado        Int      @id @default(autoincrement())
+  Descripcio      String?
+  EstadoFiliacion Int?
+  EstadoPizarra   Int?
+  version         Int      @map("_version")
+  fechaReg        DateTime @map("_fechaReg")
+  idUserReg       Int      @map("_idUserReg")
+  fechaModif      DateTime @map("_fechaModif")
+  idUserModif     Int      @map("_idUserModif")
+  Guid_Tenant     String
+}
+
+model TForPago {
+  IdForPago             Int       @id @default(autoincrement())
+  Tipo                  Int
+  Descripcio            String?
+  Inactivo              DateTime?
+  version               Int       @map("_version")
+  fechaReg              DateTime  @map("_fechaReg")
+  idUserReg             Int       @map("_idUserReg")
+  fechaModif            DateTime  @map("_fechaModif")
+  idUserModif           Int       @map("_idUserModif")
+  IdAgrupacionFormaPago Int?
+  ModoFinanciacion      Int
+  TPVVirtual            Boolean
+  TPVFisico             Boolean
+  Guid_Tenant           String
+}
+
+model TGrpColab {
+  IdGrpColab  Int      @id @default(autoincrement())
+  Descripcio  String?
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+  Guid_Tenant String
+}
+
+model TGrupos {
+  IdGrupo     Int      @id @default(autoincrement())
+  Descripcio  String?
+  Imputable   Boolean
+  SCCodSCta   String?
+  SCCodDept   String?
+  SCCodProd   String?
+  SCCodProy   String?
+  Antecedent  String?
+  SCCodSCDto  String?
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+  EsControl   Int
+  Guid_Tenant String
+}
+
+model TICD9 {
+  IdICD9      Int     @id @default(autoincrement())
+  CodICD9     String?
+  Descripcion String?
+  ClonDe      String?
+  Visible     Int?
+  VD_IdICD9   Int?
+  VD_CodICD9  String?
+  Guid_Tenant String
+}
+
+model TMRecall {
+  IdMotivo            Int       @id @default(autoincrement())
+  Descripcio          String?
+  IdTipoControlRecall Int
+  Inactivo            DateTime?
+  TratAgdOblig        Boolean
+  Guid_Tenant         String
+  TipoComunicaciones  Int?
+}
+
+model TMotivoAsignacion {
+  MotivoAsignacion String?
+  Tipo             Int?
+  Ident            Int      @id @default(autoincrement())
+  ObligarTexto     Boolean
+  ImputableCentro  Int?
+  Codigo           String?
+  version          Int      @map("_version")
+  fechaReg         DateTime @map("_fechaReg")
+  idUserReg        Int      @map("_idUserReg")
+  fechaModif       DateTime @map("_fechaModif")
+  idUserModif      Int      @map("_idUserModif")
+  InternalId       Int
+  TipoAccion       Int?
+  Guid_Tenant      String
+}
+
+model TMotivoIncidencia {
+  IdMotivo         Int      @id @default(autoincrement())
+  IdTipoIncidencia Int
+  Descripcio       String?
+  version          Int      @map("_version")
+  fechaReg         DateTime @map("_fechaReg")
+  idUserReg        Int      @map("_idUserReg")
+  fechaModif       DateTime @map("_fechaModif")
+  idUserModif      Int      @map("_idUserModif")
+  Guid_Tenant      String
+}
+
+model TPacPlan {
+  DescPlan String @id
+}
+
+model TPaises {
+  IdPais      Int      @id @default(autoincrement())
+  Descripcio  String?
+  IsoAlfa2    String?
+  IsoAlfa3    String?
+  IsoNum3     String?
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+  Normalizado Boolean
+  Guid_Tenant String
+}
+
+model TPluggin {
+  IdPluggin    Int      @id @default(autoincrement())
+  Descripcio   String
+  Fichero      String
+  TipoPlg      String
+  Area         String
+  Codigo       String
+  Version      String
+  FecAlta      DateTime
+  Nombre_RTM   String?
+  SQL_RTM      String?
+  Tabla        String?
+  CampoFecha   String?
+  Layout       Int?
+  IdTipoEspec  Int?
+  PlazoValidez Int
+  Estructura   String?
+  Idioma       String?
+}
+
+model TPoblaci {
+  IdPoblacio  Int      @id @default(autoincrement())
+  Descripcio  String?
+  IdProvin    Int?
+  IdPais      Int?
+  CodINE      String?
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+  Normalizado Boolean
+  Guid_Tenant String
+}
+
+model TProfesi {
+  IdProfesio  Int      @id @default(autoincrement())
+  Descripcio  String?
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+  Guid_Tenant String
+}
+
+model TProte {
+  IdProte                       Int       @id @default(autoincrement())
+  Nombre                        String?
+  Apellidos                     String?
+  Laboratori                    String?
+  NIF                           String?
+  Direccion                     String?
+  IdPoblacio                    Int?
+  Tel1                          String?
+  Tel2                          String?
+  TelMovil                      String?
+  Fax                           String?
+  Email                         String?
+  Web                           String?
+  CP                            String?
+  InformeRPT                    Int?
+  LimitArt                      String?
+  FechaBaja                     DateTime?
+  TipoDocIdent                  Int
+  IdPaisIdent                   Int?
+  GuidCentroDentBox             String?
+  DescLaboratorioDentBox        String?
+  DescClienteLaboratorioDentBox String?
+  NIFClienteLaboratorioDentBox  String?
+  Guid_Tenant                   String
+}
+
+model TProvin {
+  IdProvin    Int      @id @default(autoincrement())
+  Descripcio  String?
+  CodPro      String?
+  IdPais      Int?
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+  Normalizado Boolean
+  Guid_Tenant String
+}
+
+model TRRecall {
+  IdTRRecall       Int       @id @default(autoincrement())
+  Descripcion      String
+  RealizarRecall   Boolean
+  IdTipoAccion     Int
+  Inactivo         DateTime?
+  ParaTodosMotivos Boolean
+  Guid_Tenant      String
+}
+
+model TRRecall_TMRecall {
+  Id          Int      @id @default(autoincrement())
+  Id_TRRecall Int
+  Id_TMRecall Int
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+  Guid_Tenant String
+}
+
+model TReclamaPago {
+  IdTipo      Int      @id @default(autoincrement())
+  Descripcio  String?
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+}
+
+model TRegApun {
+  IdTRegApun Int     @id @default(autoincrement())
+  Descripcio String?
+}
+
+model TSeries {
+  Doc              String
+  IdEmisor         Int
+  Serie            String
+  Anyo             Int
+  Ultimo           Int?
+  Activo           String?
+  Id               Int     @id @default(autoincrement())
+  CodigoValidacion String?
+  Guid_Tenant      String
+}
+
+model TSitCal {
+  IdSit      Int       @id @default(autoincrement())
+  Descripcio String?
+  Color      Int?
+  FlgLab     String?
+  Inactivo   DateTime?
+  AOOnline   DateTime?
+}
+
+model TSitCalH {
+  IdSit Int
+  HIni  Int
+  HFin  Int
+
+  @@id([IdSit, HIni, HFin])
+}
+
+model TSitCita {
+  IdSitC           Int     @id @default(autoincrement())
+  Descripcio       String?
+  Color            Int?
+  FlgPizarra       String?
+  FlgHoraLlegada   String?
+  FlgHoraConsulta  String?
+  FlgHoraFinal     String?
+  FlgFallo         String?
+  FlgAnulada       String?
+  FlgVisible       String?
+  Orden            Int?
+  DuracMaxEstanc   Int?
+  FlgColorFont     String?
+  FlgColorShape    String?
+  IdSitCNueva      Int?
+  TiempoTransicion Int?
+  IdTipoSitCita    Int
+}
+
+model TSubFams {
+  IdFamilia    Int
+  IdSubFamilia Int      @id @default(autoincrement())
+  Descripcio   String?
+  version      Int      @map("_version")
+  fechaReg     DateTime @map("_fechaReg")
+  idUserReg    Int      @map("_idUserReg")
+  fechaModif   DateTime @map("_fechaModif")
+  idUserModif  Int      @map("_idUserModif")
+  Guid_Tenant  String
+}
+
+model TSubTipoAntecedentes {
+  IdSubTipoAnt Int      @id @default(autoincrement())
+  IdTipoAnt    Int
+  Descripcion  String?
+  Agrupado     Boolean?
+  VDM_Id       Int?
+  Guid_Tenant  String
+}
+
+model TTipoAntecedentes {
+  IdTipoAnt   Int      @id @default(autoincrement())
+  Descripcion String?
+  Orden       Int
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+  Guid_Tenant String
+}
+
+model TTipoColab {
+  IdTipoColab Int      @id @default(autoincrement())
+  Descripcio  String
+  RolPpal     Boolean
+  RolSec      Boolean
+  RolAux      Boolean
+  RolAlumno   Boolean
+  RolProfesor Boolean
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+  Guid_Tenant String
+}
+
+model TTipoIVA {
+  Descripcio   String
+  IVA          Float
+  Inactivo     DateTime?
+  SCCodSCtaFRA String?
+  SCCodSCtaGAS String?
+  version      Int       @map("_version")
+  fechaReg     DateTime  @map("_fechaReg")
+  idUserReg    Int       @map("_idUserReg")
+  fechaModif   DateTime  @map("_fechaModif")
+  idUserModif  Int       @map("_idUserModif")
+  IdTipoIVA    Int       @id @default(autoincrement())
+  Guid_Tenant  String
+}
+
+model TTipoOdg {
+  IdTipoOdg   Int     @id @default(autoincrement())
+  Tipo        Int
+  Descripcio  String?
+  IdGrupo     Int?
+  Guid_Tenant String
+}
+
+model TTipoParametros {
+  IdTipoParam Int     @id @default(autoincrement())
+  Descripcio  String?
+}
+
+model TTratamientos {
+  IdPac        Int
+  IdTrat       Int       @id @default(autoincrement())
+  Dosificacion String?
+  FecIns       DateTime?
+  Fecha        DateTime?
+  IdUsu        Int
+  Publico      String
+  IdFarmaco    Int?
+  DescFarmaco  String?
+  FecFin       DateTime?
+  IdTipoEspec  Int?
+  Observac     String?
+  IdCentro     Int?
+  IdVisita     Int?
+  Tipo         Int?
+  Dosis        String?
+  ViaAdmin     String?
+  Frecuencia   String?
+  CId          String?
+  Guid_Tenant  String
+  version      Int       @map("_version")
+  fechaReg     DateTime  @map("_fechaReg")
+  idUserReg    Int       @map("_idUserReg")
+  fechaModif   DateTime  @map("_fechaModif")
+  idUserModif  Int       @map("_idUserModif")
+}
+
+model TUCentros {
+  IdUser      Int
+  IdPerfil    Int
+  fechareg    DateTime @map("_fechareg")
+  Inactiva    String?
+  Guid_Tenant String
+
+  @@id([IdUser, IdPerfil])
+}
+
+model TUPerfil {
+  IdPerfil        Int     @id @default(autoincrement())
+  Descripcio      String?
+  IdCentro        Int?
+  CodInt          String?
+  PersonalExterno Boolean
+  Guid_Tenant     String
+}
+
+model TUsers {
+  IdUser                  Int       @id @default(autoincrement())
+  Login                   String
+  Pass                    String?
+  Nombre                  String?
+  Apellidos               String?
+  NIF                     String?
+  Email                   String?
+  Telef                   String?
+  UsrRido                 String?
+  DirRptExp               String?
+  RptGeneral              Boolean
+  FecPass                 DateTime?
+  IdPerfil                Int
+  OcultarPac              Boolean
+  OcultarPa2              Boolean?
+  IdCol                   Int?
+  FecDActiva              DateTime?
+  FecHActiva              DateTime?
+  UsrBloq                 Boolean?
+  IdTipoEspec             Int?
+  IdEmisor                Int?
+  IdGrupo                 Int?
+  AdmGrupo                String?
+  fechareg                DateTime  @map("_fechareg")
+  CodInt                  String?
+  PendienteResetear       Boolean?
+  Guid                    String
+  TipoDocIdent            Int
+  IdPaisIdent             Int?
+  Password                String
+  Guid_DefaultCenter      String?
+  Custom                  Boolean
+  Guid_ExternalUserDomain String?
+  Guid_Tenant             String
+  BannerDentIANoMostrar   DateTime?
+}
+
+model TUsuAOpc {
+  IdUsu                  Int
+  IdOpc                  String
+  Descripcio             String?
+  Imagen                 Bytes?
+  Duracion               Int?
+  LIMITADO               String?
+  LIMMATI                Int?
+  LIMTARDA               Int?
+  ImagenTxt              String?
+  DCitasGrp              String?
+  CantIntegGrp           Int?
+  Color                  Int?
+  NotaTto                String?
+  AOOnLine               String?
+  TipoLimitacion         Int
+  IdIcono                Int?
+  Disponible             DateTime?
+  SinBloqueosAutomaticos Boolean
+
+  @@id([IdUsu, IdOpc])
+}
+
+model TUsuAOpcTtosSugeridos {
+  Id            Int      @id @default(autoincrement())
+  IdOpc         String
+  IdTratamiento Int
+  version       Int      @map("_version")
+  fechaReg      DateTime @map("_fechaReg")
+  idUserReg     Int      @map("_idUserReg")
+  fechaModif    DateTime @map("_fechaModif")
+  idUserModif   Int      @map("_idUserModif")
+}
+
+model TUsuAgd {
+  IdUsu                Int       @id @default(autoincrement())
+  Descripcio           String?
+  CodExt               String?
+  MinFrac              Int?
+  IdCal                Int?
+  IdGrUsu              Int?
+  Status               Int?
+  BOX                  String?
+  IdOpcDef             String?
+  Nota                 String?
+  IdBox                Int?
+  IdCol                Int?
+  IdTipoEspec          Int?
+  AOOnLine             String?
+  AOFecPubDesde        DateTime?
+  AOFecPubHasta        DateTime?
+  AOAgdGUID            String?
+  AODescripcio         String?
+  IdOpcDefWeb          String?
+  IdCentro             Int?
+  IdTipoAgenda         Int
+  ActivarControlAgenda Int?
+  ColMan               Int?
+  ColTar               Int?
+  AOTipoTratamiento    Int
+  VentanaCitacion      Int?
+  BloqueosAutomaticos  Boolean
+  DuracionBloqueos     Int
+  Id_MotivoBloqueos    Int?
+  EnviarRecordatorio   DateTime?
+  EnviarConfirmacion   DateTime?
+}
+
+model TalonReceta {
+  IdTalonReceta Int       @id @default(autoincrement())
+  IdCol         Int
+  IdCentro      Int?
+  NumeroLote    String
+  TipoDoc       String
+  NIF           String
+  Nombre        String?
+  Apellido1     String
+  Apellido2     String?
+  NumColegiado  String
+  DirCP         String?
+  DirPostal     String?
+  DirMunicipio  String?
+  DirPais       String?
+  DirProvinica  String?
+  DirTipoVia    String?
+  IdColegio     String?
+  TrabCentro    String?
+  TrabCIF       String?
+  TrabPrincipal Int?
+  FechaReg      DateTime? @map("_FechaReg")
+  Libres        Int
+}
+
+model TalonRecetaCVE {
+  IdTalonRecetaCVE Int    @id @default(autoincrement())
+  IdTalonReceta    Int
+  Numero           String
+  CVE              String
+  Utilizado        Int
+}
+
+model Tarifas {
+  IdTarifa            Int       @id @default(autoincrement())
+  Codigo              String
+  Descripcion         String
+  Notas               String?
+  Sistema             String?
+  CodCli              String?
+  DiasCaducidad       Int
+  IdCli               Int
+  IdTarifaBase        Int?
+  IdTarifaComparativa Int?
+  IdTipoTarifa        Int?
+  IdFamiliaTarifa     Int?
+  Inactivo            DateTime?
+  fechareg            DateTime  @map("_fechareg")
+  version             Int       @map("_version")
+  LiqInmediata        Boolean
+  RequiereValidacion  Boolean
+  TipoValidacion      Int
+  IdGestionTarifa     Int
+  Guid_Tenant         String
+}
+
+model TipoControlRecall {
+  IdTipoControlRecall Int    @id @default(autoincrement())
+  Descripcion         String
+  Guid_Tenant         String
+}
+
+model TipoOrtoCasos_ConceptosColaboracion {
+  Id          Int       @id @default(autoincrement())
+  Codigo      String
+  Descripcion String
+  Posicion    Int
+  Valoracion  Int
+  Inactivo    DateTime?
+  version     Int       @map("_version")
+  fechaReg    DateTime  @map("_fechaReg")
+  idUserReg   Int       @map("_idUserReg")
+  fechaModif  DateTime  @map("_fechaModif")
+  idUserModif Int       @map("_idUserModif")
+}
+
+model TipoOrtoCasos_ConceptosHigiene {
+  Id          Int       @id @default(autoincrement())
+  Codigo      String
+  Descripcion String
+  Posicion    Int
+  Valoracion  Int
+  Inactivo    DateTime?
+  version     Int       @map("_version")
+  fechaReg    DateTime  @map("_fechaReg")
+  idUserReg   Int       @map("_idUserReg")
+  fechaModif  DateTime  @map("_fechaModif")
+  idUserModif Int       @map("_idUserModif")
+}
+
+model TipoOrtoCasos_EstadosCaso {
+  Id          Int       @id @default(autoincrement())
+  Descripcion String
+  Posicion    Int
+  Inactivo    DateTime?
+  version     Int       @map("_version")
+  fechaReg    DateTime  @map("_fechaReg")
+  idUserReg   Int       @map("_idUserReg")
+  fechaModif  DateTime  @map("_fechaModif")
+  idUserModif Int       @map("_idUserModif")
+}
+
+model TipoOrtoCasos_Intervenciones {
+  Id          Int      @id @default(autoincrement())
+  Descripcion String
+  version     Int      @map("_version")
+  fechaReg    DateTime @map("_fechaReg")
+  idUserReg   Int      @map("_idUserReg")
+  fechaModif  DateTime @map("_fechaModif")
+  idUserModif Int      @map("_idUserModif")
+}
+
+model TiposFormaPago {
+  Id          Int      @id @default(autoincrement())
+  Descripcion String
+  Bonificable Boolean
+  fechaReg    DateTime @map("_fechaReg")
+}
+
+model TiposPresupuestos {
+  IdTipoPresupuesto Int      @id @default(autoincrement())
+  Descripcion       String
+  IdTipoEspec       Int?
+  fechareg          DateTime @map("_fechareg")
+  version           Int      @map("_version")
+  LiqEnCurso        Boolean
+  Guid_Tenant       String
+}
+
+model TransaccionTratamiento {
+  Id                           Int       @id @default(autoincrement())
+  IdPac                        Int
+  IdCli                        Int
+  IdCentro                     Int
+  IdEstado                     Int
+  fechaReg                     DateTime  @map("_fechaReg")
+  idUserReg                    Int       @map("_idUserReg")
+  fechaModif                   DateTime  @map("_fechaModif")
+  idUserModif                  Int       @map("_idUserModif")
+  version                      Int       @map("_version")
+  IdMotivoAnulacion            Int?
+  ObsMotivoAnulacion           String?
+  NumBoleta                    Int?
+  IdTarifa                     Int?
+  IdCol                        Int?
+  Importe                      Decimal
+  Devuelto                     Decimal
+  IdCCDiagnostico              Int?
+  Id_UserAutorizaAnulacion     Int?
+  FechaLimiteAnulacion         DateTime?
+  NumBoletaAfecta              Int?
+  TipoTransaccion              Int?
+  IdForPago                    Int?
+  NumReferencia                String?
+  TransaccionOrderId           String?
+  AuthNumber_OLD               String?
+  Currency                     String?
+  Metadata_OLD                 String?
+  Timestamp_OLD                String?
+  PayerReference_OLD           String?
+  CardReference_OLD            String?
+  AmountDCC_OLD                String?
+  CurrencyDCC_OLD              String?
+  Exchange_OLD                 Decimal?
+  ResponseCode                 String?
+  ResponseStatus               String?
+  paymentMethod                String?
+  merchantParameters           String?
+  paymentProductId             String?
+  fraudServiceResult           String?
+  payment_id                   String?
+  payment_status               String?
+  statusCategory               String?
+  statusCode                   Int?
+  isCancellable                Boolean?
+  isAuthorized                 Boolean?
+  isRefundable                 Boolean?
+  paymentStatusCategory        String?
+  status                       String?
+  RETURNMAC                    String?
+  invalidTokens                String?
+  redirectUrl                  String?
+  partialRedirectUrl           String?
+  Resp_AID                     String?
+  Resp_ARC                     String?
+  Resp_ATC                     String?
+  Resp_PSN                     String?
+  Resp_Authorization           String?
+  Resp_CardBank                String?
+  Resp_CardHolder              String?
+  Resp_CardIssuer              String?
+  Resp_CardNumber              String?
+  Resp_CardTechnology          Int?
+  Resp_CardType                String?
+  Resp_Date                    String?
+  Resp_Time                    String?
+  Resp_Language                String?
+  Resp_Location                String?
+  Resp_MerchantId              String?
+  Resp_MerchantName            String?
+  Resp_OriginalTransactionId   String?
+  Resp_OriginalTransactionDate String?
+  Resp_PinIndicator            Int?
+  Resp_SignatureIndicator      Int?
+  Resp_SignatureImage          String?
+  Resp_TerminalId              String?
+  Resp_Type                    String?
+  Terminal                     String?
+  Guid_Tenant                  String
+}
+
+model Tratamientos {
+  IdTratamiento         Int       @id @default(autoincrement())
+  Codigo                String
+  DescripMed            String
+  DescripPac            String?
+  DescripAgd            String
+  CodInt                String?
+  IdTipoODG             Int
+  IdTipoEspec           Int?
+  IdEspecOMC            Int?
+  IdGrupo               Int?
+  IdTipoStd             Int?
+  NumFases              Int?
+  Duracion              Int?
+  Piezas                Int
+  Guia                  Boolean
+  Actos                 Int?
+  LimitNDias            Int?
+  LimitNActos           Int?
+  TipoLimitacion        Int
+  SoloPresupuestos      Int
+  NoPlanificable        Int
+  AgdPrimeraVisita      Int
+  DesglosaFases         Int
+  ConGarantia           Int
+  PrecioReferencia      Decimal?
+  IdIcono               Int?
+  Inactivo              DateTime?
+  Desde                 DateTime
+  Hasta                 DateTime?
+  fechareg              DateTime  @map("_fechareg")
+  version               Int       @map("_version")
+  GeneraTrabajoProtesis Int
+  AgdOnline             Int
+  NoDesglosarPresu      Int
+  Cuotas                Int
+  TipoCalcFase          Int
+  GUID                  String?
+  Id_VisitReason        Int?
+  Id_ResourcePlan       Int?
+  Id_TipoPresupuesto    Int?
+  TipoEnvioProtesico    Int
+  Id_TipoColab          Int?
+  PlanEcoTratamInicial  Boolean
+  PlanEcoTratamCuota    Boolean
+  Guid_Tenant           String
+  Id_TMRecall           Int?
+}
+
+model TratamientosFases {
+  IdTratamientoFase Int      @id @default(autoincrement())
+  IdTratamiento     Int
+  DescripMed        String
+  Observaciones     String?
+  Duracion          Int
+  TpcFacturar       Decimal
+  MinDias           Int
+  MaxDias           Int
+  OrdenEjecucion    Int
+  fechareg          DateTime @map("_fechareg")
+  version           Int      @map("_version")
+  DuracionBase      Int
+  DuracionPorRango  Boolean
+  IdIcono           Int?
+  Guid_Tenant       String
+}
+
+model Tratamientos_Tarifas {
+  IdTratamientoTarifa    Int       @id @default(autoincrement())
+  IdTratamiento          Int
+  IdTarifa               Int
+  IdTipoEspec            Int
+  IdGrupo                Int
+  CodTto                 String?
+  CodInt                 String?
+  Autoriz                String
+  Inactivo               DateTime?
+  fechareg               DateTime  @map("_fechareg")
+  version                Int       @map("_version")
+  IdCCGrupo              Int?
+  IdCCBeneficioAdicional Int?
+  Guid_Tenant            String
+}
+
+model Tratamientos_Tarifas_Precios {
+  IdTratamientoTarifaPrecio Int       @id @default(autoincrement())
+  Fecha                     DateTime
+  IdTratamientoTarifa       Int
+  PrecioPrivado             Decimal
+  PrecioVariable            Int
+  PrecioMutua               Decimal
+  PrecioColaborador         Decimal
+  CargoMutua                Int
+  Inactivo                  DateTime?
+  fechareg                  DateTime  @map("_fechareg")
+  version                   Int       @map("_version")
+  PrecioMinimo              Decimal
+  idUserReg                 Int       @map("_idUserReg")
+  fechaModif                DateTime  @map("_fechaModif")
+  idUserModif               Int       @map("_idUserModif")
+  Guid_Tenant               String
+}
+
+model TtosMed {
+  IdPac                   Int
+  NumTto                  Int
+  IdTto                   Int?
+  ZonasBoca               Int?
+  PiezasAdu               Decimal?
+  PiezasLec               Decimal?
+  PiezasNum               Decimal?
+  ZonasPieza              Decimal?
+  DespX                   Int?
+  DespY                   Int?
+  Rotacion                Int?
+  StaTto                  Int?
+  FecIni                  DateTime?
+  FecFin                  DateTime?
+  IdCol                   Int?
+  Notas                   String?
+  Importe                 Decimal?
+  Dto                     Int?
+  Pendiente               Float?
+  IdTipoOdg               Int?
+  Actos                   Int?
+  Tiempo                  Int?
+  IdCli                   Int?
+  Ident                   Int       @id @default(autoincrement())
+  Autoriz                 String?
+  NumFinan                String?
+  IdUser                  Int?
+  Comodin1                String?
+  IdColAux                Int?
+  Edu10                   Int?
+  Edu11                   Int?
+  Edu12                   Int?
+  Edu13                   Int?
+  Edu14                   Int?
+  Edu20                   Int?
+  Edu21                   Int?
+  Edu22                   Int?
+  Edu23                   Int?
+  Edu24                   Int?
+  TipoOperac              Int?
+  CampoAux1               String?
+  CampoAux2               String?
+  CampoAux3               String?
+  CampoAux4               String?
+  CampoAux5               String?
+  CampoAux6               String?
+  SesRealiz               Int?
+  FechaCaduc              DateTime?
+  fechareg                DateTime? @map("_fechareg")
+  IdRef                   Int?
+  IdProced                Int?
+  IdTipoEspec             Int?
+  NumDocUnico             String?
+  IdCentro                Int?
+  IdEmisor                Int?
+  ImporteDto              Decimal?
+  IdColValida             Int?
+  FechaValida             DateTime?
+  UniqueID                Int?
+  version                 Int       @map("_version")
+  IdPresuTto              Int?
+  DescTarifaConector      String?
+  ImportePrivado          Decimal?
+  ImporteMutua            Decimal?
+  IdUserEdit              Int?
+  fecharegEdit            DateTime  @map("_fecharegEdit")
+  NFacturaEl              String?
+  NumTransaccion          Int?
+  IdDevolucionTransaccion Int?
+  IdPlanEcoCuota          Int?
+  IdCCDiagnostico         Int?
+  Cuadrantes              Decimal?
+  Arcadas                 Decimal?
+  FecExpoCp               DateTime?
+  Guid_Tenant             String
+  CId                     String
+}
+
+model TtosMedFases {
+  IdTtosMedFase     Int      @id @default(autoincrement())
+  IdTtosMed         Int?
+  IdTratamientoFase Int?
+  NumFase           Int
+  Estado            Int
+  Fecha             DateTime
+  Notas             String?
+  TpcFacturar       Decimal
+  fechareg          DateTime @map("_fechareg")
+  version           Int      @map("_version")
+  IdLiqComisionDet  Int?
+  IdCol             Int?
+  IdColAux          Int?
+  Guid_Tenant       String
+}
+
+model TtosMed_PagoCli {
+  Id             Int      @id @default(autoincrement())
+  IdPagoCli      Int
+  IdTtosMed      Int
+  Reservado      Decimal
+  Consumido      Decimal
+  fechareg       DateTime @map("_fechareg")
+  version        Int      @map("_version")
+  iduser         Int      @map("_iduser")
+  NumTransaccion Int?
+  Guid_Tenant    String
+}
+
+model TxtPrede {
+  IdTxt       Int     @id @default(autoincrement())
+  Texto       String
+  TextoRich   String
+  Tipo        Int
+  Titulo      String?
+  Guid_Tenant String
+}
+
+model UserCola {
+  IdCol  Int
+  IdUser Int
+
+  @@id([IdCol, IdUser])
+}
+
+model UserEspec {
+  IdTipoEspec Int
+  IdUser      Int
+  Guid_Tenant String
+
+  @@id([IdTipoEspec, IdUser])
+}
+
+model Widgets {
+  Id             Int      @id @default(autoincrement())
+  version        Int      @map("_version")
+  fechaReg       DateTime @map("_fechaReg")
+  idUserReg      Int      @map("_idUserReg")
+  fechaModif     DateTime @map("_fechaModif")
+  idUserModif    Int      @map("_idUserModif")
+  ExternalId     String
+  Name           String
+  Description    String?
+  JsonProperties String
+  JsonVersion    Int
+  Custom         Boolean
+  Activo         Boolean
+}
+
+enum UserRole {
+  admin
+  doctor
+  hygienist
+  reception
+  accounting
+  auxiliary
+}
+
+// ─── SmilePro Native Models ──────────────────────────────────────────────────
+// Tablas propias de SmilePro (creadas en migrations 001-004).
+// Campos en camelCase (Prisma convention) con @map para snake_case en DB.
+
+model Patient {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firstName    String    @map("first_name")
+  lastName     String    @map("last_name")
+  dni          String?
+  phone        String
+  email        String?
+  dateOfBirth  DateTime? @map("date_of_birth") @db.Date
+  address      String?
+  city         String?
+  postalCode   String?   @map("postal_code")
+  medicalNotes String?   @map("medical_notes")
+  allergies    String?
+  medications  String?
+  bloodType    String?   @map("blood_type")
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("patients")
+}
+
+model ClinicalRecord {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId   String   @map("patient_id") @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  date        DateTime @default(now()) @db.Timestamptz(6)
+  type        String   @default("visit")
+  title       String   @default("")
+  content     String   @default("")
+  treatments  Json     @default("[]")
+  attachments Json     @default("[]")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("clinical_records")
+}
+
+model OdontogramEntry {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId   String   @map("patient_id") @db.Uuid
+  toothNumber Int      @map("tooth_number")
+  status      String   @default("healthy")
+  faces       Json     @default("{}")
+  notes       String?
+  userId      String?  @map("user_id") @db.Uuid
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([patientId, toothNumber])
+  @@map("odontogram_entries")
+}
+
+model Treatment {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  code        String?
+  category    String   @default("general")
+  price       Decimal  @db.Decimal(10, 2)
+  duration    Int      @default(30)
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("treatments")
+}
+
+model Automation {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  enabled     Boolean  @default(true)
+  trigger     String
+  canal       String   @default("whatsapp")
+  steps       Json     @default("[]")
+  successRate Int      @default(0) @map("success_rate")
+  executions  Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("automations")
+}
+
+model AIConfig {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agentName       String   @default("IA Dental") @map("agent_name")
+  language        String   @default("es")
+  welcomeMsg      String   @map("welcome_msg")
+  tone            Json     @default("{\"empathy\":4,\"proactivity\":3,\"formality\":\"semiformal\"}")
+  knowledge       String[]
+  escalationRules Json     @default("[]") @map("escalation_rules")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("ai_config")
+}
+
+model ConversationHistory {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  phone     String
+  patientId String?  @map("patient_id") @db.Uuid
+  messages  Json     @default("[]")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt DateTime @default(dbgenerated("(now() + interval '24 hours')")) @map("expires_at") @db.Timestamptz(6)
+
+  @@map("conversation_history")
+}
+
+model GestProveedores {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nombreFiscal     String   @map("nombre_fiscal")
+  cifNif           String?  @unique @map("cif_nif")
+  emailContacto    String?  @map("email_contacto")
+  categoriaDefecto String?  @map("categoria_defecto")
+  iban             String?
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("gest_proveedores")
+}
+
+model GestFacturasEmail {
+  gmailMessageId   String    @id @map("gmail_message_id")
+  proveedorExtraido String?  @map("proveedor_extraido")
+  proveedorId      String?   @map("proveedor_id") @db.Uuid
+  numeroFactura    String?   @map("numero_factura")
+  fechaFactura     DateTime? @map("fecha_factura") @db.Date
+  baseImponible    Decimal?  @map("base_imponible") @db.Decimal(10, 2)
+  ivaPct           Decimal?  @map("iva_pct") @db.Decimal(5, 2)
+  total            Decimal?  @db.Decimal(10, 2)
+  archivoPdfUrl    String?   @map("archivo_pdf_url")
+  estado           String    @default("pendiente")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("gest_facturas_email")
+}
+
+model GestFacturasEmitidas {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  numeroSerie     String   @unique @map("numero_serie")
+  numPac          String?  @map("num_pac")
+  nifCliente      String   @map("nif_cliente")
+  nombreCliente   String   @map("nombre_cliente")
+  concepto        String
+  baseImponible   Decimal  @map("base_imponible") @db.Decimal(10, 2)
+  ivaPct          Decimal  @default(0) @map("iva_pct") @db.Decimal(5, 2)
+  total           Decimal  @db.Decimal(10, 2)
+  fechaEmision    DateTime @map("fecha_emision") @db.Date
+  estadoPago      String   @default("pendiente") @map("estado_pago")
+  verifactuEstado String   @default("no_enviado") @map("verifactu_estado")
+  verifactuHash   String?  @map("verifactu_hash")
+
+  @@map("gest_facturas_emitidas")
+}
+
+model GestMovimientosBancarios {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ibanCuenta     String   @map("iban_cuenta")
+  fechaOperacion DateTime @map("fecha_operacion") @db.Date
+  conceptoBanco  String   @map("concepto_banco")
+  importe        Decimal  @db.Decimal(10, 2)
+  saldoPosterior Decimal? @map("saldo_posterior") @db.Decimal(10, 2)
+  estadoConcil   String   @default("abierto") @map("estado_concil")
+  fEmitidaId     String?  @map("f_emitida_id") @db.Uuid
+  fRecibidaId    String?  @map("f_recibida_id")
+
+  @@map("gest_movimientos_bancarios")
+}
+
+model GestModelosFiscales {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  modelo          String
+  ejercicio       Int
+  periodo         String
+  estado          String   @default("borrador")
+  fechaLimite     DateTime @map("fecha_limite") @db.Date
+  cuotaResultante Decimal? @map("cuota_resultante") @db.Decimal(10, 2)
+  archivoJustif   String?  @map("archivo_justif")
+
+  @@unique([modelo, ejercicio, periodo])
+  @@map("gest_modelos_fiscales")
+}
+

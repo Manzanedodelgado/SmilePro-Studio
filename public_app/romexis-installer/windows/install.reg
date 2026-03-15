@@ -1,0 +1,25 @@
+Windows Registry Editor Version 5.00
+
+; ─────────────────────────────────────────────────────────────────────────────
+; install.reg — Registra el protocolo romexis:// en Windows
+;
+; ANTES DE EJECUTAR:
+;   1. Copia launch_romexis.bat a C:\Romexis\launch_romexis.bat
+;      (o cambia la ruta en las líneas de abajo)
+;   2. Edita launch_romexis.bat y ajusta ROMEXIS_PATH
+;   3. Doble clic en este .reg → Sí → Aceptar
+; ─────────────────────────────────────────────────────────────────────────────
+
+[HKEY_CLASSES_ROOT\romexis]
+@="Planmeca Romexis Viewer"
+"URL Protocol"=""
+
+[HKEY_CLASSES_ROOT\romexis\DefaultIcon]
+@="C:\\Romexis\\data\\Romexis_Viewer_Win.exe,0"
+
+[HKEY_CLASSES_ROOT\romexis\shell]
+
+[HKEY_CLASSES_ROOT\romexis\shell\open]
+
+[HKEY_CLASSES_ROOT\romexis\shell\open\command]
+@="\"C:\\Romexis\\launch_romexis.bat\" \"%1\""
