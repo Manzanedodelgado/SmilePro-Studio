@@ -23,6 +23,19 @@ console.info(`[DB] Backend → ${API_URL}`);
 // isDbConfigured: devuelve true si el backend Node.js está disponible
 export const isDbConfigured = (): boolean => Boolean(API_URL);
 
+// ── authFetch: fetch con token JWT automático ─────────────────────
+// Lee el access_token guardado por AuthContext en localStorage.
+// Todos los servicios que llaman a endpoints protegidos deben usar esto.
+export const authFetch = (url: string, options: RequestInit = {}): Promise<Response> => {
+    const token = sessionStorage.getItem('sb_auth_token') ?? '';
+    const headers = new Headers(options.headers ?? {});
+    if (!headers.has('Content-Type') && options.method && options.method !== 'GET') {
+        headers.set('Content-Type', 'application/json');
+    }
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    return fetch(url, { ...options, headers });
+};
+
 // Tablas FDW de GELITE
 const FDW_TABLES = new Set([
     'Pacientes', 'DCitas', 'TtosMed', 'PRESUTTO', 'NV_CabFactura',

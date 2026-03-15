@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bot, Star, BookOpen, Shield, Send, ArrowRight, Save, Plus, X, Loader2 } from 'lucide-react';
-import { askIA, isAIConfigured } from '../../services/ia-dental.service';
+import { askIA, isAIConfigured, loadAIConfig, saveAIConfig } from '../../services/ia-dental.service';
 
 const TONES = ['Cálida y empática', 'Profesional y formal', 'Cercana y amigable', 'Eficiente y directa'];
 const LANG = ['Español neutro', 'Español peninsular', 'Bilingüe ES/EN'];
@@ -33,6 +33,17 @@ export const IAConfig: React.FC = () => {
     ]);
     const [saved, setSaved] = useState(false);
 
+    useEffect(() => {
+        loadAIConfig().then(cfg => {
+            if (!cfg) return;
+            if (cfg.name) setName(cfg.name);
+            if (cfg.tone !== undefined) setTone(cfg.tone);
+            if (cfg.lang !== undefined) setLang(cfg.lang);
+            if (cfg.greeting) setGreeting(cfg.greeting);
+            if (cfg.knowledge?.length) setKnowledge(cfg.knowledge);
+        });
+    }, []);
+
     const addKnowledge = () => {
         if (newKnowledge.trim()) { setKnowledge(p => [...p, newKnowledge.trim()]); setNewKnowledge(''); }
     };
@@ -55,7 +66,11 @@ export const IAConfig: React.FC = () => {
         }
     };
 
-    const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2500); };
+    const handleSave = async () => {
+        await saveAIConfig({ name, tone, lang, greeting, knowledge });
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+    };
 
     return (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">

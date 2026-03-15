@@ -1,11 +1,8 @@
 // ─────────────────────────────────────────────────────────────────
 //  services/ia-control.service.ts
-//  Control del agente IA — backend local (Node.js/Prisma).
-//  SIN dependencia de db.ts / backend.
-//  TODO: exponer /api/ai/ia-control en el backend cuando se necesite.
+//  F-004 FIX: Control del agente IA — ahora persiste en /api/ai/ia-control
 // ─────────────────────────────────────────────────────────────────
-
-const PAUSE_MINUTES = 5;
+import { authFetch } from './db';
 
 export interface IAControlStatus {
     iaActive: boolean;
@@ -14,39 +11,31 @@ export interface IAControlStatus {
     minutesLeft: number | null;
 }
 
-// Estado en memoria (fallback mientras el backend no expone este endpoint)
-const _state = new Map<string, { iaActive: boolean; pausedAt: string | null; autoResumeAt: string | null }>();
-
 export const getIAStatus = async (conversationId: string | number): Promise<IAControlStatus> => {
-    const key = String(conversationId);
-    const s = _state.get(key);
-    if (!s) return { iaActive: true, pausedAt: null, autoResumeAt: null, minutesLeft: null };
-
-    let { iaActive, pausedAt, autoResumeAt } = s;
-    let minutesLeft: number | null = null;
-
-    if (!iaActive && autoResumeAt) {
-        const resumeTime = new Date(autoResumeAt).getTime();
-        const now = Date.now();
-        if (resumeTime <= now) {
-            _state.set(key, { iaActive: true, pausedAt: null, autoResumeAt: null });
-            iaActive = true;
-        } else {
-            minutesLeft = Math.ceil((resumeTime - now) / 60000);
-        }
+    try {
+        const res = await authFetch(`/api/ai/ia-control/${conversationId}`);
+        if (!res.ok) return { iaActive: true, pausedAt: null, autoResumeAt: null, minutesLeft: null };
+        const json = await res.json();
+        return json.data ?? { iaActive: true, pausedAt: null, autoResumeAt: null, minutesLeft: null };
+    } catch {
+        return { iaActive: true, pausedAt: null, autoResumeAt: null, minutesLeft: null };
     }
-
-    return { iaActive, pausedAt, autoResumeAt, minutesLeft };
 };
 
 export const pauseIA = async (conversationId: string | number, _pausedBy?: string): Promise<boolean> => {
-    const now = new Date();
-    const autoResumeAt = new Date(now.getTime() + PAUSE_MINUTES * 60 * 1000).toISOString();
-    _state.set(String(conversationId), { iaActive: false, pausedAt: now.toISOString(), autoResumeAt });
-    return true;
+    try {
+        const res = await authFetch(`/api/ai/ia-control/${conversationId}/pause`, { method: 'POST' });
+        return res.ok;
+    } catch {
+        return false;
+    }
 };
 
 export const resumeIA = async (conversationId: string | number): Promise<boolean> => {
-    _state.set(String(conversationId), { iaActive: true, pausedAt: null, autoResumeAt: null });
-    return true;
+    try {
+        const res = await authFetch(`/api/ai/ia-control/${conversationId}/resume`, { method: 'POST' });
+        return res.ok;
+    } catch {
+        return false;
+    }
 };

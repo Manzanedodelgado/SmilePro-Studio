@@ -37,6 +37,7 @@ import { getConfigAgenda, type AgendaConfig } from '../services/config-agenda.se
 interface AgendaProps {
     activeSubArea?: string;
     initialCita?: Partial<Cita>;
+    onNavigate?: (area: import('../types').Area, subArea?: string, numPac?: string, waData?: { phone: string; name: string }) => void;
 }
 
 const PALETTE: Record<string, { bg: string; border: string; text: string; pill: string }> = {
@@ -78,7 +79,7 @@ const toHHMM = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${
 
 
 
-const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita }) => {
+const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate }) => {
 
 
     // V-010: Catálogos dinámicos desde FDW
@@ -346,16 +347,6 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita }) => {
             case 'whatsapp': {
                 const fecha = selectedDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
                 const txt = `👋 Hola ${cita.nombrePaciente.split(',')[0].trim()}, te confirmamos tu cita en Rubio García Dental:\n\n📅 ${fecha}\n⏰ ${cita.horaInicio} h\n🦷 ${cita.tratamiento}\n👨‍⚕️ ${cita.doctor}\n\n¿Necesitas cambiarla? Respóndenos a este mensaje. ¡Hasta pronto! 😊`;
-                
-                // Abrir ventana inmediatamente de forma síncrona si no usamos api en segundo plano
-                let waWindow: Window | null = null;
-                if (!isEvolutionConfigured()) {
-                    waWindow = window.open('about:blank', '_blank');
-                    if (!waWindow) {
-                        alert('Por favor, permite ventanas emergentes en tu navegador.');
-                        break;
-                    }
-                }
 
                 let tel = '';
                 try {
@@ -364,17 +355,18 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita }) => {
                         tel = pac?.telefono ?? '';
                     }
                 } catch { }
-                
-                if (!tel) { 
-                    if (waWindow) waWindow.close();
-                    alert('No hay teléfono registrado para este paciente'); 
-                    break; 
-                }
-                
+
+                if (!tel) { alert('No hay teléfono registrado para este paciente'); break; }
+
                 if (isEvolutionConfigured()) {
                     await sendTextMessage(tel, txt);
-                } else if (waWindow) {
-                    waWindow.location.href = `https://wa.me/${tel.replace(/\D/g, '')}?text=${encodeURIComponent(txt)}`;
+                } else if (onNavigate) {
+                    // Navegar al módulo interno con teléfono pre-cargado
+                    const name = cita.nombrePaciente?.split(',').reverse().join(' ').trim() || '';
+                    onNavigate('Whatsapp', undefined, undefined, { phone: tel, name });
+                } else {
+                    // Fallback: wa.me con texto pre-rellenado
+                    window.open(`https://wa.me/${tel.replace(/\D/g, '')}?text=${encodeURIComponent(txt)}`, '_blank', 'noopener');
                 }
                 break;
             }
@@ -544,9 +536,19 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita }) => {
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, cita.gabinete as 'G1'|'G2', cita.horaInicio)}
                 >
-                    <div className="w-[4.5rem] flex-shrink-0 text-center leading-none mt-0 pr-3 border-r border-slate-200/50 h-[36px] flex items-center justify-center">
-                        <span className="text-[13px] font-bold text-white bg-blue-700 shadow-sm px-2.5 py-1 rounded-md">{cita.horaInicio}</span>
-                    </div>
+                {/* Columna de horas: un label por tramo de 15 min */}
+                <div className="w-[4.5rem] flex-shrink-0 pr-3 border-r border-slate-200/50 h-full flex flex-col">
+                    {Array.from({ length: Math.ceil(safeDuration / 15) }, (_, i) => {
+                        const slotMin = parseTime(cita.horaInicio) + i * 15;
+                        return (
+                            <div key={slotMin} className="flex-1 flex items-center justify-center" style={{ minHeight: 36 }}>
+                                <span className={`text-[13px] font-bold px-2 py-0.5 rounded-md ${
+                                    i === 0 ? 'text-white bg-blue-700 shadow-sm' : 'text-blue-400 bg-blue-50 border border-blue-100'
+                                }`}>{toHHMM(slotMin)}</span>
+                            </div>
+                        );
+                    })}
+                </div>
                     <div className="flex-1 flex items-center justify-center rounded border border-dashed border-slate-300 h-[calc(100%-8px)] ml-3" style={{ background: 'repeating-linear-gradient(45deg,#f5f5f5,#f5f5f5 4px,#ebebeb 4px,#ebebeb 8px)' }}>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bioseguridad</span>
                     </div>
@@ -569,8 +571,21 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita }) => {
                 onDrop={(e) => handleDrop(e, cita.gabinete as 'G1'|'G2', cita.horaInicio)}
                 onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.pageX, y: e.pageY, cita }); }}
             >
-                <div className="w-[4.5rem] flex-shrink-0 text-center leading-none mt-0 pr-3 border-r border-slate-200/50 h-[36px] flex items-center justify-center">
-                    <span className="text-[13px] font-bold text-white bg-blue-700 shadow-sm px-2.5 py-1 rounded-md transition-colors">{cita.horaInicio}</span>
+                {/* Columna de horas: un label por cada tramo de 15 min que ocupa la cita */}
+                <div className="w-[4.5rem] flex-shrink-0 pr-3 border-r border-slate-200/50 h-full flex flex-col">
+                    {Array.from({ length: Math.ceil(safeDuration / 15) }, (_, i) => {
+                        const slotMin = parseTime(cita.horaInicio) + i * 15;
+                        const slotLabel = toHHMM(slotMin);
+                        return (
+                            <div key={slotLabel} className="flex-1 flex items-center justify-center" style={{ minHeight: 36 }}>
+                                <span className={`text-[13px] font-bold px-2 py-0.5 rounded-md transition-colors ${
+                                    i === 0
+                                        ? 'text-white bg-blue-700 shadow-sm'
+                                        : 'text-blue-500 bg-blue-50 border border-blue-100'
+                                }`}>{slotLabel}</span>
+                            </div>
+                        );
+                    })}
                 </div>
                 
                 <div className={`relative flex-1 ml-3 flex items-center gap-3 pl-3 pr-4 h-[calc(100%-8px)] rounded-md border ${isEditing ? 'border-blue-400 bg-blue-50/50 shadow-md shadow-blue-500/10 z-10' : 'border-slate-200/80 bg-white shadow-sm hover:border-blue-300 hover:shadow-md transition-all'}`}>
@@ -590,36 +605,38 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita }) => {
                         )}
                     </div>
                     <div className="ml-auto flex items-center gap-2">
+                        {/* Ver ficha — solo si tiene paciente registrado */}
+                        {cita.pacienteNumPac && !cita.pacienteNumPac.startsWith('CTX-') && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onNavigate?.('Pacientes', 'Historia Clínica', cita.pacienteNumPac);
+                                }}
+                                className="text-slate-400 hover:text-[#051650] transition-colors p-1 rounded-md hover:bg-slate-100 flex-shrink-0"
+                                title="Abrir ficha del paciente"
+                            >
+                                <User className="w-4 h-4" />
+                            </button>
+                        )}
                         <button
                             onClick={async (e) => {
                                 e.stopPropagation();
-                                if (!cita.pacienteNumPac) {
-                                    alert('La cita no tiene un paciente asignado.');
-                                    return;
-                                }
-                                
-                                const newWindow = window.open('about:blank', '_blank');
-                                if (!newWindow) {
-                                    alert('Por favor, permite ventanas emergentes en tu navegador.');
-                                    return;
-                                }
-
+                                if (!cita.pacienteNumPac) return;
                                 try {
-                                    newWindow.document.write('Cargando chat...');
                                     const p = await getPaciente(cita.pacienteNumPac);
-                                    if (p?.telefono) {
-                                        const phone = p.telefono.replace(/\D/g, '');
-                                        newWindow.location.href = `https://wa.me/34${phone}`;
+                                    const phone = p?.telefono ?? '';
+                                    const name  = cita.nombrePaciente?.split(',').reverse().join(' ').trim() || p?.nombre || '';
+                                    if (onNavigate) {
+                                        onNavigate('Whatsapp', undefined, undefined, { phone, name });
                                     } else {
-                                        newWindow.close();
-                                        alert('Este paciente no tiene teléfono registrado.');
+                                        // fallback: abrir wa.me si no hay navegación interna
+                                        const clean = phone.replace(/\D/g, '');
+                                        if (clean) window.open(`https://wa.me/${clean}`, '_blank', 'noopener');
                                     }
-                                } catch (e) { 
-                                    newWindow.close();
-                                }
+                                } catch { /* no-op */ }
                             }}
-                            className="text-slate-400 hover:text-blue-500 transition-colors p-1 rounded-md hover:bg-slate-100 flex-shrink-0"
-                            title="Escribir por WhatsApp"
+                            className="text-slate-400 hover:text-[#25D366] transition-colors p-1 rounded-md hover:bg-emerald-50 flex-shrink-0"
+                            title="Abrir chat de WhatsApp"
                         >
                             <MessageCircle className="w-4 h-4" />
                         </button>
@@ -638,63 +655,164 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita }) => {
 
 
     const renderGabineteList = (gab: 'G1' | 'G2') => {
-        let elements = [];
-        const citasGab = filteredCitas.filter(c => c.gabinete === gab).sort((a,b) => {
-            const aMin = parseTime(a.horaInicio);
-            const bMin = parseTime(b.horaInicio);
-            return aMin - bMin;
-        });
+        const SLOT_H = 36;
+        const elements: React.ReactNode[] = [];
+        const docG1 = agendaConfigStore?.doctores?.[0]?.nombre || 'Dr. Mario Rubio';
+        const doc = gab === 'G1' ? docG1 : 'Tec. Juan Antonio Manzanedo';
 
         for (const [startH, endH] of workingSegments) {
             const segStart = startH * 60;
-            const segEnd = endH * 60;
-            
+            const segEnd   = endH * 60;
+            const slotCount = (segEnd - segStart) / 15;
+            const totalHeight = slotCount * SLOT_H;
+
             if (startH >= 15) {
                 elements.push(
                     <div key={`seg-${gab}-${startH}-pausa`} className="bg-[#051650] py-1.5 px-6 shadow-sm border-y border-[#051650]/80 sticky top-0 z-20 flex justify-center items-center gap-3">
                         <svg width="10" height="10" viewBox="0 0 14 14" className="flex-shrink-0 rounded-[2px] overflow-hidden opacity-90">
-                            <rect x="0" y="0" width="7" height="7" fill="#FF4B68" />
-                            <rect x="7" y="0" width="7" height="7" fill="#FBFFA3" />
-                            <rect x="0" y="7" width="7" height="7" fill="#118DF0" />
-                            <rect x="7" y="7" width="7" height="7" fill="#004182" />
+                            <rect x="0" y="0" width="7" height="7" fill="#FF4B68" /><rect x="7" y="0" width="7" height="7" fill="#FBFFA3" />
+                            <rect x="0" y="7" width="7" height="7" fill="#118DF0" /><rect x="7" y="7" width="7" height="7" fill="#004182" />
                         </svg>
-                        <span className="text-[11px] font-bold uppercase tracking-widest leading-none bg-gradient-to-r from-[#D4F5F5] to-[#FBFFA3] bg-clip-text text-transparent transform translate-y-[1px]">Pausa</span>
+                        <span className="text-[11px] font-bold uppercase tracking-widest leading-none bg-gradient-to-r from-[#D4F5F5] to-[#FBFFA3] bg-clip-text text-transparent translate-y-[1px]">Pausa</span>
                         <svg width="10" height="10" viewBox="0 0 14 14" className="flex-shrink-0 rounded-[2px] overflow-hidden opacity-90">
-                            <rect x="0" y="0" width="7" height="7" fill="#FF4B68" />
-                            <rect x="7" y="0" width="7" height="7" fill="#FBFFA3" />
-                            <rect x="0" y="7" width="7" height="7" fill="#118DF0" />
-                            <rect x="7" y="7" width="7" height="7" fill="#004182" />
+                            <rect x="0" y="0" width="7" height="7" fill="#FF4B68" /><rect x="7" y="0" width="7" height="7" fill="#FBFFA3" />
+                            <rect x="0" y="7" width="7" height="7" fill="#118DF0" /><rect x="7" y="7" width="7" height="7" fill="#004182" />
                         </svg>
                     </div>
                 );
             }
 
-            let currentMin = segStart;
+            const segCitas = filteredCitas
+                .filter(c => c.gabinete === gab)
+                .filter(c => { const t = parseTime(c.horaInicio); return t >= segStart && t < segEnd; });
 
-            const segmentCitas = citasGab.filter(c => {
-                const t = parseTime(c.horaInicio);
-                return t >= segStart && t < segEnd; 
-            });
+            elements.push(
+                <div key={`grid-${gab}-${startH}`} className="relative" style={{ height: totalHeight }}>
 
-            for (const cita of segmentCitas) {
-                const cStart = parseTime(cita.horaInicio);
-                
-                while (currentMin + 15 <= cStart) {
-                    elements.push(renderFreeSlot(gab, currentMin));
-                    currentMin += 15;
-                }
-                
-                elements.push(renderListCita(cita));
-                // Redondear duracion al alza a los 15 min más cercanos para continuar
-                const safeDuration = Math.min(cita.duracionMinutos || 30, 240);
-                const durRounded = Math.ceil(safeDuration / 15) * 15;
-                currentMin = Math.max(currentMin, cStart + durRounded);
-            }
+                    {/* Columna de horas — todos los labels siempre visibles */}
+                    <div className="absolute left-0 top-0 bottom-0 border-r border-slate-200/50" style={{ width: '4.5rem', zIndex: 6 }}>
+                        {Array.from({ length: slotCount }, (_, i) => {
+                            const min = segStart + i * 15;
+                            // Determinar estado del slot
+                            const isCitaStart = segCitas.some(c => parseTime(c.horaInicio) === min);
+                            const isOccupied  = !isCitaStart && segCitas.some(c => {
+                                const cStart = parseTime(c.horaInicio);
+                                const cEnd   = cStart + Math.min(c.duracionMinutos || 30, 240);
+                                return min > cStart && min < cEnd;
+                            });
+                            const labelCls = isOccupied
+                                ? 'text-slate-400 bg-white border border-slate-300'          // gris — tramo ocupado
+                                : isCitaStart
+                                    ? 'text-white bg-blue-700 border border-blue-700 shadow-sm' // azul fondo, texto blanco — inicio cita
+                                    : 'text-blue-700 bg-white border border-blue-700 shadow-sm'; // azul borde — libre
+                            return (
+                                <div key={min} className="absolute flex items-center justify-center" style={{ top: i * SLOT_H, height: SLOT_H, width: '100%' }}>
+                                    <span className={`text-[13px] font-bold px-2.5 py-1 rounded-md ${labelCls}`}>{toHHMM(min)}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
 
-            while (currentMin + 15 <= segEnd) {
-                 elements.push(renderFreeSlot(gab, currentMin));
-                 currentMin += 15;
-            }
+                    {/* Filas de fondo para drag-drop y clic derecho */}
+                    <div className="absolute inset-0" style={{ left: '4.5rem', zIndex: 1 }}>
+                        {Array.from({ length: slotCount }, (_, i) => {
+                            const min = segStart + i * 15;
+                            const timeStr = toHHMM(min);
+                            return (
+                                <div key={min}
+                                    className="absolute border-b border-slate-200 hover:bg-white transition-all cursor-pointer group"
+                                    style={{ top: i * SLOT_H, height: SLOT_H, left: 0, right: 0 }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingCita({ id: generateId(), gabinete: gab, pacienteNumPac: '', nombrePaciente: '', horaInicio: timeStr, duracionMinutos: 30, tratamiento: 'Control', categoria: 'Diagnostico', estado: 'planificada', doctor: doc, alertasMedicas: [], alertasLegales: [], alertasFinancieras: false, notas: '' });
+                                    }}
+                                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                    onDragOver={handleDragOver}
+                                    onDrop={(e) => handleDrop(e, gab, timeStr)}
+                                >
+                                    <div className="flex items-center justify-end h-full pr-4">
+                                        <div className="flex-shrink-0 flex items-center opacity-0 group-hover:opacity-100 transition-opacity text-blue-500 bg-white px-2.5 py-0.5 rounded-md shadow-sm border border-blue-100 h-6">
+                                            <span className="text-[10px] font-bold uppercase tracking-wider">Nueva Cita</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Citas absolutas — solapamiento por z-index (inicio más tardío encima) */}
+                    <div className="absolute inset-0 pointer-events-none" style={{ left: '4.5rem', zIndex: 2 }}>
+                        {segCitas.map(cita => {
+                            const cStart  = parseTime(cita.horaInicio);
+                            const safeDur = Math.min(cita.duracionMinutos || 30, 240);
+                            const hPx  = Math.max(SLOT_H, Math.ceil(safeDur / 15) * SLOT_H);
+                            const topPx = (cStart - segStart) / 15 * SLOT_H;
+                            const zIdx  = Math.floor(cStart / 15) + 10;
+
+                            if (cita.estado === 'bloqueo_bio') {
+                                return (
+                                    <div key={cita.id} draggable
+                                        onDragStart={(e) => handleDragStart(e, cita.id!)}
+                                        onDragOver={handleDragOver}
+                                        onDrop={(e) => handleDrop(e, gab, cita.horaInicio)}
+                                        className="absolute flex items-center justify-center rounded border-dashed border-2 border-slate-300 cursor-move pointer-events-auto"
+                                        style={{ top: topPx + 3, height: hPx - 6, left: 6, right: 6, zIndex: zIdx, background: 'repeating-linear-gradient(45deg,#f5f5f5,#f5f5f5 4px,#ebebeb 4px,#ebebeb 8px)' }}>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bioseguridad</span>
+                                        <button onClick={async (e) => { e.stopPropagation(); await deleteCita(cita.id); setCitas(prev => prev.filter(c => c.id !== cita.id)); }}
+                                            className="absolute right-1 top-1 p-0.5 text-slate-300 hover:text-red-500 transition-colors"><X className="w-3 h-3" /></button>
+                                    </div>
+                                );
+                            }
+
+                            const pal = getPalette(cita.tratamiento);
+                            const cfg = ec(cita.estado);
+                            const isEditing = editingCita?.id === cita.id;
+
+                            return (
+                                <div key={cita.id} draggable
+                                    onDragStart={(e) => handleDragStart(e, cita.id!)}
+                                    onDragOver={handleDragOver}
+                                    onDrop={(e) => handleDrop(e, cita.gabinete as 'G1'|'G2', cita.horaInicio)}
+                                    onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.pageX, y: e.pageY, cita }); }}
+                                    className="absolute cursor-move group pointer-events-auto"
+                                    style={{ top: topPx + 3, height: hPx - 6, left: 6, right: 6, zIndex: zIdx }}>
+                                    <div className={`flex items-center gap-3 pl-3 pr-3 h-full rounded-md border ${isEditing ? 'border-blue-400 bg-blue-50/50 shadow-md shadow-blue-500/10' : 'border-slate-200/80 bg-white shadow-sm hover:border-blue-300 hover:shadow-md transition-all'}`}>
+                                        <div className="w-1 h-3/5 min-h-[16px] rounded-full flex-shrink-0" style={{ background: pal.border }} />
+                                        <span className="text-[12px] font-bold text-[#051650] flex-shrink-0">{cita.pacienteNumPac || '****'}</span>
+                                        <div className="flex-1 flex items-center gap-2 min-w-0 pl-2 border-l border-slate-100">
+                                            <p className="text-[13px] font-bold text-[#051650] shrink-0 truncate max-w-[160px]">{cita.nombrePaciente || 'Sin datos'}</p>
+                                            <span className="text-slate-200 shrink-0">|</span>
+                                            <p className="text-[12px] font-bold truncate" style={{ color: pal.border }}>{cita.tratamiento}</p>
+                                            {cita.notas && <><span className="text-slate-300 text-[10px] shrink-0">●</span><p className="text-[11px] text-slate-500 italic truncate">{cita.notas}</p></>}
+                                        </div>
+                                        <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+                                            {cita.pacienteNumPac && !cita.pacienteNumPac.startsWith('CTX-') && (
+                                                <button onClick={(e) => { e.stopPropagation(); onNavigate?.('Pacientes', 'Historia Clínica', cita.pacienteNumPac); }}
+                                                    className="text-slate-400 hover:text-[#051650] transition-colors p-1 rounded-md hover:bg-slate-100 flex-shrink-0" title="Ver ficha">
+                                                    <User className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                            <button onClick={async (e) => {
+                                                e.stopPropagation(); if (!cita.pacienteNumPac) return;
+                                                try { const p = await getPaciente(cita.pacienteNumPac); const phone = p?.telefono ?? ''; const name = cita.nombrePaciente?.split(',').reverse().join(' ').trim() || p?.nombre || '';
+                                                    if (onNavigate) { onNavigate('Whatsapp', undefined, undefined, { phone, name }); } else { const clean = phone.replace(/\D/g, ''); if (clean) window.open(`https://wa.me/${clean}`, '_blank', 'noopener'); }
+                                                } catch { /* no-op */ }
+                                            }} className="text-slate-400 hover:text-[#25D366] transition-colors p-1 rounded-md hover:bg-emerald-50 flex-shrink-0" title="WhatsApp">
+                                                <MessageCircle className="w-3.5 h-3.5" />
+                                            </button>
+                                            <div className={`flex items-center gap-1 px-2 h-5 rounded-md border text-[10px] font-bold flex-shrink-0 shadow-sm cursor-pointer hover:opacity-80 ${cfg.cls}`}
+                                                onClick={e => { e.stopPropagation(); setStatusMenu({ x: e.pageX, y: e.pageY, cita }); }}>
+                                                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: cfg.dot }} />
+                                                {cfg.label}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
         }
         return elements;
     };
@@ -1565,6 +1683,36 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita }) => {
                                                 </button>
                                             </div>
                                         )}
+                                    {/* ── Accesos rápidos al paciente ── */}
+                                    {editingCita.pacienteNumPac && !editingCita.pacienteNumPac.startsWith('CTX-') && (
+                                        <div className="flex gap-2 mt-3">
+                                            <button
+                                                type="button"
+                                                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#051650]/8 hover:bg-[#051650]/15 text-[#051650] text-[12px] font-bold transition-colors border border-[#051650]/20"
+                                                onClick={() => onNavigate?.('Pacientes', 'Historia Clínica', editingCita.pacienteNumPac)}
+                                            >
+                                                <User size={13} />
+                                                Ver ficha
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#128C7E] text-[12px] font-bold transition-colors border border-[#25D366]/30"
+                                                onClick={async () => {
+                                                    const pac = await getPaciente(editingCita.pacienteNumPac);
+                                                    const phone = pac?.telefono?.replace(/\D/g, '') ?? '';
+                                                    const name = editingCita.nombrePaciente;
+                                                    if (phone) {
+                                                        onNavigate?.('Whatsapp', undefined, undefined, { phone, name });
+                                                    } else {
+                                                        window.open(`https://wa.me/?text=${encodeURIComponent(`Hola ${name}`)}`, '_blank');
+                                                    }
+                                                }}
+                                            >
+                                                <MessageCircle size={13} />
+                                                WhatsApp
+                                            </button>
+                                        </div>
+                                    )}
                                     </div>
                                 )} {/* End Primera Visita / Paciente conditional */}
 

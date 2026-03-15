@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────────
 import { type SOAPNote } from '../types';
 import { logger } from './logger';
+import { authFetch } from './db';
 
 const API_BASE = 'http://localhost:3000/api/clinical';
 
@@ -26,7 +27,7 @@ const mapRecord = (r: any): SOAPNote => ({
 
 export const getSoapNotes = async (numPac: string): Promise<SOAPNote[]> => {
     try {
-        const res = await fetch(`${API_BASE}/patients/${encodeURIComponent(numPac)}/history`);
+        const res = await authFetch(`${API_BASE}/patients/${encodeURIComponent(numPac)}/history`);
         if (!res.ok) return [];
         const json = await res.json();
         const records: any[] = json.data?.records ?? json.data ?? [];
@@ -40,7 +41,7 @@ export const getSoapNotes = async (numPac: string): Promise<SOAPNote[]> => {
 /** numPac es el NumPac GELITE del paciente; note es el cuerpo de la nota */
 export const createSoapNote = async (numPac: string, note: Omit<SOAPNote, 'id'>): Promise<SOAPNote | null> => {
     try {
-        const res = await fetch(`${API_BASE}/records`, {
+        const res = await authFetch(`${API_BASE}/records`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -68,7 +69,7 @@ export const updateSoapNote = async (id: string, _updates: Partial<SOAPNote>): P
 
 export const deleteSoapNote = async (id: string): Promise<boolean> => {
     try {
-        const res = await fetch(`${API_BASE}/records/${id}`, { method: 'DELETE' });
+        const res = await authFetch(`${API_BASE}/records/${id}`, { method: 'DELETE' });
         return res.ok;
     } catch { return false; }
 };

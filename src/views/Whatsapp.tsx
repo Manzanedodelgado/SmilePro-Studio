@@ -603,7 +603,7 @@ const Whatsapp: React.FC<WhatsappProps> = ({ initialPhone, initialName, onNaviga
                                                 : <><Pause className="w-3 h-3" />{iaState.minutesLeft ? `${iaState.minutesLeft}min` : 'Pausada'}</>}
                                         </button>
                                         <button onClick={handleGoToPatient} className="p-2 hover:bg-slate-50 rounded-xl transition-all" title="Ver ficha"><UserRound className="w-4 h-4 text-slate-400" /></button>
-                                        <button className="p-2 hover:bg-slate-50 rounded-xl transition-all" title="Llamar"><Phone className="w-4 h-4 text-slate-400" /></button>
+                                        <button onClick={() => active?.phone && window.open(`tel:${active.phone.replace(/\s/g,'')}`)} className="p-2 hover:bg-slate-50 rounded-xl transition-all" title="Llamar"><Phone className="w-4 h-4 text-slate-400" /></button>
                                         <button onClick={async () => { if (active.chatwootId) { await labelConversation(active.chatwootId, ['Revisado']); } }} className="p-2 hover:bg-slate-50 rounded-xl transition-all" title="Etiquetar"><Tag className="w-4 h-4 text-slate-400" /></button>
                                         <button onClick={async () => { if (active.chatwootId) { await resolveConversation(active.chatwootId); setConvs(p => p.map(c => c.id === active.id ? { ...c, status: 'resolved' } : c)); } }}
                                             className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 border border-blue-200 text-[#051650] rounded-xl text-[13px] font-bold uppercase hover:bg-blue-100 transition-all">
@@ -767,7 +767,10 @@ const Whatsapp: React.FC<WhatsappProps> = ({ initialPhone, initialName, onNaviga
 
                                     {/* Input row */}
                                     <div className="flex items-end gap-2 p-2">
-                                        <button className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors flex-shrink-0" title="Adjunto"><Paperclip className="w-5 h-5" /></button>
+                                        <label className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors flex-shrink-0 cursor-pointer" title="Adjunto">
+                                            <Paperclip className="w-5 h-5" />
+                                            <input type="file" accept="image/*,application/pdf,.doc,.docx" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setInput(prev => prev + ` [Archivo: ${f.name}]`); e.target.value=''; }} />
+                                        </label>
                                         <button onClick={() => { setShowEmoji(v => !v); setShowTemplates(false); }}
                                             className={`p-2 rounded-full transition-colors flex-shrink-0 ${showEmoji ? 'text-blue-600 bg-blue-50' : 'text-slate-400 hover:bg-slate-100'}`} title="Emojis">
                                             <Smile className="w-5 h-5" />

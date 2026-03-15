@@ -8,10 +8,9 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import PlanmecaLauncher from '../components/radiologia/PlanmecaLauncher';
-import RadiologiaViewer, {
-    type MeasureTool, type Measurement,
-} from '../components/radiologia/RadiologiaViewer';
+
+type MeasureTool = 'select' | 'pan' | 'wl' | 'ruler' | 'angle' | 'roiRect' | 'roiEllipse' | 'arrow' | 'text';
+interface Measurement { id: string; tipo: string; points: { x: number; y: number }[]; value?: number; unit?: string; }
 import {
     Upload, Download, RotateCcw, Search, FolderOpen,
     Move, Ruler, Type, Sliders, Info,
@@ -200,6 +199,7 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
     const [isDragging, setIsDragging] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const fileMapRef = useRef<Map<string, File>>(new Map());
+    const [dicomFile, setDicomFile] = useState<File | null>(null);
 
     // ── Herramienta activa ────────────────────────────────────────────────────
     const [activeTool, setActiveTool] = useState<MeasureTool>('select');
@@ -215,8 +215,6 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
     const [rotation, setRotation] = useState(0);
     const [colorMap, setColorMap] = useState<ColorMap>('grayscale');
 
-    // ── DICOM: solo necesitamos saber si hay archivo local ────────────────────
-    // Los controles de imagen (W/L, layout) los gestiona Planmeca Romexis
 
     // ── Notificar padre ───────────────────────────────────────────────────────
     useEffect(() => {
@@ -227,7 +225,6 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
     // ── Derivados ─────────────────────────────────────────────────────────────
     const selected = estudios.find(e => e.id === selectedId) ?? null;
     const isDicom = selected?.tipo === 'dicom';
-    const cbctFile = selectedId ? fileMapRef.current.get(selectedId) ?? null : null;
     const displayUrl = selected
         ? (selected.colorizedUrl ?? selected.enhancedUrl ?? selected.originalUrl)
         : null;
@@ -276,6 +273,7 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
                 fileMapRef.current.set(nuevo.id, file);
                 setEstudios(prev => [nuevo, ...prev]);
                 setSelectedId(nuevo.id);
+                if (nuevo.tipo === 'dicom') setDicomFile(file);
             } catch (err) {
                 console.error('[Radiologia] Upload error:', err);
             }
@@ -432,7 +430,10 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
                             {studies.map(est => (
                                 <div
                                     key={est.id}
-                                    onClick={() => setSelectedId(est.id)}
+                                    onClick={() => {
+                                        setSelectedId(est.id);
+                                        setDicomFile(fileMapRef.current.get(est.id) ?? null);
+                                    }}
                                     style={{
                                         padding: '7px 12px',
                                         cursor: 'pointer',
@@ -557,31 +558,47 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
                 </div>
 
                 {/* Visor */}
-                <div style={{ flex: 1, minHeight: 0 }}>
-                    {isDicom && selected ? (
-                        /* Estudios DICOM → lanzar Planmeca Romexis */
-                        <PlanmecaLauncher
-                            estudio={selected}
-                            file={cbctFile}
-                            patientName={DEMO_PATIENTS.find(p => p.id === selected.pacienteNumPac)?.nombre}
-                        />
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative', background: '#060809' }}>
+                    {!selected || !displayUrl ? (
+                        <div style={{ textAlign: 'center', color: '#334155' }}>
+                            <p style={{ fontSize: 13, marginBottom: 6 }}>Selecciona un estudio</p>
+                            <p style={{ fontSize: 11 }}>o arrastra un archivo DICOM / imagen</p>
+                        </div>
+                    ) : isDicom && !dicomFile ? (
+                        /* DICOM de red sin archivo local → panel informativo */
+                        <div style={{ textAlign: 'center', color: '#475569', padding: 32 }}>
+                            <div style={{ fontSize: 40, marginBottom: 12 }}>🔬</div>
+                            <p style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8', marginBottom: 6 }}>Estudio DICOM</p>
+                            <p style={{ fontSize: 11, marginBottom: 16, lineHeight: 1.6 }}>
+                                Este estudio está almacenado en el servidor de imágenes.<br />
+                                Usa el botón <strong style={{ color: '#22d3ee' }}>Romexis</strong> o <strong style={{ color: '#94a3b8' }}>Weasis</strong> para abrirlo.
+                            </p>
+                            {selected.rutaOrigen && (
+                                <code style={{ display: 'block', background: '#0d1018', border: '1px solid #1e2535', borderRadius: 6, padding: '6px 10px', fontSize: 10, color: '#64748b', wordBreak: 'break-all' }}>
+                                    {selected.rutaOrigen}
+                                </code>
+                            )}
+                        </div>
                     ) : (
-                        /* Imagen radiográfica estándar */
-                        <RadiologiaViewer
-                            url={displayUrl}
-                            tool={activeTool}
-                            measurements={measurements}
-                            onMeasurementsChange={setMeasurements}
-                            brightness={brightness}
-                            contrast={contrast}
-                            colorMap={colorMap}
-                            invert={invertImg}
-                            flipH={flipH}
-                            flipV={flipV}
-                            rotation={rotation}
-                            onWLChange={(wc, ww) => {
-                                setBrightness(Math.round(wc / 10));
-                                setContrast(Math.round(ww / 50));
+                        /* Imagen (estándar o DICOM importado) con filtros CSS */
+                        <img
+                            src={displayUrl}
+                            alt={selected.nombre}
+                            style={{
+                                maxWidth: '100%',
+                                maxHeight: '100%',
+                                objectFit: 'contain',
+                                filter: [
+                                    `brightness(${1 + brightness / 100})`,
+                                    `contrast(${1 + contrast / 100})`,
+                                    invertImg ? 'invert(1)' : '',
+                                ].filter(Boolean).join(' '),
+                                transform: [
+                                    `rotate(${rotation}deg)`,
+                                    flipH ? 'scaleX(-1)' : '',
+                                    flipV ? 'scaleY(-1)' : '',
+                                ].filter(Boolean).join(' '),
+                                transition: 'filter 0.15s, transform 0.15s',
                             }}
                         />
                     )}
@@ -591,8 +608,8 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
             {/* ── PANEL DERECHO: controles ─────────────────────────────────── */}
             <div style={{ width: 268, flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #1e2535', background: '#0d1018', overflowY: 'auto' }}>
 
-                {/* Ajuste de imagen — solo para no-DICOM */}
-                {!isDicom && (
+                {/* Ajuste de imagen */}
+                {(!isDicom || dicomFile || !selected?.rutaOrigen) && (
                     <div style={{ padding: '10px 14px', borderBottom: '1px solid #1e2535' }}>
                         <p style={{ color: '#64748b', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
                             Ajuste de imagen
@@ -602,8 +619,8 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
                     </div>
                 )}
 
-                {/* Info DICOM — controles en Romexis */}
-                {isDicom && (
+                {/* Info DICOM — controles en Romexis (solo si es estudio de red, no local) */}
+                {isDicom && !dicomFile && (
                     <div style={{ padding: '10px 14px', borderBottom: '1px solid #1e2535' }}>
                         <p style={{ color: '#64748b', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
                             Imagen DICOM
@@ -615,7 +632,7 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
                 )}
 
                 {/* Mapa de color */}
-                {!isDicom && (
+                {(!isDicom || dicomFile || !selected?.rutaOrigen) && (
                     <div style={{ padding: '10px 14px', borderBottom: '1px solid #1e2535' }}>
                         <p style={{ color: '#64748b', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
                             <Palette style={{ display: 'inline', width: 10, height: 10, marginRight: 4 }} />

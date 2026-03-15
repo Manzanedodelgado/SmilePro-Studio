@@ -415,14 +415,213 @@ const Rendimiento: React.FC<{ onNavigate: DashboardProps['onNavigate'] }> = ({ o
     function totalCancels() { return cancelSemana.reduce((a, b) => a + b, 0); }
 };
 
+const saveCiclos = (cs: CicloEsterilizacion[]) => localStorage.setItem(STORAGE_KEY, JSON.stringify(cs));
+
+const Pruebas: React.FC = () => {
+    const [ciclos, setCiclos] = React.useState<CicloEsterilizacion[]>(loadCiclos);
+    const [filtro, setFiltro] = React.useState<'todos' | 'OK' | 'FALLO' | 'PENDIENTE'>('todos');
+    const [showForm, setShowForm] = React.useState(false);
+    const [form, setForm] = React.useState({
+        equipo: EQUIPOS[0], programa: PROGRAMAS[0],
+        operador: '', lote: '', resultado: 'PENDIENTE' as CicloEsterilizacion['resultado'], notas: ''
+    });
+
+    const handleGuardar = () => {
+        if (!form.operador.trim() || !form.lote.trim()) return;
+        const now = new Date();
+        const nuevo: CicloEsterilizacion = {
+            id: crypto.randomUUID(),
+            fecha: now.toISOString().split('T')[0],
+            hora: now.toTimeString().slice(0, 5),
+            ...form,
+        };
+        const actualizado = [nuevo, ...ciclos];
+        setCiclos(actualizado);
+        saveCiclos(actualizado);
+        setShowForm(false);
+        setForm({ equipo: EQUIPOS[0], programa: PROGRAMAS[0], operador: '', lote: '', resultado: 'PENDIENTE', notas: '' });
+    };
+
+    const handleDelete = (id: string) => {
+        const actualizado = ciclos.filter(c => c.id !== id);
+        setCiclos(actualizado);
+        saveCiclos(actualizado);
+    };
+
+    const handleToggleResultado = (id: string) => {
+        const actualizado = ciclos.map(c => {
+            if (c.id !== id) return c;
+            const next: CicloEsterilizacion['resultado'] = c.resultado === 'PENDIENTE' ? 'OK' : c.resultado === 'OK' ? 'FALLO' : 'PENDIENTE';
+            return { ...c, resultado: next };
+        });
+        setCiclos(actualizado);
+        saveCiclos(actualizado);
+    };
+
+    const filtrados = ciclos.filter(c => filtro === 'todos' || c.resultado === filtro);
+    const totalOK = ciclos.filter(c => c.resultado === 'OK').length;
+    const totalFallo = ciclos.filter(c => c.resultado === 'FALLO').length;
+    const totalPendiente = ciclos.filter(c => c.resultado === 'PENDIENTE').length;
+
+    const badgeRes = (r: CicloEsterilizacion['resultado']) =>
+        r === 'OK' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+        r === 'FALLO' ? 'bg-red-100 text-red-700 border-red-200' :
+        'bg-amber-100 text-amber-700 border-amber-200';
+
+    const exportCSV = () => {
+        const head = 'Fecha,Hora,Equipo,Programa,Operador,Lote,Resultado,Notas';
+        const rows = ciclos.map(c =>
+            `${c.fecha},${c.hora},"${c.equipo}","${c.programa}","${c.operador}","${c.lote}",${c.resultado},"${c.notas ?? ''}"`
+        );
+        const blob = new Blob([[head, ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = `esterilizacion_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click(); URL.revokeObjectURL(url);
+    };
+
+    return (
+        <div className="space-y-5">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                    <p className="text-[12px] font-bold text-slate-400 uppercase tracking-[0.2em]">Control de Calidad</p>
+                    <h1 className="text-[18px] font-bold text-[#051650]">Registro de Esterilización</h1>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[12px] font-bold text-slate-600 transition-all shadow-sm">
+                        <FileText className="w-3.5 h-3.5" /> Exportar CSV
+                    </button>
+                    <button onClick={() => setShowForm(v => !v)} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#051650] text-white text-[12px] font-bold hover:bg-blue-900 transition-all shadow-sm active:scale-95">
+                        <Zap className="w-3.5 h-3.5" /> Nuevo Ciclo
+                    </button>
+                </div>
+            </div>
+
+            {/* KPIs */}
+            <div className="grid grid-cols-3 gap-3">
+                {[
+                    { label: 'Completados', value: totalOK, color: 'bg-emerald-500', txt: 'text-emerald-700' },
+                    { label: 'Pendientes', value: totalPendiente, color: 'bg-amber-400', txt: 'text-amber-700' },
+                    { label: 'Fallos', value: totalFallo, color: totalFallo > 0 ? 'bg-red-500' : 'bg-slate-300', txt: 'text-red-700' },
+                ].map(k => (
+                    <div key={k.label} className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3 shadow-sm">
+                        <div className={`w-10 h-10 rounded-xl ${k.color} flex items-center justify-center flex-shrink-0`}>
+                            <CheckCircle2 className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                            <p className="text-[24px] font-bold text-[#051650] leading-none">{k.value}</p>
+                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">{k.label}</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Formulario nuevo ciclo */}
+            {showForm && (
+                <div className="bg-white rounded-2xl border border-[#051650]/20 shadow-lg p-5 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <h3 className="text-[13px] font-black text-[#051650] uppercase tracking-widest">Registrar Ciclo</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                        {[
+                            { label: 'Equipo', key: 'equipo', options: EQUIPOS },
+                            { label: 'Programa', key: 'programa', options: PROGRAMAS },
+                        ].map(f => (
+                            <div key={f.key}>
+                                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">{f.label}</label>
+                                <select className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[13px] font-bold text-[#051650] focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                                    value={(form as any)[f.key]}
+                                    onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}>
+                                    {f.options.map(o => <option key={o}>{o}</option>)}
+                                </select>
+                            </div>
+                        ))}
+                        {[
+                            { label: 'Operador', key: 'operador', placeholder: 'Nombre del operador' },
+                            { label: 'Nº Lote / Ciclo', key: 'lote', placeholder: 'Ej. 2024-001' },
+                        ].map(f => (
+                            <div key={f.key}>
+                                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">{f.label}</label>
+                                <input className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[13px] font-bold text-[#051650] focus:ring-2 focus:ring-blue-400 focus:outline-none placeholder:font-normal placeholder:text-slate-300"
+                                    placeholder={f.placeholder} value={(form as any)[f.key]}
+                                    onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))} />
+                            </div>
+                        ))}
+                        <div>
+                            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Resultado</label>
+                            <select className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[13px] font-bold text-[#051650] focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                                value={form.resultado} onChange={e => setForm(prev => ({ ...prev, resultado: e.target.value as CicloEsterilizacion['resultado'] }))}>
+                                <option value="PENDIENTE">Pendiente</option>
+                                <option value="OK">OK — Correcto</option>
+                                <option value="FALLO">FALLO — Incidente</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Notas</label>
+                            <input className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-600 focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                                placeholder="Observaciones (opcional)" value={form.notas}
+                                onChange={e => setForm(prev => ({ ...prev, notas: e.target.value }))} />
+                        </div>
+                    </div>
+                    <div className="flex gap-2 justify-end pt-1">
+                        <button onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg border border-slate-200 text-[12px] font-bold text-slate-500 hover:bg-slate-50 transition-all">Cancelar</button>
+                        <button onClick={handleGuardar} className="px-5 py-2 rounded-lg bg-[#051650] text-white text-[12px] font-bold hover:bg-blue-900 transition-all shadow-sm">Guardar Ciclo</button>
+                    </div>
+                </div>
+            )}
+
+            {/* Filtros */}
+            <div className="flex items-center gap-2 flex-wrap">
+                {(['todos', 'OK', 'PENDIENTE', 'FALLO'] as const).map(f => (
+                    <button key={f} onClick={() => setFiltro(f)}
+                        className={`text-[12px] font-bold px-3 py-1.5 rounded-lg border transition-all ${filtro === f ? 'bg-[#051650] text-white border-[#051650] shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-[#051650]/30'}`}>
+                        {f === 'todos' ? 'Todos' : f}
+                    </button>
+                ))}
+                <span className="text-[12px] text-slate-400 font-medium ml-1">{filtrados.length} registros</span>
+            </div>
+
+            {/* Lista de ciclos */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                {filtrados.length === 0 ? (
+                    <div className="px-5 py-12 text-center">
+                        <Stethoscope className="w-8 h-8 text-slate-200 mx-auto mb-3" />
+                        <p className="text-[13px] font-bold text-slate-400">
+                            {ciclos.length === 0 ? 'Sin ciclos registrados. Pulsa "Nuevo Ciclo" para empezar.' : 'Sin resultados para el filtro seleccionado.'}
+                        </p>
+                    </div>
+                ) : (
+                    <div className="divide-y divide-slate-50">
+                        {filtrados.map(c => (
+                            <div key={c.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-colors group">
+                                <div className="text-center w-14 flex-shrink-0">
+                                    <p className="text-[11px] font-black text-[#051650]">{c.hora}</p>
+                                    <p className="text-[10px] text-slate-400 font-bold">{c.fecha.slice(5).replace('-', '/')}</p>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[12px] font-black text-slate-800 truncate">{c.equipo} · <span className="font-bold text-slate-500">{c.programa}</span></p>
+                                    <p className="text-[11px] text-slate-400 font-bold truncate">Lote: {c.lote} · Op: {c.operador}{c.notas ? ` · ${c.notas}` : ''}</p>
+                                </div>
+                                <button onClick={() => handleToggleResultado(c.id)}
+                                    className={`text-[11px] font-black px-2.5 py-1 rounded-full border flex-shrink-0 transition-all hover:opacity-80 ${badgeRes(c.resultado)}`}
+                                    title="Cambiar estado">
+                                    {c.resultado}
+                                </button>
+                                <button onClick={() => handleDelete(c.id)}
+                                    className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100">
+                                    <Ban className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════════════
-import Pruebas from './Pruebas';
-
 const Dashboard: React.FC<DashboardProps> = ({ activeSubArea, onNavigate }) => {
-    if (activeSubArea === 'Pruebas') return <Pruebas />;
     if (activeSubArea === 'Rendimiento') return <Rendimiento onNavigate={onNavigate} />;
     return <HoyEnClinica onNavigate={onNavigate} />;
 };

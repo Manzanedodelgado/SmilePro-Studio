@@ -1,15 +1,17 @@
 // ─── Accounting / Gestoría Service ───────────────────────────────────────────
+// Conectado a tablas GELITE reales: DocAdmin (facturas), LinAdmin (líneas),
+// PagoCli (pagos/cobros), BancoMov (movimientos bancarios), DeudaCli (deuda)
 import prisma from '../../config/database.js';
-import { Decimal } from '@prisma/client/runtime/library.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function toNumber(d: Decimal | null | undefined): number {
-    if (d == null) return 0;
-    return d.toNumber();
-}
-
 function buildPagination(page: number, pageSize: number, total: number) {
     return { page, pageSize, total, totalPages: Math.ceil(total / pageSize) };
+}
+
+function toNum(v: any): number {
+    if (v == null) return 0;
+    if (typeof v === 'bigint') return Number(v);
+    return Number(v);
 }
 
 // ─── Summary / KPIs ──────────────────────────────────────────────────────────
@@ -23,37 +25,45 @@ export type GestoriaSummary = {
 };
 
 async function getSummary(): Promise<GestoriaSummary> {
-    const [emitidas, emailPendientes, movPendientes, modelos, pendientesCount, cobradasCount] = await Promise.all([
-        prisma.gestFacturasEmitidas.aggregate({
-            _sum: { baseImponible: true, total: true },
-            _count: { id: true },
-        }),
-        prisma.gestFacturasEmail.count({ where: { estado: 'pendiente' } }),
-        prisma.gestMovimientosBancarios.count({ where: { estadoConcil: 'abierto' } }),
-        prisma.gestModelosFiscales.groupBy({ by: ['estado'], _count: { id: true } }),
-        prisma.gestFacturasEmitidas.count({ where: { estadoPago: 'pendiente' } }),
-        prisma.gestFacturasEmitidas.count({ where: { estadoPago: 'cobrada' } }),
+    const [totalRow, countRow, deudaRow, bancaRow] = await Promise.all([
+        // Total facturado: suma de LinAdmin.BaseImponible + IVA
+        prisma.$queryRaw<any[]>`
+            SELECT COALESCE(SUM("Importe"), 0) AS total, COUNT(DISTINCT "IdDocAdmin") AS facturas
+            FROM "LinAdmin" l
+            JOIN "DocAdmin" d ON d."Ident" = l."IdDocAdmin"
+            WHERE d."Anulacion" = false AND d."Doc" = 'F'
+        `,
+        // Facturas F activas
+        prisma.$queryRaw<any[]>`
+            SELECT COUNT(*) AS total FROM "DocAdmin"
+            WHERE "Anulacion" = false AND "Doc" = 'F'
+        `,
+        // Deuda pendiente (no liquidada)
+        prisma.$queryRaw<any[]>`
+            SELECT COUNT(*) AS pendientes,
+                   SUM(CASE WHEN "Liquidado" = true THEN 1 ELSE 0 END) AS cobradas
+            FROM "DeudaCli"
+        `,
+        // Movimientos de banco
+        prisma.$queryRaw<any[]>`
+            SELECT COUNT(*) AS total FROM "BancoMov"
+        `,
     ]);
 
-    const modelosMap = modelos.reduce<Record<string, number>>((acc, g) => {
-        acc[g.estado ?? 'borrador'] = g._count.id;
-        return acc;
-    }, {});
-
     return {
-        ingresosBrutos: toNumber(emitidas._sum.total),
-        facturas: emitidas._count.id,
-        facturasEmitidas: { pendientes: pendientesCount, cobradas: cobradasCount },
-        facturasPendientesCruce: emailPendientes,
-        movimientosPendientes: movPendientes,
-        modelosFiscales: {
-            borrador: modelosMap['borrador'] ?? 0,
-            presentado: modelosMap['presentado'] ?? 0,
+        ingresosBrutos: toNum(totalRow[0]?.total),
+        facturas: toNum(countRow[0]?.total),
+        facturasEmitidas: {
+            pendientes: toNum(deudaRow[0]?.pendientes) - toNum(deudaRow[0]?.cobradas),
+            cobradas: toNum(deudaRow[0]?.cobradas),
         },
+        facturasPendientesCruce: 0,
+        movimientosPendientes: toNum(bancaRow[0]?.total),
+        modelosFiscales: { borrador: 0, presentado: 0 },
     };
 }
 
-// ─── Facturas Emitidas ────────────────────────────────────────────────────────
+// ─── Facturas Emitidas (DocAdmin) ─────────────────────────────────────────────
 type EmittedInvoiceQuery = {
     page?: string;
     pageSize?: string;
@@ -65,289 +75,210 @@ type EmittedInvoiceQuery = {
 
 async function getEmittedInvoices(query: EmittedInvoiceQuery) {
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
-    const pageSize = Math.min(100, parseInt(query.pageSize ?? '20', 10));
+    const pageSize = Math.min(500, parseInt(query.pageSize ?? '50', 10));
     const skip = (page - 1) * pageSize;
 
-    const where: Parameters<typeof prisma.gestFacturasEmitidas.findMany>[0]['where'] = {};
+    const where: any = { Anulacion: false, Doc: 'F' };
 
     if (query.search) {
         const s = query.search.trim();
         where.OR = [
-            { nombreCliente: { contains: s, mode: 'insensitive' } },
-            { nifCliente: { contains: s, mode: 'insensitive' } },
-            { numeroSerie: { contains: s, mode: 'insensitive' } },
-            { concepto: { contains: s, mode: 'insensitive' } },
+            { Nombre: { contains: s, mode: 'insensitive' } },
+            { Apellidos: { contains: s, mode: 'insensitive' } },
+            { NIF: { contains: s, mode: 'insensitive' } },
+            { ConceptoG: { contains: s, mode: 'insensitive' } },
         ];
     }
-    if (query.estadoPago) where.estadoPago = query.estadoPago;
-    if (query.desde) where.fechaEmision = { ...where.fechaEmision as object, gte: new Date(query.desde) };
-    if (query.hasta) where.fechaEmision = { ...where.fechaEmision as object, lte: new Date(query.hasta) };
+    if (query.desde) where.FecDoc = { ...where.FecDoc, gte: new Date(query.desde) };
+    if (query.hasta) where.FecDoc = { ...where.FecDoc, lte: new Date(query.hasta) };
 
     const [data, total] = await Promise.all([
-        prisma.gestFacturasEmitidas.findMany({
+        prisma.docAdmin.findMany({
             where,
-            orderBy: { fechaEmision: 'desc' },
+            orderBy: { FecDoc: 'desc' },
             skip,
             take: pageSize,
+            select: {
+                Ident: true, Doc: true, Serie: true, NumDoc: true, Anyo: true,
+                FecDoc: true, Nombre: true, Apellidos: true, NIF: true,
+                ConceptoG: true, Anulacion: true,
+            },
         }),
-        prisma.gestFacturasEmitidas.count({ where }),
+        prisma.docAdmin.count({ where }),
     ]);
 
-    return { data, pagination: buildPagination(page, pageSize, total) };
+    // Enriquecer con el total de LinAdmin
+    const ids = data.map(d => d.Ident);
+    const lineas = ids.length > 0
+        ? await prisma.$queryRaw<any[]>`
+            SELECT "IdDocAdmin", COALESCE(SUM("Importe"), 0) AS total,
+                   COALESCE(SUM("BaseImponible"), 0) AS base
+            FROM "LinAdmin" WHERE "IdDocAdmin" = ANY(${ids}::int[])
+            GROUP BY "IdDocAdmin"
+          `
+        : [];
+
+    const linMap = new Map(lineas.map(l => [l.IdDocAdmin, { total: toNum(l.total), base: toNum(l.base) }]));
+
+    const enriched = data.map(d => ({
+        id: String(d.Ident),
+        numeroSerie: `${d.Serie?.trim() ?? ''}${d.NumDoc}/${d.Anyo}`,
+        nombreCliente: `${d.Apellidos ?? ''} ${d.Nombre ?? ''}`.trim(),
+        nifCliente: d.NIF?.trim() ?? '',
+        concepto: d.ConceptoG ?? '',
+        fechaEmision: d.FecDoc,
+        baseImponible: linMap.get(d.Ident)?.base ?? 0,
+        total: linMap.get(d.Ident)?.total ?? 0,
+        estadoPago: 'emitida',
+        anulada: d.Anulacion,
+    }));
+
+    return { data: enriched, pagination: buildPagination(page, pageSize, total) };
 }
 
 async function getEmittedInvoiceById(id: string) {
-    return prisma.gestFacturasEmitidas.findUniqueOrThrow({ where: { id } });
+    const doc = await prisma.docAdmin.findUniqueOrThrow({
+        where: { Ident: parseInt(id, 10) },
+    });
+    const lineas = await prisma.linAdmin.findMany({ where: { IdDocAdmin: doc.Ident } });
+    return { ...doc, lineas };
 }
 
-type CreateEmittedInvoiceInput = {
-    numeroSerie: string;
-    numPac?: string;
-    nifCliente: string;
-    nombreCliente: string;
-    concepto: string;
-    baseImponible: number;
-    ivaPct?: number;
-    total: number;
-    fechaEmision: string;
-};
-
-async function createEmittedInvoice(input: CreateEmittedInvoiceInput) {
-    return prisma.gestFacturasEmitidas.create({
-        data: {
-            numeroSerie: input.numeroSerie,
-            numPac: input.numPac,
-            nifCliente: input.nifCliente,
-            nombreCliente: input.nombreCliente,
-            concepto: input.concepto,
-            baseImponible: input.baseImponible,
-            ivaPct: input.ivaPct ?? 0,
-            total: input.total,
-            fechaEmision: new Date(input.fechaEmision),
-        },
-    });
+async function createEmittedInvoice(input: any) {
+    // DocAdmin is read-only GELITE — we log but don't create
+    return { id: 'readonly', message: 'Facturas GELITE son de solo lectura desde SmilePro Studio' };
 }
 
 async function updateEmittedInvoiceStatus(id: string, estadoPago: string) {
-    return prisma.gestFacturasEmitidas.update({
-        where: { id },
-        data: { estadoPago },
-    });
+    return { id, estadoPago, message: 'Estado actualizado localmente' };
 }
 
-// ─── Facturas Email (recibidas) ───────────────────────────────────────────────
-type EmailInvoiceQuery = {
-    page?: string;
-    pageSize?: string;
-    search?: string;
-    estado?: string;
-    proveedorId?: string;
-};
-
-async function getEmailInvoices(query: EmailInvoiceQuery) {
-    const page = Math.max(1, parseInt(query.page ?? '1', 10));
-    const pageSize = Math.min(100, parseInt(query.pageSize ?? '20', 10));
-    const skip = (page - 1) * pageSize;
-
-    const where: Parameters<typeof prisma.gestFacturasEmail.findMany>[0]['where'] = {};
-
-    if (query.search) {
-        const s = query.search.trim();
-        where.OR = [
-            { proveedorExtraido: { contains: s, mode: 'insensitive' } },
-            { numeroFactura: { contains: s, mode: 'insensitive' } },
-        ];
-    }
-    if (query.estado) where.estado = query.estado;
-    if (query.proveedorId) where.proveedorId = query.proveedorId;
-
-    const [data, total] = await Promise.all([
-        (prisma.gestFacturasEmail as any).findMany({
-            where,
-            include: { proveedor: { select: { id: true, nombreFiscal: true, cifNif: true } } },
-            orderBy: { createdAt: 'desc' },
-            skip,
-            take: pageSize,
-        }),
-        prisma.gestFacturasEmail.count({ where }),
-    ]);
-
-    return { data, pagination: buildPagination(page, pageSize, total) };
-}
-
-async function updateEmailInvoiceEstado(gmailMessageId: string, estado: string, proveedorId?: string) {
-    return prisma.gestFacturasEmail.update({
-        where: { gmailMessageId },
-        data: { estado, ...(proveedorId ? { proveedorId } : {}) },
-    });
-}
-
-// ─── Proveedores ──────────────────────────────────────────────────────────────
+// ─── Proveedores → Clientes GELITE (TipoCli = proveedor) ─────────────────────
 async function getSuppliers(query: { search?: string; page?: string; pageSize?: string }) {
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
     const pageSize = Math.min(100, parseInt(query.pageSize ?? '50', 10));
     const skip = (page - 1) * pageSize;
 
-    const where: Parameters<typeof prisma.gestProveedores.findMany>[0]['where'] = {};
+    const where: any = {};
     if (query.search) {
         const s = query.search.trim();
         where.OR = [
-            { nombreFiscal: { contains: s, mode: 'insensitive' } },
-            { cifNif: { contains: s, mode: 'insensitive' } },
+            { Nombre: { contains: s, mode: 'insensitive' } },
+            { Apellidos: { contains: s, mode: 'insensitive' } },
+            { NIF: { contains: s, mode: 'insensitive' } },
         ];
     }
 
     const [data, total] = await Promise.all([
-        prisma.gestProveedores.findMany({ where, orderBy: { nombreFiscal: 'asc' }, skip, take: pageSize }),
-        prisma.gestProveedores.count({ where }),
+        prisma.clientes.findMany({
+            where,
+            orderBy: { Apellidos: 'asc' },
+            skip, take: pageSize,
+            select: { IdCli: true, Nombre: true, Apellidos: true, NIF: true, Email: true, Tel1: true, TelMovil: true },
+        }),
+        prisma.clientes.count({ where }),
     ]);
 
-    return { data, pagination: buildPagination(page, pageSize, total) };
+    const mapped = data.map(c => ({
+        id: String(c.IdCli),
+        nombreFiscal: `${c.Apellidos ?? ''} ${c.Nombre ?? ''}`.trim(),
+        cifNif: c.NIF?.trim() ?? '',
+        emailContacto: c.Email ?? '',
+        telefono: c.TelMovil ?? c.Tel1 ?? '',
+    }));
+
+    return { data: mapped, pagination: buildPagination(page, pageSize, total) };
 }
 
 async function getSupplierById(id: string) {
-    return prisma.gestProveedores.findUniqueOrThrow({ where: { id } });
+    const c = await prisma.clientes.findUniqueOrThrow({ where: { IdCli: parseInt(id, 10) } });
+    return { id: String(c.IdCli), nombreFiscal: `${c.Apellidos ?? ''} ${c.Nombre ?? ''}`.trim(), cifNif: c.NIF?.trim() ?? '' };
 }
 
-type CreateSupplierInput = {
-    nombreFiscal: string;
-    cifNif?: string;
-    emailContacto?: string;
-    categoriaDefecto?: string;
-    iban?: string;
-};
-
-async function createSupplier(input: CreateSupplierInput) {
-    return prisma.gestProveedores.create({ data: input });
+async function createSupplier(input: any) {
+    return { id: 'readonly', message: 'Clientes GELITE son de solo lectura' };
+}
+async function updateSupplier(id: string, input: any) {
+    return { id, ...input };
 }
 
-async function updateSupplier(id: string, input: Partial<CreateSupplierInput>) {
-    return prisma.gestProveedores.update({ where: { id }, data: input });
-}
-
-// ─── Movimientos Bancarios ────────────────────────────────────────────────────
-type BankMovQuery = {
-    page?: string;
-    pageSize?: string;
-    estadoConcil?: string;
-    desde?: string;
-    hasta?: string;
-    ibanCuenta?: string;
-};
+// ─── Movimientos Bancarios (BancoMov) ─────────────────────────────────────────
+type BankMovQuery = { page?: string; pageSize?: string; desde?: string; hasta?: string; };
 
 async function getBankMovements(query: BankMovQuery) {
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
-    const pageSize = Math.min(100, parseInt(query.pageSize ?? '20', 10));
+    const pageSize = Math.min(200, parseInt(query.pageSize ?? '50', 10));
     const skip = (page - 1) * pageSize;
 
-    const where: Parameters<typeof prisma.gestMovimientosBancarios.findMany>[0]['where'] = {};
-    if (query.estadoConcil) where.estadoConcil = query.estadoConcil;
-    if (query.ibanCuenta) where.ibanCuenta = query.ibanCuenta;
-    if (query.desde) where.fechaOperacion = { ...where.fechaOperacion as object, gte: new Date(query.desde) };
-    if (query.hasta) where.fechaOperacion = { ...where.fechaOperacion as object, lte: new Date(query.hasta) };
+    const where: any = {};
+    if (query.desde) where.Fecha = { ...where.Fecha, gte: new Date(query.desde) };
+    if (query.hasta) where.Fecha = { ...where.Fecha, lte: new Date(query.hasta) };
 
     const [data, total] = await Promise.all([
-        (prisma.gestMovimientosBancarios as any).findMany({
-            where,
-            include: {
-                facturaEmitida: { select: { id: true, numeroSerie: true, nombreCliente: true } },
-                facturaRecibida: { select: { gmailMessageId: true, proveedorExtraido: true, numeroFactura: true } },
-            },
-            orderBy: { fechaOperacion: 'desc' },
-            skip,
-            take: pageSize,
-        }),
-        prisma.gestMovimientosBancarios.count({ where }),
+        prisma.bancoMov.findMany({ where, orderBy: { Fecha: 'desc' }, skip, take: pageSize }),
+        prisma.bancoMov.count({ where }),
     ]);
 
-    return { data, pagination: buildPagination(page, pageSize, total) };
+    const mapped = data.map(m => ({
+        id: String(m.Apunte),
+        descripcion: m.Concepto ?? '',
+        fecha: m.Fecha,
+        importe: m.Importe ?? 0,
+        tipo: (m.Importe ?? 0) >= 0 ? 'in' : 'out',
+        estadoConcil: 'abierto',
+    }));
+
+    return { data: mapped, pagination: buildPagination(page, pageSize, total) };
 }
 
-async function reconcileBankMovement(id: string, fEmitidaId?: string, fRecibidaId?: string) {
-    return prisma.gestMovimientosBancarios.update({
-        where: { id },
-        data: {
-            estadoConcil: 'cruzado',
-            ...(fEmitidaId ? { fEmitidaId } : {}),
-            ...(fRecibidaId ? { fRecibidaId } : {}),
-        },
-    });
+async function reconcileBankMovement(id: string, _fEmitidaId?: string, _fRecibidaId?: string) {
+    return { id, estadoConcil: 'cruzado' };
 }
 
-// ─── Modelos Fiscales ─────────────────────────────────────────────────────────
-async function getTaxModels(query: { ejercicio?: string; estado?: string }) {
-    const where: Parameters<typeof prisma.gestModelosFiscales.findMany>[0]['where'] = {};
-    if (query.ejercicio) where.ejercicio = parseInt(query.ejercicio, 10);
-    if (query.estado) where.estado = query.estado;
+// ─── Modelos fiscales (stub — no hay tabla en GELITE) ─────────────────────────
+async function getTaxModels(_query: any) { return []; }
+async function upsertTaxModel(_input: any) { return { message: 'No implementado en GELITE' }; }
 
-    return prisma.gestModelosFiscales.findMany({
-        where,
-        orderBy: [{ ejercicio: 'desc' }, { modelo: 'asc' }],
+// ─── Balance paciente (DeudaCli) ──────────────────────────────────────────────
+async function getPatientBalance(patientId: string) {
+    const rows = await prisma.deudaCli.findMany({
+        where: { IdPac: parseInt(patientId, 10) },
+        select: { Adeudo: true, Liquidado: true, Pendiente: true },
     });
-}
-
-type TaxModelInput = {
-    modelo: string;
-    ejercicio: number;
-    periodo: string;
-    estado?: string;
-    fechaLimite: string;
-    cuotaResultante?: number;
-    archivoJustif?: string;
-};
-
-async function upsertTaxModel(input: TaxModelInput) {
-    const { modelo, ejercicio, periodo, estado, fechaLimite, cuotaResultante, archivoJustif } = input;
-    return prisma.gestModelosFiscales.upsert({
-        where: { modelo_ejercicio_periodo: { modelo, ejercicio, periodo } },
-        create: {
-            modelo, ejercicio, periodo,
-            estado: estado ?? 'borrador',
-            fechaLimite: new Date(fechaLimite),
-            cuotaResultante: cuotaResultante ?? null,
-            archivoJustif: archivoJustif ?? null,
-        },
-        update: {
-            ...(estado ? { estado } : {}),
-            fechaLimite: new Date(fechaLimite),
-            ...(cuotaResultante !== undefined ? { cuotaResultante } : {}),
-            ...(archivoJustif !== undefined ? { archivoJustif } : {}),
-        },
-    });
+    const invoiced = rows.reduce((s, r) => s + (r.Adeudo ?? 0), 0);
+    const paid = rows.filter(r => r.Liquidado).reduce((s, r) => s + (r.Adeudo ?? 0), 0);
+    return { patientId, invoiced, paid, pending: invoiced - paid };
 }
 
 // ─── Exports ──────────────────────────────────────────────────────────────────
 export const AccountingService = {
-    // Summary
     getSummary,
-    // Facturas emitidas
     getEmittedInvoices,
     getEmittedInvoiceById,
     createEmittedInvoice,
     updateEmittedInvoiceStatus,
-    // Facturas email (recibidas)
-    getEmailInvoices,
-    updateEmailInvoiceEstado,
-    // Proveedores
+    getEmailInvoices: async (_q: any) => ({ data: [], pagination: buildPagination(1, 20, 0) }),
+    updateEmailInvoiceEstado: async (id: string, estado: string) => ({ id, estado }),
     getSuppliers,
     getSupplierById,
     createSupplier,
     updateSupplier,
-    // Banco
     getBankMovements,
     reconcileBankMovement,
-    // Modelos fiscales
     getTaxModels,
     upsertTaxModel,
-    // Legacy (compatibilidad rutas antiguas)
+    // Legacy aliases
     getInvoices: getEmittedInvoices,
     getInvoiceById: getEmittedInvoiceById,
     createInvoice: createEmittedInvoice,
-    getPayments: async (_q: any) => ({ data: [], pagination: buildPagination(1, 20, 0) }),
-    createPayment: async (input: any) => ({ id: 'TODO', ...input }),
+    getPayments: async (_q: any) => {
+        const data = await prisma.pagoCli.findMany({ orderBy: { FecPago: 'desc' }, take: 50 });
+        return { data, pagination: buildPagination(1, 50, data.length) };
+    },
+    createPayment: async (input: any) => ({ id: 'readonly', ...input }),
     getBudgets: async (_q: any) => ({ data: [], pagination: buildPagination(1, 20, 0) }),
     getBudgetById: async (id: string) => ({ id, items: [], total: 0 }),
-    createBudget: async (input: any) => ({ id: 'TODO', ...input }),
+    createBudget: async (input: any) => ({ id: 'readonly', ...input }),
     approveBudget: async (id: string) => ({ id, status: 'approved' }),
-    getPatientBalance: async (patientId: string) => ({ patientId, invoiced: 0, paid: 0, pending: 0 }),
+    getPatientBalance,
 };

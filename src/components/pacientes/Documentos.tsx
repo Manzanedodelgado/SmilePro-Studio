@@ -285,8 +285,36 @@ const Documentos: React.FC<DocumentosProps> = ({ numPac, nombrePaciente, telefon
                                             </td>
                                             <td className="p-4 text-center">
                                                 <button
-                                                    onClick={() => logAudit({ action: 'VIEW_DOCUMENT', entity_type: 'patient_document', entity_id: doc.id, details: { numPac } })}
-                                                    className="text-secondary hover:text-secondary-dark font-bold text-[12px] uppercase hover:underline">
+                                                    onClick={() => {
+                                                        logAudit({ action: 'VIEW_DOCUMENT', entity_type: 'patient_document', entity_id: doc.id, details: { numPac } });
+                                                        const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${doc.titulo}</title><style>
+                                                            body{font-family:Arial,sans-serif;padding:40px;color:#1a1a2e;max-width:700px;margin:0 auto}
+                                                            h1{font-size:20px;border-bottom:2px solid #051650;padding-bottom:10px;color:#051650}
+                                                            .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;margin:20px 0;font-size:13px}
+                                                            .lbl{font-weight:bold;color:#666}.footer{margin-top:40px;padding-top:16px;border-top:1px solid #eee;font-size:11px;color:#999;text-align:center}
+                                                            @media print{button{display:none}}
+                                                        </style></head><body>
+                                                        <h1>📄 ${doc.titulo}</h1>
+                                                        <div class="grid">
+                                                            <span class="lbl">Paciente</span><span>${nombrePaciente ?? numPac}</span>
+                                                            <span class="lbl">Nº Paciente</span><span>${numPac}</span>
+                                                            <span class="lbl">Tipo</span><span>${doc.tipo}</span>
+                                                            <span class="lbl">Estado</span><span>${doc.estado}</span>
+                                                            <span class="lbl">Creado</span><span>${new Date(doc.created_at).toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}</span>
+                                                            <span class="lbl">Actualizado</span><span>${new Date(doc.updated_at).toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}</span>
+                                                        </div>
+                                                        <p style="font-size:12px;color:#555;border:1px solid #ddd;padding:12px;border-radius:6px">
+                                                            ${doc.estado === 'Firmado' ? '✅ Firmado digitalmente y registrado conforme al RGPD Art. 9.' : '⏳ Pendiente de firma.'}<br/>
+                                                            <small>Hash: ${doc.contenido_hash ?? 'N/D'}</small>
+                                                        </p>
+                                                        <div class="footer">Rubio García Dental · ${new Date().toLocaleString('es-ES')}</div>
+                                                        <br/><button onclick="window.print()" style="padding:10px 24px;background:#051650;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold">🖨 Imprimir</button>
+                                                        </body></html>`;
+                                                        const win = window.open('', '_blank', 'width=800,height=600');
+                                                        if (win) { win.document.write(html); win.document.close(); }
+                                                    }}
+                                                    className="text-secondary hover:text-secondary-dark font-bold text-[12px] uppercase hover:underline"
+                                                >
                                                     Ver PDF
                                                 </button>
                                             </td>

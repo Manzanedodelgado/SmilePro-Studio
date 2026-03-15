@@ -1,9 +1,9 @@
 // ─────────────────────────────────────────────────────────────────
 //  services/contactos.service.ts
-//  Contactos (leads primera visita) — stub temporal.
-//  TODO: crear /api/patients/leads en el backend.
-//  SIN dependencia de db.ts / backend.
+//  Contactos (leads primera visita) — F-001 FIX: ahora persiste en Backend.
+//  Conectado a /api/patients/leads (autenticado con authFetch).
 // ─────────────────────────────────────────────────────────────────
+import { authFetch } from './db';
 
 export type ContactoEstado = 'potencial' | 'confirmado' | 'convertido' | 'cancelado' | 'no_acudio';
 export type ContactoOrigen = 'primera_visita' | 'whatsapp' | 'manual' | 'derivacion';
@@ -24,20 +24,17 @@ export interface Contacto {
     notas?: string;
     createdAt: string;
     updatedAt?: string;
-    // Datos de tutor (para menores de edad)
     esMenor?: boolean;
     nombreTutor?: string;
     apellidosTutor?: string;
     telefonoTutor?: string;
     emailTutor?: string;
     relacionTutor?: string;
-    // Datos de cita vinculada
     fechaCitaPrevista?: string;
     doctorAsignado?: string;
     tratamientoAdicional?: string;
 }
 
-/** Input extendido para crearContacto — incluye campos de Primera Visita */
 export interface CrearContactoInput {
     nombre: string;
     apellidos?: string;
@@ -51,14 +48,12 @@ export interface CrearContactoInput {
     citaId?: string;
     motivoConsulta?: string;
     notas?: string;
-    // Tutor
     esMenor?: boolean;
     nombreTutor?: string;
     apellidosTutor?: string;
     telefonoTutor?: string;
     emailTutor?: string;
     relacionTutor?: string;
-    // Cita
     fechaCita?: Date;
     doctorAsignado?: string;
     tratamientoAdicional?: string;
@@ -73,51 +68,42 @@ export const validateContacto = (c: Partial<Contacto>): ContactoValidationError[
     return errors;
 };
 
-// In-memory store (stub hasta que el backend exponga /api/patients/leads)
-const _store = new Map<string, Contacto>();
+const API = '/api/patients/leads';
 
 export const crearContacto = async (
     data: CrearContactoInput
 ): Promise<{ contacto: Contacto; linkCuestionario: string | null }> => {
-    const id = crypto.randomUUID();
-    const contacto: Contacto = {
-        id,
-        nombre: data.nombre,
-        apellidos: data.apellidos,
-        telefono: data.telefono,
-        email: data.email,
-        estado: data.estado ?? 'potencial',
-        origen: data.origen ?? 'primera_visita',
-        canal: data.canalEntrada ?? data.canal ?? 'recepcion',
-        numPac: data.numPac,
-        citaId: data.citaId,
-        motivoConsulta: data.motivoConsulta,
-        notas: data.notas,
-        createdAt: new Date().toISOString(),
-        esMenor: data.esMenor,
-        nombreTutor: data.nombreTutor,
-        apellidosTutor: data.apellidosTutor,
-        telefonoTutor: data.telefonoTutor,
-        emailTutor: data.emailTutor,
-        relacionTutor: data.relacionTutor,
-        doctorAsignado: data.doctorAsignado,
-        tratamientoAdicional: data.tratamientoAdicional,
-    };
-    _store.set(id, contacto);
-    // TODO: generar link de cuestionario real vía backend
-    const linkCuestionario: string | null = null;
-    return { contacto, linkCuestionario };
+    const res = await authFetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            ...data,
+            canal: data.canalEntrada ?? data.canal ?? 'recepcion',
+        }),
+    });
+    if (!res.ok) throw new Error('Error al crear contacto');
+    const json = await res.json();
+    return { contacto: json.data, linkCuestionario: null };
 };
 
-export const getContactosActivos = async (): Promise<Contacto[]> =>
-    [..._store.values()].filter(c => c.estado !== 'convertido' && c.estado !== 'cancelado');
+export const getContactosActivos = async (): Promise<Contacto[]> => {
+    const res = await authFetch(API);
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.data ?? [];
+};
 
-export const getContactoPorId = async (id: string): Promise<Contacto | null> =>
-    _store.get(id) ?? null;
+export const getContactoPorId = async (id: string): Promise<Contacto | null> => {
+    const res = await authFetch(`${API}/${id}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.data ?? null;
+};
 
 export const buscarContactos = async (query: string): Promise<Contacto[]> => {
     const q = query.toLowerCase();
-    return [..._store.values()].filter(c =>
+    const todos = await getContactosActivos();
+    return todos.filter(c =>
         c.nombre.toLowerCase().includes(q) ||
         c.apellidos?.toLowerCase().includes(q) ||
         c.telefono.includes(q)
@@ -125,17 +111,21 @@ export const buscarContactos = async (query: string): Promise<Contacto[]> => {
 };
 
 export const actualizarEstadoContacto = async (id: string, estado: ContactoEstado, _motivo?: string): Promise<boolean> => {
-    const c = _store.get(id);
-    if (!c) return false;
-    _store.set(id, { ...c, estado, updatedAt: new Date().toISOString() });
-    return true;
+    const res = await authFetch(`${API}/${id}/estado`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado }),
+    });
+    return res.ok;
 };
 
 export const convertirContactoEnPaciente = async (id: string, numPac: string): Promise<boolean> => {
-    const c = _store.get(id);
-    if (!c) return false;
-    _store.set(id, { ...c, estado: 'convertido', numPac, updatedAt: new Date().toISOString() });
-    return true;
+    const res = await authFetch(`${API}/${id}/convertir`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numPac }),
+    });
+    return res.ok;
 };
 
 export const generarMensajeBienvenidaContacto = (

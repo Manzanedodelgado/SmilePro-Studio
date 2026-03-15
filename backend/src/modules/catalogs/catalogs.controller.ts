@@ -1,12 +1,10 @@
 import type { Request, Response } from 'express';
-import { CatalogsService } from './catalogs.service';
-
-const svc = new CatalogsService();
+import { CatalogsService } from './catalogs.service.js';
 
 export const CatalogsController = {
     getSpecialties: async (_req: Request, res: Response) => {
         try {
-            const data = await svc.getSpecialties();
+            const data = await CatalogsService.getSpecialties();
             res.json({ success: true, data });
         } catch (e) {
             res.status(500).json({ success: false, message: String(e) });
@@ -14,7 +12,7 @@ export const CatalogsController = {
     },
     getTaxes: async (_req: Request, res: Response) => {
         try {
-            const data = await svc.getTaxes();
+            const data = await CatalogsService.getTaxes();
             res.json({ success: true, data });
         } catch (e) {
             res.status(500).json({ success: false, message: String(e) });

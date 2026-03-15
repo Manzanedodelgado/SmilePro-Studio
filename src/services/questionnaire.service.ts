@@ -1,9 +1,9 @@
 // ─────────────────────────────────────────────────────────────────
 //  services/questionnaire.service.ts
-//  Cuestionario Primera Visita — in-memory (stub temporal).
-//  TODO: exponer /api/clinical/questionnaires en el backend.
-//  SIN dependencia de db.ts / backend.
+//  F-002 FIX: ahora persiste en Backend /api/clinical/questionnaires
+//  (en lugar del Map in-memory original).
 // ─────────────────────────────────────────────────────────────────
+import { authFetch } from './db';
 
 export interface QuestionnaireData {
     fechaNacimiento?: string;
@@ -59,46 +59,63 @@ export interface QuestionnaireRecord {
     created_at: string;
 }
 
-const _tokens = new Map<string, QuestionnaireRecord & { data?: QuestionnaireData }>();
+const API = '/api/clinical/questionnaires';
 
 export const crearQuestionnaireToken = async (
     entityId: string,
     fechaCita: Date,
     entityType: 'contacto' | 'paciente' = 'paciente',
 ): Promise<string | null> => {
-    const token = crypto.randomUUID().replace(/-/g, '');
-    const expiresAt = new Date(fechaCita.getTime() + 60 * 60 * 1000).toISOString();
-    const record: QuestionnaireRecord = {
-        id: crypto.randomUUID(),
-        token,
-        [entityType === 'contacto' ? 'contacto_id' : 'num_pac']: entityId,
-        estado: 'pendiente',
-        expires_at: expiresAt,
-        created_at: new Date().toISOString(),
-    };
-    _tokens.set(token, record);
-    const base = window?.location?.origin ?? 'https://gestion.rubiogarciadental.com';
-    return `${base}/cuestionario?token=${token}`;
+    try {
+        const res = await authFetch(API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ entityId, entityType, fechaCita: fechaCita.toISOString() }),
+        });
+        if (!res.ok) return null;
+        const json = await res.json();
+        return json.data?.url ?? null;
+    } catch {
+        return null;
+    }
 };
 
-export const getQuestionnaireByToken = async (token: string): Promise<QuestionnaireRecord | null> =>
-    _tokens.get(token) ?? null;
+export const getQuestionnaireByToken = async (token: string): Promise<QuestionnaireRecord | null> => {
+    try {
+        const res = await fetch(`${API}/token/${token}`); // pública, sin auth
+        if (!res.ok) return null;
+        const json = await res.json();
+        return json.data ?? null;
+    } catch {
+        return null;
+    }
+};
 
 export const guardarRespuestasQuestionnaire = async (
     token: string,
     data: QuestionnaireData,
 ): Promise<boolean> => {
-    const record = _tokens.get(token);
-    if (!record) return false;
-    _tokens.set(token, { ...record, estado: 'completado', completado_at: new Date().toISOString(), data });
-    return true;
+    try {
+        const res = await fetch(`${API}/token/${token}/submit`, { // pública, sin auth
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        return res.ok;
+    } catch {
+        return false;
+    }
 };
 
 export const getQuestionnairePorPaciente = async (numPac: string): Promise<QuestionnaireRecord | null> => {
-    for (const r of _tokens.values()) {
-        if (r.num_pac === numPac && r.estado === 'completado') return r;
+    try {
+        const res = await authFetch(`${API}/paciente/${numPac}`);
+        if (!res.ok) return null;
+        const json = await res.json();
+        return json.data ?? null;
+    } catch {
+        return null;
     }
-    return null;
 };
 
 export const generarMensajeQuestionnaire = (nombrePaciente: string, url: string, fechaCita: string): string =>

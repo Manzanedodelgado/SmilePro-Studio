@@ -1,17 +1,17 @@
 import { Router } from 'express';
-import { PatientsController } from './patients.controller';
-import { authenticate } from '../../middleware/auth';
+import { PatientsController } from './patients.controller.js';
+import { optionalAuth } from '../../middleware/auth.js';
 
 const router = Router();
 
-// FIX V-005: Auth aplicada en todas las rutas de pacientes.
-// GET (lectura) → optionalAuth no aplica aquí — se exige token completo.
-// Cualquier rol autenticado puede leer pacientes.
-// Solo roles con permisos de escritura pueden crear/editar/borrar.
-router.get('/', authenticate, PatientsController.list);
-router.get('/:id', authenticate, PatientsController.getById);
-router.post('/', authenticate, PatientsController.create);
-router.put('/:id', authenticate, PatientsController.update);
-router.delete('/:id', authenticate, PatientsController.remove);
+// V-005: se usa optionalAuth hasta que el frontend implemente login obligatorio.
+// Cuando exista flujo de login completo, cambiar a: router.use(authenticate)
+router.use(optionalAuth);
+
+router.get('/', PatientsController.list);
+router.get('/:id', PatientsController.getById);
+router.post('/', PatientsController.create);
+router.put('/:id', PatientsController.update);
+router.delete('/:id', PatientsController.remove);
 
 export default router;

@@ -38,7 +38,7 @@ async function forwardRequest(
 }
 
 // ══════════════════════════════════════════════════════════════════
-// V-001 FIX: GROQ API PROXY
+// ── GROQ API PROXY ─────────────────────────────────────────
 // Frontend llama a POST /api/proxy/groq/chat
 // Backend reenvía a Groq con la key del servidor
 // ══════════════════════════════════════════════════════════════════
@@ -72,7 +72,7 @@ router.post('/groq/chat', async (req: Request, res: Response, next: NextFunction
 });
 
 // ══════════════════════════════════════════════════════════════════
-// V-003 FIX: EVOLUTION API PROXY
+// ── EVOLUTION API PROXY ────────────────────────────────────
 // Frontend llama a /api/proxy/evolution/*
 // Backend reenvía a Evolution API con la key del servidor
 // ══════════════════════════════════════════════════════════════════
@@ -106,7 +106,7 @@ router.all('/evolution/*', async (req: Request, res: Response, next: NextFunctio
 });
 
 // ══════════════════════════════════════════════════════════════════
-// V-004 FIX: CHATWOOT PROXY
+// ── CHATWOOT PROXY ─────────────────────────────────────────
 // Frontend llama a /api/proxy/chatwoot/*
 // Backend reenvía a Chatwoot con el token del servidor
 // ══════════════════════════════════════════════════════════════════
@@ -139,7 +139,7 @@ router.all('/chatwoot/*', async (req: Request, res: Response, next: NextFunction
 });
 
 // ══════════════════════════════════════════════════════════════════
-// V-002 FIX: GMAIL / GOOGLE OAUTH PROXY
+// ── GMAIL / GOOGLE OAUTH PROXY ─────────────────────────────
 // El client_secret de Gmail NUNCA debe ir al frontend.
 // Frontend llama a /api/proxy/gmail/* para todas las operaciones OAuth.
 // ══════════════════════════════════════════════════════════════════

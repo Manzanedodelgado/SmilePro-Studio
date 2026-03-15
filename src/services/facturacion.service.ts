@@ -4,6 +4,7 @@
 //  SIN dependencia de db.ts / backend.
 // ─────────────────────────────────────────────────────────────────
 import { logger } from './logger';
+import { authFetch } from './db';
 
 const API_BASE = 'http://localhost:3000/api/accounting';
 
@@ -77,7 +78,7 @@ const mapBankMovement = (r: any): MovimientoBancoUI => {
 /** Todas las facturas emitidas — para vista global Gestoría */
 export const getFacturas = async (): Promise<FacturaUI[]> => {
     try {
-        const res = await fetch(`${API_BASE}/invoices?pageSize=500`);
+        const res = await authFetch(`${API_BASE}/invoices?pageSize=500`);
         if (!res.ok) return [];
         const json = await res.json();
         const rows: any[] = json.data ?? [];
@@ -92,7 +93,7 @@ export const getFacturas = async (): Promise<FacturaUI[]> => {
 export const getFacturasByPaciente = async (numPac: string | number): Promise<FacturaUI[]> => {
     if (!numPac) return [];
     try {
-        const res = await fetch(`${API_BASE}/invoices?pageSize=500`);
+        const res = await authFetch(`${API_BASE}/invoices?pageSize=500`);
         if (!res.ok) return [];
         const json = await res.json();
         const rows: any[] = json.data ?? [];
@@ -118,7 +119,7 @@ export const createFactura = async (factura: {
     fechaEmision: string;
 }): Promise<boolean> => {
     try {
-        const res = await fetch(`${API_BASE}/invoices`, {
+        const res = await authFetch(`${API_BASE}/invoices`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(factura),
@@ -133,7 +134,7 @@ export const createFactura = async (factura: {
 /** Movimientos bancarios — para conciliación */
 export const getMovimientosBanco = async (): Promise<MovimientoBancoUI[]> => {
     try {
-        const res = await fetch(`${API_BASE}/bank-movements?pageSize=200`);
+        const res = await authFetch(`${API_BASE}/bank-movements?pageSize=200`);
         if (!res.ok) return [];
         const json = await res.json();
         const rows: any[] = json.data ?? [];
@@ -147,7 +148,7 @@ export const getMovimientosBanco = async (): Promise<MovimientoBancoUI[]> => {
 /** KPIs para el dashboard de Gestoría */
 export const getGestoriaStats = async (): Promise<{ ingresosBrutos: string; facturasConteo: number }> => {
     try {
-        const res = await fetch(`${API_BASE}/summary`);
+        const res = await authFetch(`${API_BASE}/summary`);
         if (!res.ok) return { ingresosBrutos: '—', facturasConteo: 0 };
         const json = await res.json();
         const data = json.data ?? {};

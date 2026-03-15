@@ -293,14 +293,41 @@ export const getColaboradorNombre = async (idCol?: number): Promise<string> => {
 };
 
 // ─────────────────────────────────────────────────────────────────
-//  HISTORIAL CLÍNICO (TtosMed / PRESUTTO)
-//  Estos datos son de GELITE — no expuestos aún vía backend local.
-//  Se devuelve [] como fallback hasta que el backend los exponga.
+//  ENTRADAS MÉDICAS (TtosMed GELITE via backend /api/clinical)
 // ─────────────────────────────────────────────────────────────────
 
+const CLINICAL_BASE = 'http://localhost:3000/api/clinical';
+
+export interface EntradaMedica {
+    id: number;
+    fecha: string | null;
+    tratamiento: string;
+    notas: string;
+    piezas: number[];
+    importe: number;
+    estado: number;
+}
+
 export const getEntradasMedicas = async (
-    _idPac: number
-): Promise<import('../types').SOAPNote[]> => [];
+    idPac: number,
+    opts: { page?: number; pageSize?: number; order?: 'asc' | 'desc' } = {}
+): Promise<EntradaMedica[]> => {
+    if (!idPac) return [];
+    try {
+        const params = new URLSearchParams({
+            page: String(opts.page ?? 1),
+            pageSize: String(opts.pageSize ?? 100),
+            order: opts.order ?? 'desc',
+        });
+        const res = await fetch(`${CLINICAL_BASE}/patients/${idPac}/entradas?${params}`);
+        if (!res.ok) return [];
+        const json = await res.json();
+        return (json.data ?? []) as EntradaMedica[];
+    } catch (e) {
+        logger.warn('[ENTRADAS] Error cargando entradas médicas:', e);
+        return [];
+    }
+};
 
 export const getHistorialCitasPaciente = async (
     _apellidos: string,
@@ -311,3 +338,4 @@ export const getHistorialCitasPaciente = async (
 export const getTratamientosPaciente = async (
     _idPac: number
 ): Promise<{ id: number; fecha: string; tratamientos: string[]; total: number; estado: string }[]> => [];
+

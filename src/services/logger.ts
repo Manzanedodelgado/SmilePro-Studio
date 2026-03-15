@@ -2,8 +2,7 @@
 //  services/logger.ts
 //  Logger seguro para producción.
 //
-//  AUDITORÍA-VULN-006 FIX:
-//  Reemplaza console.log/warn/error con un logger que silencia
+//  //  Reemplaza console.log/warn/error con un logger que silencia
 //  mensajes con datos sensibles en producción (VITE_MODE=production).
 //
 //  USO:

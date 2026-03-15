@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────
 import { type Paciente } from '../types';
 import { logger } from './logger';
+import { authFetch } from './db';
 
 export interface ValidationError { field: string; message: string; }
 
@@ -32,7 +33,7 @@ export const searchPacientes = async (query: string): Promise<Paciente[]> => {
         if (query.trim()) url.searchParams.append('search', query.trim());
         url.searchParams.append('limit', '50');
 
-        const res = await fetch(url.toString());
+        const res = await authFetch(url.toString());
         if (!res.ok) throw new Error('Error buscando pacientes');
         const json = await res.json();
         if (json.success && Array.isArray(json.data)) {
@@ -47,7 +48,7 @@ export const searchPacientes = async (query: string): Promise<Paciente[]> => {
 
 export const getPaciente = async (numPac: string): Promise<Paciente | null> => {
     try {
-        const res = await fetch(`${API_BASE_URL}/patients/${numPac}`);
+        const res = await authFetch(`${API_BASE_URL}/patients/${numPac}`);
         if (!res.ok) return null;
         const json = await res.json();
         return json.success && json.data ? mapPrismaToPaciente(json.data) : null;
@@ -57,7 +58,7 @@ export const getPaciente = async (numPac: string): Promise<Paciente | null> => {
     }
 };
 
-// ── Validación (SEC-A03 FIX) ──────────────────────────────────────
+// ── Validación ────────────────────────────────────────────────────────
 export const validatePaciente = (p: Partial<Omit<Paciente, 'historial'>>): ValidationError[] => {
     const errs: ValidationError[] = [];
 
@@ -77,7 +78,7 @@ export const createPaciente = async (p: Omit<Paciente, 'historial'>): Promise<Pa
     if (errors.length > 0) throw new Error(`Datos inválidos: ${errors.map(e => e.message).join(', ')}`);
 
     try {
-        const res = await fetch(`${API_BASE_URL}/patients`, {
+        const res = await authFetch(`${API_BASE_URL}/patients`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -106,7 +107,7 @@ export const updatePaciente = async (numPac: string, updates: Partial<Omit<Pacie
         if (updates.dni) body.NIF = updates.dni;
         if (updates.telefono) body.TelMovil = updates.telefono;
         
-        const res = await fetch(`${API_BASE_URL}/patients/${numPac}`, {
+        const res = await authFetch(`${API_BASE_URL}/patients/${numPac}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
@@ -122,7 +123,7 @@ export const updatePaciente = async (numPac: string, updates: Partial<Omit<Pacie
 
 export const deletePaciente = async (numPac: string): Promise<boolean> => {
     try {
-        const res = await fetch(`${API_BASE_URL}/patients/${numPac}`, { method: 'DELETE' });
+        const res = await authFetch(`${API_BASE_URL}/patients/${numPac}`, { method: 'DELETE' });
         return res.ok;
     } catch (error) {
         logger.error('[PACIENTES] deletePaciente error:', error);

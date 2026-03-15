@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────
 //  services/gdrive.service.ts  (FRONTEND)
 //  Capa frontend de integración con Google Drive.
-//  P-003 FIX: Ahora llama al backend proxy en lugar de usar
+//  Ahora llama al backend proxy en lugar de usar
 //  VITE_GDRIVE_API_KEY directamente.
 //
 //  Backend: GET /api/gdrive/photos/:numPac?apellidos=&nombre=

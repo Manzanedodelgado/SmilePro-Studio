@@ -3,8 +3,7 @@
 //  services/romexis.service.ts
 //  Capa de integración con Planmeca Romexis
 //
-//  AUDITORÍA-VULN-001 FIX:
-//  Las llamadas a Romexis ya NO van directamente al API desde el frontend.
+//  //  Las llamadas a Romexis ya NO van directamente al API desde el frontend.
 //  Pasan por la Edge Function romexis-proxy (backend).
 //  La ROMEXIS_KEY vive en las variables de entorno de backend Node.js.
 //

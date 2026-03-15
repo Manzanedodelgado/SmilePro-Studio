@@ -4,12 +4,14 @@ import SOAPEditor from '../components/pacientes/SOAPEditor';
 import PatientSearchModal from '../components/pacientes/PatientSearchModal';
 import Odontograma from '../components/pacientes/Odontograma';
 import Periodontograma from '../components/pacientes/Periodontograma';
-import Economica from '../components/pacientes/Economica';
 import Documentos from '../components/pacientes/Documentos';
+import Economica from '../components/pacientes/Economica';
+import EntradasMedicas from '../components/pacientes/EntradasMedicas';
+import QuestionnairePanel from '../components/pacientes/QuestionnairePanel';
 import { type SOAPNote, type Paciente, type Area } from '../types';
 import {
-    Activity, CheckCircle, Brain, Camera,
-    FileText, CircleDollarSign, ChevronDown, ChevronUp,
+    Activity, Brain, Camera,
+    FileText, CircleDollarSign,
     ShieldCheck, ShieldAlert, Pencil,
     Phone, Calendar, MessageSquare, ArrowLeftRight, ExternalLink, Maximize2,
     Gavel, UserPlus, X, Plus, Save, Pill, Search
@@ -18,7 +20,7 @@ import {
     getPatientPanoramicas, isRomexisConfigured, type RomexisPanoramica
 } from '../services/romexis.service';
 import {
-    getPatientPhotos, isGDriveConfigured, type PatientPhoto
+    getPatientPhotos, isGDriveConfigured, createPatientDriveFolder, type PatientPhoto
 } from '../services/gdrive.service';
 import {
     getMedications, getAllergies, upsertMedication, deleteMedication,
@@ -26,9 +28,9 @@ import {
     type PatientMedication, type PatientAllergy
 } from '../services/supabase.service';
 import {
-    getSoapNotes, createSoapNote, updateSoapNote,
+    getSoapNotes, createSoapNote,
 } from '../services/soap.service';
-import { getEntradasMedicas } from '../services/citas.service';
+import { getPaciente } from '../services/pacientes.service';
 import { searchVademecum, type Medicamento } from '../data/vademecum';
 import { Badge } from '../components/UI';
 
@@ -42,20 +44,8 @@ interface PacientesProps {
     onNavigate?: (area: Area, subArea?: string, citaData?: Partial<import('../types').Cita>, waData?: { phone: string; name: string }) => void;
 }
 
-// Color por especialidad
-const especialidadConfig: Record<string, { dot: string; badge: string; border: string }> = {
-    'Implantología': { dot: 'bg-rose-500', badge: 'bg-rose-50 text-rose-700 border-rose-200', border: 'border-l-rose-500' },
-    'Higiene': { dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', border: 'border-l-emerald-500' },
-    'Ortodoncia': { dot: 'bg-blue-500', badge: 'bg-blue-50 text-blue-700 border-blue-200', border: 'border-l-blue-500' },
-    'Diagnóstico': { dot: 'bg-slate-400', badge: 'bg-slate-50 text-slate-600 border-slate-200', border: 'border-l-slate-400' },
-    'Urgencia': { dot: 'bg-amber-500', badge: 'bg-amber-50 text-amber-700 border-amber-200', border: 'border-l-amber-500' },
-    'Cirugía': { dot: 'bg-purple-500', badge: 'bg-purple-50 text-purple-700 border-purple-200', border: 'border-l-purple-500' },
-    'General': { dot: 'bg-slate-400', badge: 'bg-slate-50 text-slate-600 border-slate-200', border: 'border-l-slate-400' },
-};
-const getEsp = (esp: string) => especialidadConfig[esp] ?? especialidadConfig['General'];
 
-
-const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, showToast }) => {
+const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, showToast, onNavigate, requestedNumPac, onRequestedHandled }) => {
     const [paciente, setPaciente] = useState<Paciente | null>(null);
 
     const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -63,8 +53,6 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
     const [saraTyped, setSaraTyped] = useState('');
     const saraText = `Paciente con recurrencia en dolor. Alergia al látex activa — asegurar material alternativo en G1. RX control pieza 2.5 recomendado. Considerar revisión periodoncia en próxima visita.`;
     // Cuadrantes state
-    const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
-    const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
     const [panoramicaIdx, setPanoramicaIdx] = useState(0);
     const [fotoIdx, setFotoIdx] = useState(0);
     const [panoramicas, setPanoramicas] = useState<RomexisPanoramica[]>([]);
@@ -81,6 +69,16 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
     const [medQuery, setMedQuery] = useState('');
     const [medSuggestions, setMedSuggestions] = useState<Medicamento[]>([]);
 
+    // Crear carpeta Drive automáticamente al cargar paciente (idempotente)
+    useEffect(() => {
+        if (!paciente?.numPac || !paciente?.apellidos) return;
+        createPatientDriveFolder(
+            paciente.numPac,
+            paciente.apellidos,
+            paciente.nombre ?? ''
+        ).catch(() => {}); // silencioso — si falla no interrumpe
+    }, [paciente?.numPac]);
+
     // Inicializar alergias y medicaciones desde el paciente + Supabase
     useEffect(() => {
         if (!paciente?.numPac) return;
@@ -88,19 +86,10 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
             getAllergies(paciente.numPac).then(a => { if (a.length) setAllergies(a); });
             getMedications(paciente.numPac).then(m => { if (m.length) setMedications(m); });
         }
-        // Cargar entradas médicas reales desde TtosMed
-        const idPac = paciente.idPac;
-        Promise.all([
-            getSoapNotes(paciente.numPac),
-            idPac ? getEntradasMedicas(idPac) : Promise.resolve([]),
-        ]).then(([soapNotes, entradasMedicas]) => {
-            // SOAP notes prevalecen si coincide timestamp. Entradas médicas van después.
-            const combined = [
-                ...soapNotes,
-                ...entradasMedicas.filter(e => !soapNotes.find(s => s.id === e.id)),
-            ];
-            if (combined.length > 0) {
-                setPaciente(prev => prev ? { ...prev, historial: combined } : prev);
+        // Cargar SOAP notes del paciente
+        getSoapNotes(paciente.numPac).then(soapNotes => {
+            if (soapNotes.length > 0) {
+                setPaciente(prev => prev ? { ...prev, historial: soapNotes } : prev);
             }
         });
     }, [paciente?.numPac, paciente?.alergias, paciente?.medicacionActual]);
@@ -115,6 +104,19 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
         if (activeSubArea === 'ACTION_SEARCH') { setSearchInitialView('search'); setIsSearchOpen(true); onSubAreaChange('Historia Clínica'); }
         else if (activeSubArea === 'ACTION_NEW') { setSearchInitialView('create'); setIsSearchOpen(true); onSubAreaChange('Historia Clínica'); }
     }, [activeSubArea, onSubAreaChange]);
+
+    // Auto-cargar paciente cuando llega desde otro módulo (ej: Agenda → Ver ficha)
+    useEffect(() => {
+        if (!requestedNumPac) return;
+        getPaciente(requestedNumPac).then(p => {
+            if (p) {
+                setPaciente(p);
+                onSubAreaChange('Historia Clínica');
+                showToast(`Abriendo ficha de ${p.nombre} ${p.apellidos}`);
+            }
+            onRequestedHandled?.();
+        }).catch(() => onRequestedHandled?.());
+    }, [requestedNumPac]);
 
     // SARA IA typing effect
     useEffect(() => {
@@ -165,54 +167,6 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
             showToast('Evolutivo registrado legalmente');
         }
     };
-
-    const handleUpdateNote = async (id: string, data: {
-        subjetivo: string; objetivo: string; analisis: string; plan: string;
-        eva: number; fecha?: string; especialidad?: string;
-        tratamiento_id?: string | number; tratamiento_nombre?: string;
-        pieza?: number; cuadrante?: number; arcada?: string;
-    }) => {
-        await updateSoapNote(id, {
-            subjetivo: data.subjetivo, objetivo: data.objetivo,
-            analisis: data.analisis, plan: data.plan,
-            eva: data.eva,
-            ...(data.fecha ? { fecha: data.fecha } : {}),
-            ...(data.especialidad ? { especialidad: data.especialidad } : {}),
-            tratamiento_id: data.tratamiento_id,
-            tratamiento_nombre: data.tratamiento_nombre,
-            pieza: data.pieza,
-            cuadrante: data.cuadrante,
-            arcada: data.arcada,
-        });
-        setPaciente(prev => prev ? ({
-            ...prev,
-            historial: prev.historial.map(n =>
-                n.id === id
-                    ? {
-                        ...n,
-                        subjetivo: data.subjetivo,
-                        objetivo: data.objetivo,
-                        analisis: data.analisis,
-                        plan: data.plan,
-                        eva: data.eva,
-                        fecha: data.fecha
-                            ? new Date(data.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
-                            : n.fecha,
-                        especialidad: data.especialidad ?? n.especialidad,
-                        tratamiento_id: data.tratamiento_id,
-                        tratamiento_nombre: data.tratamiento_nombre,
-                        pieza: data.pieza,
-                        cuadrante: data.cuadrante,
-                        arcada: data.arcada,
-                    }
-                    : n
-            ),
-        }) : prev);
-        setEditingNoteId(null);
-        setExpandedNoteId(id);
-        showToast('Entrada clínica actualizada');
-    };
-
 
 
     // ── Handlers alergias ──────────────────────────────────────
@@ -294,7 +248,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
     const renderHistorial = () => {
         if (!paciente) return null;
         return (
-        <div className="grid gap-3 animate-in fade-in duration-400 h-[calc(100vh-240px)] min-h-[500px]" style={{ gridTemplateColumns: '70fr 30fr' }}>
+        <div className="grid gap-3 animate-in fade-in duration-400 h-[calc(100vh-240px)] min-h-[500px]" style={{ gridTemplateColumns: '65fr 35fr' }}>
 
             {/* ── COL 1: IZQUIERDA (Top: Historial, Bottom: SOAP) ──────────────── */}
             <div className="flex flex-col gap-3 h-full min-h-0">
@@ -304,129 +258,10 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                         <div className="flex items-center gap-1.5 flex-1">
                             <Activity className="w-3.5 h-3.5 text-[#051650]" />
                             <h3 className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Entradas Médicas</h3>
-                            <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse ml-1" title="Datos Simulados"></span>
                         </div>
-                        <span className="text-[9px] font-bold text-slate-400">{paciente.historial.length}</span>
                     </div>
-                    <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
-                        {paciente.historial.length === 0 && (
-                            <div className="flex items-center justify-center h-full">
-                                <p className="text-sm text-slate-300 font-medium">Sin entradas registradas</p>
-                            </div>
-                        )}
-                        {[...paciente.historial]
-                            .sort((a, b) => {
-                                const ta = a.timestamp ?? a.fecha ?? '';
-                                const tb = b.timestamp ?? b.fecha ?? '';
-                                return tb.localeCompare(ta);
-                            })
-                            .map((note) => {
-                                const cfg = getEsp(note.especialidad);
-                                const isOpen = expandedNoteId === note.id;
-                                const isEditing = editingNoteId === note.id;
-                                const fechaISO = (() => {
-                                    try {
-                                        const d = new Date(note.fecha);
-                                        return isNaN(d.getTime()) ? new Date().toISOString().split('T')[0] : d.toISOString().split('T')[0];
-                                    } catch { return new Date().toISOString().split('T')[0]; }
-                                })();
-                                return (
-                                    <div key={note.id} className="border-l-2 transition-all" style={{ borderLeftColor: isOpen || isEditing ? '#051650' : '#e2e8f0' }}>
-                                        <div className="w-full flex items-center justify-between px-2 py-2 hover:bg-slate-50 transition-colors">
-                                            <button
-                                                onClick={() => { setExpandedNoteId(isOpen ? null : note.id); setEditingNoteId(null); }}
-                                                className="flex items-center gap-2 min-w-0 flex-1 text-left"
-                                            >
-                                                {/* Fecha tipo calendario */}
-                                                <div className="flex flex-col items-center justify-center w-10 h-12 bg-slate-100 rounded-lg flex-shrink-0 border border-slate-200">
-                                                    <span className="text-sm font-black text-[#051650] leading-none">{note.fecha.split(' ')[0]}</span>
-                                                    <span className="text-[10px] font-bold text-slate-500 uppercase">{note.fecha.split(' ')[1]}</span>
-                                                    <span className="text-[9px] font-semibold text-slate-400">{note.fecha.split(' ')[2]}</span>
-                                                </div>
-                                                {/* Resumen */}
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-center gap-1 mb-0.5 flex-wrap">
-                                                        <span className={`text-[10px] font-black uppercase tracking-wider px-1 py-0.5 rounded border ${cfg.badge}`}>{note.especialidad}</span>
-                                                        {note.firmada && <CheckCircle className="w-3 h-3 text-emerald-500 flex-shrink-0" />}
-                                                        {note.eva > 0 && (
-                                                            <span className={`text-[10px] font-bold px-1 rounded ${note.eva >= 7 ? 'bg-red-50 text-red-600' : note.eva >= 4 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-700'}`}>
-                                                                {note.eva}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    {/* Tratamiento + pieza/cuadrante/arcada */}
-                                                    {note.tratamiento_nombre && (
-                                                        <div className="flex items-center gap-1 mb-0.5">
-                                                            <span className="text-[10px] bg-violet-100 text-violet-800 font-bold px-1.5 py-0.5 rounded-full truncate max-w-[200px]">{note.tratamiento_nombre}</span>
-                                                            {note.pieza && <span className="text-[9px] bg-blue-50 text-blue-700 font-bold px-1 py-0.5 rounded">🦷 {note.pieza}</span>}
-                                                            {note.cuadrante && <span className="text-[9px] bg-blue-50 text-blue-700 font-bold px-1 py-0.5 rounded">Q{note.cuadrante}</span>}
-                                                            {note.arcada && <span className="text-[9px] bg-blue-50 text-blue-700 font-bold px-1 py-0.5 rounded capitalize">{note.arcada}</span>}
-                                                        </div>
-                                                    )}
-                                                    <p className="text-[13px] text-slate-600 font-medium leading-snug line-clamp-2">{note.subjetivo || note.plan}</p>
-                                                </div>
-                                            </button>
-                                            <div className="flex items-center gap-0.5 flex-shrink-0 ml-1">
-                                                <button
-                                                    onClick={() => { setEditingNoteId(isEditing ? null : note.id); setExpandedNoteId(null); }}
-                                                    className={`w-5 h-5 flex items-center justify-center rounded transition-all ${isEditing ? 'bg-[#051650] text-white' : 'text-slate-400 hover:text-[#051650] hover:bg-slate-100'}`}
-                                                    title="Editar entrada"
-                                                >
-                                                    <Pencil className="w-2.5 h-2.5" />
-                                                </button>
-                                                {isOpen
-                                                    ? <ChevronUp className="w-3.5 h-3.5 text-slate-300 cursor-pointer" onClick={() => setExpandedNoteId(null)} />
-                                                    : <ChevronDown className="w-3.5 h-3.5 text-slate-300 cursor-pointer" onClick={() => { setExpandedNoteId(note.id); setEditingNoteId(null); }} />}
-                                            </div>
-                                        </div>
-                                        {/* Modo edición inline */}
-                                        {isEditing && (
-                                            <div className="mx-2 mb-3">
-                                                <SOAPEditor
-                                                    onSave={(data) => handleUpdateNote(note.id, data)}
-                                                    alergiasPaciente={paciente!.alergias}
-                                                    onCancel={() => setEditingNoteId(null)}
-                                                    initialData={{
-                                                        subjetivo: note.subjetivo,
-                                                        objetivo: note.objetivo,
-                                                        analisis: note.analisis,
-                                                        plan: note.plan,
-                                                        eva: note.eva,
-                                                        fecha: fechaISO,
-                                                        especialidad: note.especialidad,
-                                                        tratamiento_id: note.tratamiento_id,
-                                                        tratamiento_nombre: note.tratamiento_nombre,
-                                                        pieza: note.pieza,
-                                                        cuadrante: note.cuadrante,
-                                                        arcada: note.arcada,
-                                                    }}
-                                                />
-                                            </div>
-                                        )}
-                                        {/* Contenido expandido SOAP solo lectura */}
-                                        {isOpen && !isEditing && (
-                                            <div className="grid grid-cols-2 gap-px bg-slate-100 text-[10px] mx-2 mb-2 rounded-lg overflow-hidden">
-                                                <div className="bg-white p-2">
-                                                    <span className="block text-[8px] font-black text-blue-600 uppercase tracking-widest mb-0.5">S</span>
-                                                    <p className="text-slate-600 leading-relaxed">{note.subjetivo}</p>
-                                                </div>
-                                                <div className="bg-white p-2">
-                                                    <span className="block text-[8px] font-black text-orange-600 uppercase tracking-widest mb-0.5">O</span>
-                                                    <p className="text-slate-600 leading-relaxed">{note.objetivo}</p>
-                                                </div>
-                                                <div className="bg-white p-2">
-                                                    <span className="block text-[8px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">A</span>
-                                                    <p className="text-slate-600 leading-relaxed">{note.analisis}</p>
-                                                </div>
-                                                <div className="bg-[#051650] p-2">
-                                                    <span className="block text-[8px] font-black text-white/60 uppercase tracking-widest mb-0.5">P</span>
-                                                    <p className="text-white font-medium leading-relaxed">{note.plan}</p>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden p-2">
+                        <EntradasMedicas idPac={paciente.idPac ?? (paciente.numPac ? parseInt(paciente.numPac, 10) : 0)} />
                     </div>
                     {/* IA DENTAL al pie */}
                     <div className="border-t border-slate-100 bg-[#051650] px-3 py-2 flex items-center gap-2 flex-shrink-0">
@@ -544,7 +379,16 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                         ))}
                         <label className="flex-shrink-0 w-10 h-10 rounded-lg border-2 border-dashed border-slate-200 flex flex-col items-center justify-center cursor-pointer hover:border-[#051650] transition-all">
                             <Camera className="w-3 h-3 text-slate-300" />
-                            <input type="file" accept="image/*" className="hidden" />
+                            <input type="file" accept="image/*" className="hidden"
+                                onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file || !paciente?.numPac) return;
+                                    showToast("Subiendo foto...");
+                                    const { uploadPatientPhoto } = await import("../services/gdrive.service");
+                                    const ok = await uploadPatientPhoto(paciente.numPac, file);
+                                    showToast(ok ? "Foto subida a Google Drive" : "Google Drive OAuth requerido — configura la integracion");
+                                    e.target.value = "";
+                                }} />
                         </label>
                     </div>
                 </div>
@@ -559,14 +403,20 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
     const renderContent = () => {
         switch (activeSubArea) {
             case 'Odontograma 3D':
-            case 'Odontograma': return <Odontograma onSuggestionUpdate={() => { }} />;
+            case 'Odontograma': return <Odontograma onSuggestionUpdate={() => { }} numPac={paciente?.numPac} />;
             case 'Sondaje Periodontal':
             case 'Periodoncia': return <Periodontograma />;
             case 'Cuenta Corriente':
             case 'Económica':
-            case 'Presupuestos': return <Economica />;
+            case 'Presupuestos': return <Economica
+                numPac={paciente?.numPac ?? ''}
+                idPac={paciente?.idPac}
+                pacienteNombre={paciente ? `${paciente.nombre} ${paciente.apellidos}`.trim() : ''}
+                pacienteTelefono={paciente?.telefono ?? ''}
+            />;
             case 'Documentos y Consentimientos':
             case 'Documentos': return <Documentos numPac={paciente?.numPac ?? ''} nombrePaciente={paciente ? `${paciente.nombre} ${paciente.apellidos}` : undefined} telefono={paciente?.telefono} onDocumentSigned={handleDocumentSigned} />;
+            case 'Anamnesis': return paciente ? <QuestionnairePanel paciente={paciente} onUpdated={(p) => setPaciente(p)} /> : null;
             case 'Historia Clínica':
             case 'Historial Clínico':
             default: return renderHistorial();
@@ -774,8 +624,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                 <div className="px-6 py-4 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                     {/* Avatar + datos */}
                     <div className="flex items-center gap-4">
-                        <div className="h-14 px-3 rounded-xl bg-gradient-to-br from-[#051650] to-blue-700 text-white flex flex-col items-center justify-center shadow-md flex-shrink-0 min-w-[56px]">
-                            <span className="text-[9px] font-bold text-blue-300 uppercase tracking-widest leading-none mb-0.5">#NUMPAC</span>
+                        <div className="h-14 px-3 rounded-xl bg-gradient-to-br from-[#051650] to-blue-700 text-white flex items-center justify-center shadow-md flex-shrink-0 min-w-[56px]">
                             <span className="text-[13px] font-black leading-tight tracking-tight whitespace-nowrap">{paciente.numPac}</span>
                         </div>
                         <div>
@@ -808,10 +657,23 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
 
                     {/* Acciones rápidas */}
                     <div className="flex items-center gap-2 shrink-0">
-                        <button className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500 text-white rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-emerald-600 transition-all shadow-sm active:scale-95">
+                        <button
+                            onClick={() => onNavigate?.('Whatsapp', undefined, undefined, {
+                                phone: paciente.telefono ?? '',
+                                name: `${paciente.nombre} ${paciente.apellidos}`.trim(),
+                            })}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500 text-white rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-emerald-600 transition-all shadow-sm active:scale-95"
+                        >
                             <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
                         </button>
-                        <button className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-slate-200 transition-all active:scale-95">
+                        <button
+                            onClick={() => onNavigate?.('Agenda', undefined, {
+                                pacienteNombre: `${paciente.nombre} ${paciente.apellidos}`,
+                                pacienteTelefono: paciente.telefono ?? '',
+                                pacienteNumPac: paciente.numPac ?? '',
+                            } as any)}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-slate-200 transition-all active:scale-95"
+                        >
                             <Calendar className="w-3.5 h-3.5" /> Nueva Cita
                         </button>
                         <button

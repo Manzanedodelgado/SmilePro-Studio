@@ -11,9 +11,11 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 // ─── Module Routes ──────────────────────────────────────
 import authRoutes from './modules/auth/auth.routes';
 import patientsRoutes from './modules/patients/patients.routes';
+import leadsRoutes from './modules/patients/leads.routes';
 import appointmentsRoutes from './modules/appointments/appointments.routes';
 import treatmentsRoutes from './modules/treatments/treatments.routes';
 import clinicalRoutes from './modules/clinical/clinical.routes';
+import questionnairesRoutes from './modules/clinical/questionnaires.routes';
 import accountingRoutes from './modules/accounting/accounting.routes';
 import communicationRoutes from './modules/communication/communication.routes';
 import aiRoutes from './modules/ai/ai.routes';
@@ -63,9 +65,11 @@ app.get('/api/health', (_req, res) => {
 
 // ─── API Routes ─────────────────────────────────────────
 app.use('/api/auth', authRoutes);
+app.use('/api/patients/leads', leadsRoutes);
 app.use('/api/patients', patientsRoutes);
 app.use('/api/appointments', appointmentsRoutes);
 app.use('/api/treatments', treatmentsRoutes);
+app.use('/api/clinical/questionnaires', questionnairesRoutes);
 app.use('/api/clinical', clinicalRoutes);
 app.use('/api/accounting', accountingRoutes);
 app.use('/api/communication', communicationRoutes);

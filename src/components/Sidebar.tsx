@@ -14,7 +14,7 @@ import {
 interface SidebarProps {
     activeArea: Area;
     activeSubArea: string;
-    onNavigate: (area: Area, subArea: string) => void;
+    onNavigate: (area: Area, subArea: string, numPac?: string) => void;
     radControls?: {
         brightness: number; contrast: number; sharpness: number; colorMap: ColorMap;
         onBrightness: (v: number) => void; onContrast: (v: number) => void;
@@ -25,8 +25,8 @@ interface SidebarProps {
 
 // P-002 FIX: Hook de operativa en tiempo real desde DCitas
 const useOperativaHoy = () => {
-    const [espera, setEspera] = useState<{ id: string; nombre: string; tiempo: string; alerta: string; trat: string }[]>([]);
-    const [gabinete, setGabinete] = useState<{ id: string; nombre: string; gab: string; doctor: string; tiempo: string }[]>([]);
+    const [espera, setEspera] = useState<{ id: string; numPac: string; nombre: string; tiempo: string; alerta: string; trat: string }[]>([]);
+    const [gabinete, setGabinete] = useState<{ id: string; numPac: string; nombre: string; gab: string; doctor: string; tiempo: string }[]>([]);
 
     useEffect(() => {
         const load = async () => {
@@ -43,9 +43,10 @@ const useOperativaHoy = () => {
                     const minEspera = Math.max(0, nowMin - (h * 60 + m));
                     return {
                         id: c.id,
+                        numPac: c.pacienteNumPac ?? '',
                         nombre: c.nombrePaciente,
                         tiempo: `${minEspera}`,
-                        alerta: c.alertasMedicas.includes('Látex') ? 'Látex' : '',
+                        alerta: c.alertasMedicas.includes('L\u00e1tex') ? 'L\u00e1tex' : '',
                         trat: c.tratamiento,
                     };
                 })
@@ -60,6 +61,7 @@ const useOperativaHoy = () => {
                     const minGab = Math.max(0, nowMin - (h * 60 + m));
                     return {
                         id: c.id,
+                        numPac: c.pacienteNumPac ?? '',
                         nombre: c.nombrePaciente,
                         gab: c.gabinete,
                         doctor: c.doctor,
@@ -413,7 +415,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
                                     </div>
                                     <div className="space-y-1.5">
                                         {stats.espera.map((p) => (
-                                            <div key={p.id} className="bg-white p-2.5 rounded-lg flex items-center gap-3 hover:bg-slate-50 transition-all cursor-pointer border border-slate-100">
+                                            <div key={p.id}
+                                                onClick={() => p.numPac && !p.numPac.startsWith('CTX-') ? onNavigate('Pacientes', 'Historia Clínica', p.numPac) : undefined}
+                                                className={`bg-white p-2.5 rounded-lg flex items-center gap-3 transition-all border border-slate-100 ${p.numPac && !p.numPac.startsWith('CTX-') ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-200' : 'cursor-default'}`}
+                                            >
                                                 <div className={`w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0 ${parseInt(p.tiempo) > 10 ? 'bg-red-500/20 text-red-500 border border-[#FF4B68]/30' : 'bg-blue-500/20 text-[#051650] border border-blue-500/30'}`}>
                                                     <div className="flex flex-col items-center leading-none">
                                                         <span className="text-[13px] font-bold">{p.tiempo.split(' ')[0]}</span>
@@ -444,7 +449,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
                                     {stats.gabinete.length === 0 ? (
                                         <p className="text-[12px] text-white/40 px-1 italic">Sin pacientes en gabinete</p>
                                     ) : stats.gabinete.map(g => (
-                                        <div key={g.id} className="bg-white border-l-4 border-l-[#051650] border border-slate-200 p-3 rounded-lg flex items-center gap-3 hover:bg-slate-50 transition-all cursor-pointer mb-1.5">
+                                        <div key={g.id}
+                                            onClick={() => g.numPac && !g.numPac.startsWith('CTX-') ? onNavigate('Pacientes', 'Historia Clínica', g.numPac) : undefined}
+                                            className={`bg-white border-l-4 border-l-[#051650] border border-slate-200 p-3 rounded-lg flex items-center gap-3 transition-all mb-1.5 ${g.numPac && !g.numPac.startsWith('CTX-') ? 'cursor-pointer hover:bg-blue-50' : 'cursor-default hover:bg-slate-50'}`}
+                                        >
                                             <div className="w-10 h-10 rounded-lg bg-[#051650] text-white flex items-center justify-center flex-shrink-0 font-bold text-sm">
                                                 {g.gab}
                                             </div>
@@ -467,21 +475,21 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
                 <div className={`p-3 border-t border-white/10 transition-all duration-300 mt-auto ${isExpanded ? 'grid grid-cols-2 gap-2' : 'flex flex-col gap-2 items-center'}`}>
                     {isExpanded ? (
                         <>
-                            <button className="flex items-center justify-center gap-2 py-2 bg-[#0a2150] hover:bg-[#0d2760] text-white rounded-md border border-[#1a3a7a] transition-all active:scale-95 animate-fade-in">
+                            <button onClick={() => onNavigate('Agenda', 'Nueva Cita')} className="flex items-center justify-center gap-2 py-2 bg-[#0a2150] hover:bg-[#0d2760] text-white rounded-md border border-[#1a3a7a] transition-all active:scale-95 animate-fade-in">
                                 <PlusCircle className="w-4 h-4" />
                                 <span className="text-[12px] font-bold uppercase tracking-wider">Cita</span>
                             </button>
-                            <button className="flex items-center justify-center gap-2 py-2 bg-[#C02040] hover:bg-[#E03555] text-white rounded-md border border-red-800 transition-all active:scale-95 animate-fade-in">
+                            <button onClick={() => onNavigate('Agenda', 'Urgencia')} className="flex items-center justify-center gap-2 py-2 bg-[#C02040] hover:bg-[#E03555] text-white rounded-md border border-red-800 transition-all active:scale-95 animate-fade-in">
                                 <AlertTriangle className="w-4 h-4" style={{ color: '#FF4B68' }} />
                                 <span className="text-[12px] font-bold uppercase tracking-wider">Urgente</span>
                             </button>
                         </>
                     ) : (
                         <>
-                            <button className="w-11 h-11 flex items-center justify-center bg-[#0a2150] hover:bg-[#0d2760] text-white rounded-xl border border-[#1a3a7a] transition-all active:scale-95 animate-fade-in shadow-inner" title="Nueva Cita">
+                            <button onClick={() => onNavigate('Agenda', 'Nueva Cita')} className="w-11 h-11 flex items-center justify-center bg-[#0a2150] hover:bg-[#0d2760] text-white rounded-xl border border-[#1a3a7a] transition-all active:scale-95 animate-fade-in shadow-inner" title="Nueva Cita">
                                 <PlusCircle className="w-[18px] h-[18px]" />
                             </button>
-                            <button className="w-11 h-11 flex items-center justify-center bg-[#C02040]/80 hover:bg-[#E03555] text-white rounded-xl border border-red-800 transition-all active:scale-95 animate-fade-in shadow-inner" title="Urgencia">
+                            <button onClick={() => onNavigate('Agenda', 'Urgencia')} className="w-11 h-11 flex items-center justify-center bg-[#C02040]/80 hover:bg-[#E03555] text-white rounded-xl border border-red-800 transition-all active:scale-95 animate-fade-in shadow-inner" title="Urgencia">
                                 <AlertTriangle className="w-[18px] h-[18px]" style={{ color: '#FF4B68' }} />
                             </button>
                         </>

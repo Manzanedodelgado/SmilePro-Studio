@@ -1,13 +1,13 @@
 // ─────────────────────────────────────────────────────────────────
 //  services/ia-dental.service.ts
-//  IA Dental — llama al backend proxy (V-001 FIX: key en servidor).
+//  IA Dental — llama al backend proxy (key en servidor).
 //  Chat history: stub (sin persistencia por ahora).
 // ─────────────────────────────────────────────────────────────────
 import { logger } from './logger';
 
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
-// V-001 FIX: la key Groq vive en el backend (.env del servidor).
+// la key Groq vive en el backend (.env del servidor).
 // El frontend llama al proxy autenticado en lugar de a Groq directamente.
 const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000';
 const PROXY_GROQ = `${API_BASE}/api/proxy/groq/chat`;
@@ -142,6 +142,40 @@ export const askIA = async (
     } catch (e) {
         console.warn('[IA Dental] Fallback por error:', e);
         return fallbackReply(userMessage);
+    }
+};
+
+// ── Config persistente en backend ─────────────────────────────────
+
+export interface AIAgentConfig {
+    name: string;
+    tone: number;
+    lang: number;
+    greeting: string;
+    knowledge: string[];
+}
+
+export const loadAIConfig = async (): Promise<AIAgentConfig | null> => {
+    try {
+        const res = await fetch(`${API_BASE}/api/ai/config`);
+        if (!res.ok) return null;
+        const json = await res.json();
+        return json.data ?? null;
+    } catch {
+        return null;
+    }
+};
+
+export const saveAIConfig = async (config: AIAgentConfig): Promise<boolean> => {
+    try {
+        const res = await fetch(`${API_BASE}/api/ai/config`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config),
+        });
+        return res.ok;
+    } catch {
+        return false;
     }
 };
 

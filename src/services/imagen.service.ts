@@ -9,7 +9,16 @@
  * - Soporte DICOM real (.dcm/.dic): parser binario puro con windowing y LUT
  */
 
-import { dicomFileToImageUrl, isDicomFile } from './dicom.service';
+/** Detecta archivos DICOM por extensión o magic bytes (DICM en offset 128). */
+async function isDicomFile(file: File): Promise<boolean> {
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+    if (['dcm', 'dic', 'dicom'].includes(ext)) return true;
+    try {
+        const buf = await file.slice(128, 132).arrayBuffer();
+        const magic = new TextDecoder().decode(buf);
+        return magic === 'DICM';
+    } catch { return false; }
+}
 
 export type ImageType = 'panoramica' | 'dicom' | 'intraoral' | 'extraoral' | 'cefalometrica' | 'periapical';
 
@@ -338,20 +347,10 @@ export async function addEstudio(
     const tipo: ImageType = isDicom ? 'dicom' : meta.tipo;
 
     // ── Obtener URL visualizable ─────────────────────────────────────────────
-    // DICOM: parsear binario → canvas → WebP data URL (los navegadores no pueden mostrar .dcm directamente)
+    // DICOM: solo blob URL — el renderizado lo hace CbctViewer directamente
+    // desde el File object con su propio parser. Evitamos parsear dos veces.
     // Imágenes estándar: blob URL directo
-    let originalUrl: string;
-    if (isDicom) {
-        try {
-            originalUrl = await dicomFileToImageUrl(file);
-        } catch (err) {
-            console.error('[DICOM] Error al renderizar:', err);
-            // Fallback a blob URL aunque no se muestre — el error se indicará visualmente
-            originalUrl = URL.createObjectURL(file);
-        }
-    } else {
-        originalUrl = URL.createObjectURL(file);
-    }
+    const originalUrl = URL.createObjectURL(file);
 
     const estudio: EstudioRadiologico = {
         id: `img-${Date.now()}-${nextId++}`,

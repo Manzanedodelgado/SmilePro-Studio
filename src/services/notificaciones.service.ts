@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────
 //  services/notificaciones.service.ts
-//  P-001 FIX: Notificaciones del Header conectadas a datos reales.
+//  Notificaciones del Header conectadas a datos reales.
 //  Fuentes: citas del día (sin confirmar, urgentes), stock bajo.
 //  Se ejecuta en background y devuelve alertas accionables.
 // ─────────────────────────────────────────────────────────────────

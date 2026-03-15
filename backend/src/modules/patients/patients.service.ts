@@ -35,7 +35,7 @@ export class PatientsService {
     }
 
     static async create(input: CreatePatientInput) {
-        // T-002 FIX: NumPac calculado como MAX(NumPac)+1 en GELITE, no Date.now()
+        // NumPac calculado como MAX(NumPac)+1 en GELITE, no Date.now()
         let numPac = input.NumPac;
         if (!numPac) {
             const maxRow = await prisma.pacientes

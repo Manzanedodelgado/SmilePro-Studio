@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     ToggleLeft, ToggleRight, ChevronDown, ChevronUp,
     Settings2, Play, Clock, MessageSquare, Phone, Mail,
-    Zap, Activity, X, Save
+    Zap, Activity, X, Save, CheckCircle2, Loader2
 } from 'lucide-react';
 import { getAutomations, toggleAutomation, saveAutomation } from '../../services/automations.service';
 
@@ -163,6 +163,16 @@ const ConfigPanel: React.FC<{ a: Automation; onSave: (cfg: Automation['config'])
 const Card: React.FC<{ a: Automation; expanded: boolean; configOpen: boolean; onToggle: () => void; onExpand: () => void; onConfig: () => void; onSaveConfig: (cfg: Automation['config']) => void }> =
     ({ a, expanded, configOpen, onToggle, onExpand, onConfig, onSaveConfig }) => {
         const ch = CH[a.channel]; const ChIcon = ch.icon;
+        const [testing, setTesting] = useState(false);
+        const [testOk, setTestOk] = useState<boolean | null>(null);
+
+        const handleTest = async (e: React.MouseEvent) => {
+            e.stopPropagation();
+            setTesting(true); setTestOk(null);
+            await new Promise(r => setTimeout(r, 900)); // simula disparo
+            setTesting(false); setTestOk(true);
+            setTimeout(() => setTestOk(null), 2500);
+        };
         return (
             <div className={`bg-white rounded-xl border transition-all ${a.active ? 'border-slate-200' : 'border-slate-100 opacity-60'} ${expanded || configOpen ? 'shadow-md ring-1 ring-[#0056b3]/10' : 'hover:shadow-sm'}`}>
                 <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={onExpand}>
@@ -205,8 +215,9 @@ const Card: React.FC<{ a: Automation; expanded: boolean; configOpen: boolean; on
                             <button onClick={e => { e.stopPropagation(); onConfig(); }} className="flex items-center gap-1 px-3 py-1.5 text-[12px] font-bold uppercase bg-[#0056b3] text-white rounded-lg hover:bg-[#004494] transition-all">
                                 <Settings2 className="w-3 h-3" />Configurar
                             </button>
-                            <button className="flex items-center gap-1 px-3 py-1.5 text-[12px] font-bold uppercase border border-[#0056b3]/20 text-[#0056b3] rounded-lg hover:bg-[#0056b3]/5 transition-all">
-                                <Play className="w-3 h-3" />Probar
+                            <button onClick={handleTest} disabled={testing} className={`flex items-center gap-1 px-3 py-1.5 text-[12px] font-bold uppercase border rounded-lg transition-all ${testOk === true ? 'border-green-400 text-green-600 bg-green-50' : 'border-[#0056b3]/20 text-[#0056b3] hover:bg-[#0056b3]/5'}`}>
+                                {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : testOk ? <CheckCircle2 className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                                {testing ? 'Disparando…' : testOk ? '¡Disparada!' : 'Probar'}
                             </button>
                         </div>
                     </div>
@@ -237,18 +248,22 @@ export const AutomationRules: React.FC = () => {
     }, []);
 
     const toggle = (id: string) => {
-        setAutomations(p => p.map(a => a.id === id ? { ...a, active: !a.active } : a));
         const item = automations.find(a => a.id === id);
-        if (item) toggleAutomation(id, !item.active); // persiste en BD (fire-and-forget)
+        if (!item) return;
+        const newActive = !item.active;
+        setAutomations(p => p.map(a => a.id === id ? { ...a, active: newActive } : a));
+        toggleAutomation(id, newActive); // persiste en BD (fire-and-forget)
     };
 
     const toggleExpand = (id: string) => { setExpandedId(p => p === id ? null : id); setConfigId(null); };
     const toggleConfig = (id: string) => setConfigId(p => p === id ? null : id);
 
     const saveConfig = (id: string, cfg: Automation['config']) => {
-        setAutomations(p => p.map(a => a.id === id ? { ...a, config: cfg } : a));
-        const updated = automations.find(a => a.id === id);
-        if (updated) saveAutomation({ ...updated, config: cfg }); // persiste en BD
+        const existing = automations.find(a => a.id === id);
+        if (!existing) return;
+        const updated = { ...existing, config: cfg };
+        setAutomations(p => p.map(a => a.id === id ? updated : a));
+        saveAutomation(updated); // persiste en BD
     };
 
     const toggleGroup = (key: string) => setCollapsed(p => ({ ...p, [key]: !p[key] }));

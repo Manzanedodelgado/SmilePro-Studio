@@ -58,9 +58,16 @@ const App: React.FC = () => {
         setTimeout(() => setToastMessage(null), 3000);
     };
 
-    const handleNavigation = (area: Area, subArea: string) => {
+    const handleNavigation = (area: Area, subArea: string, numPac?: string) => {
         setActiveArea(area);
-        setActiveSubArea(subArea);
+        if (numPac) setRequestedNumPac(numPac);
+        // Botones de acceso rápido "Nueva Cita" y "Urgencia" del sidebar
+        if (area === 'Agenda' && (subArea === 'Nueva Cita' || subArea === 'Urgencia')) {
+            setActiveSubArea('Jornada de Hoy');
+            setPendingCita({ tratamiento: subArea === 'Urgencia' ? 'Urgencia' : 'Control' });
+        } else {
+            setActiveSubArea(subArea);
+        }
     };
 
     const renderContent = () => {
@@ -68,7 +75,16 @@ const App: React.FC = () => {
             case 'Agenda': {
                 const cita = pendingCita;
                 if (cita) setTimeout(() => setPendingCita(null), 100);
-                return <Agenda activeSubArea={activeSubArea} initialCita={cita ?? undefined} />;
+                return <Agenda
+                    activeSubArea={activeSubArea}
+                    initialCita={cita ?? undefined}
+                    onNavigate={(area, subArea, numPac, waData) => {
+                        setActiveArea(area as Area);
+                        if (subArea) setActiveSubArea(subArea);
+                        if (numPac) setRequestedNumPac(numPac);
+                        if (waData) pendingWhatsappRef.current = waData;
+                    }}
+                />;
             }
             // Pacientes se maneja fuera del switch — siempre montado para preservar estado
             case 'Pacientes': return null;

@@ -5,7 +5,7 @@ import { AuthService } from './auth.service';
 import { logger } from '../../config/logger.js';
 import { config } from '../../config/index';
 
-// ── T-001 FIX: Token blacklist en memoria ────────────────
+// ── Token blacklist en memoria ────────────────
 // Almacena los JTI (o tokens raw) invalidados hasta su expiración natural.
 // Para producción real se recomienda Redis, pero esto es efectivo en desarrollo.
 // Se limpia automáticamente cada 15 minutos para evitar memory leaks.
@@ -85,7 +85,7 @@ export class AuthController {
         }
     }
 
-    // T-001 FIX: Logout ahora invalida el access token en la blacklist
+    // Logout ahora invalida el access token en la blacklist
     static async logout(req: Request, res: Response) {
         const authHeader = req.headers.authorization;
         if (authHeader?.startsWith('Bearer ')) {

@@ -9,7 +9,6 @@ export const navigationItems: MenuItem[] = [
         children: [
             { name: 'Hoy en Clínica', icon: 'today' },
             { name: 'Rendimiento', icon: 'analytics' },
-            { name: 'Pruebas', icon: 'science' },
         ]
     },
     {
@@ -34,7 +33,7 @@ export const navigationItems: MenuItem[] = [
     },
     {
         name: 'Radiología',
-        icon: 'radiology',
+        icon: 'image_search',
         title: 'Radiología & Imagen',
         children: []
     },
@@ -52,7 +51,7 @@ export const navigationItems: MenuItem[] = [
         title: 'Cerebro Digital',
         children: [
             { name: 'Panel IA', icon: 'smart_toy' },
-            { name: 'IA Dental ✦', icon: 'smart_toy' },
+            { name: 'IA Dental ✶', icon: 'auto_awesome' },
             { name: 'Automatizaciones', icon: 'bolt' },
             { name: 'Flujos Conversacionales', icon: 'account_tree' },
             { name: 'Editor', icon: 'edit_note' },
@@ -79,7 +78,7 @@ export const navigationItems: MenuItem[] = [
             { name: 'Facturación', icon: 'receipt_long' },
             { name: 'Banco y Conciliación', icon: 'account_balance' },
             { name: 'Declaraciones Fiscales', icon: 'request_page' },
-            { name: 'Informes de Gestión', icon: 'analytics' },
+            { name: 'Informes de Gestión', icon: 'bar_chart' },
         ]
     },
 ];

@@ -30,11 +30,12 @@ export const getSAAccessToken = async (): Promise<string | null> => {
     }
 
     try {
-        const sa = JSON.parse(
-            Buffer.from(saKeyJson, 'base64').toString('utf-8').startsWith('{')
-                ? saKeyJson
-                : Buffer.from(saKeyJson, 'base64').toString('utf-8')
-        );
+        let sa;
+        try {
+            sa = JSON.parse(saKeyJson);  // raw JSON
+        } catch {
+            sa = JSON.parse(Buffer.from(saKeyJson, 'base64').toString('utf-8'));  // base64
+        }
 
         // JWT para Service Account
         const { createSign } = await import('node:crypto');
