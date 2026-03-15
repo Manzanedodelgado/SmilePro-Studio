@@ -2,7 +2,7 @@
 //  services/pacientes.service.ts
 //  CRUD completo de pacientes conectado al Backend Local (Node.js/Prisma).
 // ─────────────────────────────────────────────────────────────────
-import { Paciente } from '../types';
+import { type Paciente } from '../types';
 import { logger } from './logger';
 
 export interface ValidationError { field: string; message: string; }

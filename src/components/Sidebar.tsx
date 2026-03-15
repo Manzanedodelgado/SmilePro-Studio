@@ -5,10 +5,10 @@ import { type ColorMap, COLOR_MAPS, type EstudioRadiologico } from '../services/
 import { getCitasByFecha } from '../services/citas.service';
 import {
     LayoutDashboard, Calendar, Users, BarChart2, Package, Settings, MessageSquare,
-    Search, UserPlus, ChevronRight, Activity, Clock, AlertCircle, TrendingUp,
-    MoreHorizontal, PlusCircle, AlertTriangle, Monitor, FileText, Grid, CreditCard,
-    Brain, FileCheck, ClipboardList, ShoppingCart, QrCode, Receipt, PieChart, Bot,
-    Sliders, Palette, Wand2, CheckCircle2
+    Search, UserPlus, ChevronRight, Activity, Clock, AlertCircle,
+    PlusCircle, AlertTriangle, FileText, Grid, CreditCard,
+    Brain, FileCheck, ClipboardList, ShoppingCart, QrCode, Receipt, PieChart,
+    Palette, Wand2, CheckCircle2
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -148,7 +148,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
     };
 
     const isAgenda = activeArea === 'Agenda';
-    const isPacientes = activeArea === 'Pacientes';
     const isRadiologia = activeArea === 'Radiología';
 
     const handleEnhanceIA = async () => {
@@ -160,18 +159,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
         setTimeout(() => setEnhanceSuccess(false), 2000);
     };
 
-    // ── Colores de marca por área (extraídos del favicon) ─────────────────────
-    // #FF4B68 coral · #FBFFA3 amarillo · #118DF0 azul brillante · #004182 azul marino
-    const AREA_ACCENT: Record<string, { active: string; border: string; glow: string }> = {
-        'CLÍNICA': { active: 'text-[#118DF0]', border: 'border-[#118DF0]', glow: 'rgba(17,141,240,0.2)' },
-        'Agenda': { active: 'text-[#FF4B68]', border: 'border-[#FF4B68]', glow: 'rgba(255,75,104,0.2)' },
-        'Pacientes': { active: 'text-[#0ea5e9]', border: 'border-[#0ea5e9]', glow: 'rgba(14,165,233,0.2)' },
-        'Whatsapp': { active: 'text-[#22c55e]', border: 'border-[#22c55e]', glow: 'rgba(34,197,94,0.2)' },
-        'IA & Automatización': { active: 'text-[#FBFFA3]', border: 'border-[#FBFFA3]', glow: 'rgba(251,255,163,0.15)' },
-        'Inventario': { active: 'text-[#118DF0]', border: 'border-[#118DF0]', glow: 'rgba(17,141,240,0.2)' },
-        'Gestoría': { active: 'text-[#a78bfa]', border: 'border-[#a78bfa]', glow: 'rgba(167,139,250,0.2)' },
-    };
-    const accent = AREA_ACCENT[activeArea] ?? { active: 'text-[#60a5fa]', border: 'border-[#1d4ed8]', glow: 'rgba(29,78,216,0.25)' };
+
 
     const MainIcon = getIcon(currentMenuItem.icon || 'clinic');
     const isExpanded = isHovered;

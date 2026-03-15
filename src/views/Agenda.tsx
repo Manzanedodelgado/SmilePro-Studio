@@ -1,17 +1,12 @@
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import ConfiguracionAgenda from './ConfiguracionAgenda';
-import { Cita, EstadoCita, TratamientoCategoria } from '../types';
+import { type Cita, type EstadoCita, type TratamientoCategoria } from '../types';
 import {
-    Calendar,
-    Clock,
     Activity,
     X,
     Search,
-    AlertTriangle,
     Filter,
-    Stethoscope,
-    CircleDot,
     MoreVertical,
     ChevronLeft,
     ChevronRight as ChevronRightIcon,
@@ -24,7 +19,6 @@ import {
     Plus,
     MessageCircle
 } from 'lucide-react';
-import { Badge } from '../components/UI';
 import {
     getCitasByFecha, updateCita, updateEstadoCita, createCita, deleteCita,
     isDbConfigured as isDbCfg, dateToISO, getIdUsuFromCitaId, nombreAgendaByIdUsu
@@ -34,11 +28,11 @@ import { crearContacto } from '../services/contactos.service';
 import { generateId } from '../services/db';
 import { logger } from '../services/logger';
 import { sendTextMessage, isEvolutionConfigured } from '../services/evolution.service';
-import { Paciente } from '../types';
+import { type Paciente } from '../types';
 import {
-    loadAgendaConfig, TratamientoAgenda, EstadoCitaAgenda, DoctorAgenda
+    loadAgendaConfig, type TratamientoAgenda, type EstadoCitaAgenda, type DoctorAgenda
 } from '../services/agenda-config.service';
-import { getConfigAgenda, AgendaConfig } from '../services/config-agenda.service';
+import { getConfigAgenda, type AgendaConfig } from '../services/config-agenda.service';
 
 interface AgendaProps {
     activeSubArea?: string;
@@ -82,12 +76,10 @@ const parseTime = (time: string) => {
 };
 const toHHMM = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
-const MIN_PX_PER_HOUR = 80; // must be divisible by 4 for clean 15-min grid
+
 
 const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita }) => {
-    const timelineRef = useRef<HTMLDivElement>(null);
-    const timeline2Ref = useRef<HTMLDivElement>(null);
-    const slotsG1Ref = useRef<HTMLDivElement>(null);
+
 
     // V-010: Catálogos dinámicos desde FDW
     const [agendaTratamientos, setAgendaTratamientos] = useState<TratamientoAgenda[]>([]);
@@ -101,10 +93,8 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita }) => {
             setAgendaDoctores(doctores);
         });
     }, []);
-    const slotsG2Ref = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-    const [pxPerHour, setPxPerHour] = useState(MIN_PX_PER_HOUR);
 
     const [agendaConfigStore, setAgendaConfigStore] = useState<AgendaConfig | null>(null);
 
@@ -189,8 +179,6 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita }) => {
     const goToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); setSelectedDate(d); };
     const isToday = selectedDate.toDateString() === new Date().toDateString();
     const DIAS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-    const MESES_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-    const dateLabel = `${DIAS_ES[selectedDate.getDay()]} ${selectedDate.getDate()} ${MESES_ES[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`;
 
     const toggleVista = () => setVistaGabinete(prev => prev === 'ALL' ? 'G1' : (prev === 'G1' ? 'G2' : 'ALL'));
     const blockSlots = () => {
@@ -227,49 +215,14 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita }) => {
     // ── Working hours — mañana 09:00-14:00, tarde 16:00-20:00 ────────────────
     const workingSegments: [number, number][] = [[10, 14], [16, 20]];
 
-    const totalHours = workingSegments.reduce((acc, [s, e]) => acc + (e - s), 0);
-    const totalHeight = totalHours * pxPerHour; // px dinámico
 
-    // FIX SCROLL: pxPerHour fijo a 100px para que el timeline siempre genere scroll.
-    // totalHours=9 → 900px mañana + 400px tarde = 1300px > pantalla → overflow-y-auto activo.
-    // El ResizeObserver previo colapsaba el layout (h/totalHours ≈ clientHeight → sin scroll).
-    useEffect(() => {
-        setPxPerHour(100);
-    }, []);
+    // pxPerHour eliminado (constante no usada tras simplificación)
 
-    // Helper: hora:min → número de fila grid (1-indexed)
-    // ROW 1 = header, ROW 2 = primera franja de tiempo (workingSegments[0][0]:00)
-    // Cada fila = 15 minutos
-    const timeToGridRow = (horaInicio: string): number => {
-        const [h, m] = horaInicio.split(':').map(Number);
-        let offsetQuarters = 0;
-        let found = false;
-        for (const [start, end] of workingSegments) {
-            if (h >= start && h < end) {
-                offsetQuarters += (h - start) * 4 + Math.floor(m / 15);
-                found = true;
-                break;
-            } else if (h >= end) {
-                offsetQuarters += (end - start) * 4;
-            }
-        }
-        if (!found) {
-            // Hora fuera de jornada — colocamos al final
-            offsetQuarters = workingSegments.reduce((a, [s, e]) => a + (e - s) * 4, 0);
-        }
-        return offsetQuarters + 2; // +1 por 1-indexed, +1 por la fila de cabecera (row 1)
-    };
+    // Helper: deshabilitado (no usado actualmente)
+    // const timeToGridRow = ...
 
-    // Helper legacy (usado aún en drag-and-drop)
-    const minutesToPx = (horaInicio: string): number => {
-        const [h, m] = horaInicio.split(':').map(Number);
-        let offsetHours = 0;
-        for (const [start, end] of workingSegments) {
-            if (h >= start && h < end) { offsetHours += (h - start); break; }
-            else if (h >= end) { offsetHours += (end - start); }
-        }
-        return offsetHours * pxPerHour + m * (pxPerHour / 60);
-    };
+    // Helper minutesToPx: deshabilitado (no usado actualmente)
+    // const minutesToPx = ...
 
 
     // ── Cargar citas reales por fecha ────────────────────────────────────────

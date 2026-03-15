@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     ToggleLeft, ToggleRight, ChevronDown, ChevronUp,
     Settings2, Play, Clock, MessageSquare, Phone, Mail,
-    Zap, Activity, X, Save, Hash, AlarmClock, ChevronRight
+    Zap, Activity, X, Save
 } from 'lucide-react';
 import { getAutomations, toggleAutomation, saveAutomation } from '../../services/automations.service';
 

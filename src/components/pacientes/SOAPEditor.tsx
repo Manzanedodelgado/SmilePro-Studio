@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import {
-    Stethoscope, ChevronDown, ShieldAlert, Mic, MicOff, Brain,
+    Stethoscope, ChevronDown, Mic, MicOff,
     CheckCircle, Loader2, Calendar, Save, X, Search
 } from 'lucide-react';
 import { searchTratamientos, getCategorias, type Tratamiento } from '../../services/tratamientos.service';
@@ -10,14 +10,14 @@ interface SOAPEditorProps {
     onSave: (noteData: {
         subjetivo: string; objetivo: string; analisis: string; plan: string;
         eva: number; fecha?: string; especialidad?: string;
-        tratamiento_id?: number; tratamiento_nombre?: string;
+        tratamiento_id?: string | number; tratamiento_nombre?: string;
         pieza?: number; cuadrante?: number; arcada?: string;
     }) => void;
     alergiasPaciente: string[];
     initialData?: {
         subjetivo: string; objetivo: string; analisis: string; plan: string;
         eva: number; fecha: string; especialidad: string;
-        tratamiento_id?: number; tratamiento_nombre?: string;
+        tratamiento_id?: string | number; tratamiento_nombre?: string;
         pieza?: number; cuadrante?: number; arcada?: string;
     };
     onCancel?: () => void;
@@ -101,7 +101,7 @@ function analyzeTranscript(transcript: string): {
 }
 
 const SOAPEditor: React.FC<SOAPEditorProps> = ({
-    onSave, alergiasPaciente, initialData, onCancel,
+    onSave, alergiasPaciente: _alergiasPaciente, initialData, onCancel,
 }) => {
     const todayISO = new Date().toISOString().split('T')[0];
     const [nota, setNota] = useState({

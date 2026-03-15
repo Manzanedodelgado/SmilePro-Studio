@@ -6,7 +6,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
     Maximize2, Minimize2, RotateCcw, FlipVertical,
-    ZoomIn, Sun, Grid3X3, Upload, X
+    Sun, Grid3X3, Upload, X
 } from 'lucide-react';
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
@@ -190,7 +190,7 @@ function renderSlice(
 
 // ── ViewPanel ──────────────────────────────────────────────────────────────────
 interface PanelProps {
-    meta: ViewMeta; canvasRef: React.RefObject<HTMLCanvasElement>;
+    meta: ViewMeta; canvasRef: React.RefObject<HTMLCanvasElement | null>;
     slice: number; maxSlices: number; onSlice: (v: number) => void;
     onExpand?: () => void; isExpanded?: boolean;
     volume: DicomVolume | null; wc: number; ww: number; invert: boolean;
@@ -280,7 +280,7 @@ export default function DicomViewer({ file, url, onClose }: DicomViewerProps) {
     const coronalRef = useRef<HTMLCanvasElement>(null);
     const sagittalRef = useRef<HTMLCanvasElement>(null);
     const mipRef = useRef<HTMLCanvasElement>(null);
-    const canvasRefs: Record<ViewId, React.RefObject<HTMLCanvasElement>> = {
+    const canvasRefs: Record<ViewId, React.RefObject<HTMLCanvasElement | null>> = {
         axial: axialRef, coronal: coronalRef, sagittal: sagittalRef, mip: mipRef,
     };
 

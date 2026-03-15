@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getQuestionnairePorPaciente, type QuestionnaireData } from '../../services/questionnaire.service';
+import { } from '../../services/questionnaire.service';
 import { dbSelect } from '../../services/db';
 import { getDocumentosPorPaciente, revocarDocumento, tipoDocLabel, type DocumentoFirmadoEvento } from '../../services/documentos-firmados.service';
 

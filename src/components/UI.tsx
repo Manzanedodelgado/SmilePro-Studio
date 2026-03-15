@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpRight, ArrowDownRight, ShieldAlert, LucideIcon } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, ShieldAlert, type LucideIcon } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────
 //  AccessDenied — M-03 FIX: Componente compartido para eliminar

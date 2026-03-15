@@ -64,7 +64,7 @@ const Economica: React.FC<EconomicaProps> = ({
     const [expanded, setExpanded] = useState<number | null>(null);
     const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
     const [movimientos, setMovimientos] = useState<FacturaUI[]>([]);
-    const [resumen, setResumen] = useState({ deudaPendiente: 0, totalPresupuestado: 0, totalCobrado: 0, presupuestosCount: 0 });
+    const [resumen, setResumen] = useState({ deudaPendiente: 0, totalPresupuestado: 0, totalCobrado: 0, presupuestosCount: 0, totalFacturado: 0, totalPagado: 0, totalPendiente: 0 });
     const [loading, setLoading] = useState(false);
     const [confirming, setConfirming] = useState<{ id: number; action: 'aceptar' | 'rechazar' } | null>(null);
 
@@ -338,10 +338,10 @@ const Economica: React.FC<EconomicaProps> = ({
                                                     </td>
                                                     <td className="py-2.5 text-center text-slate-500">{c.cantidad}</td>
                                                     <td className="py-2.5 text-right text-slate-600">
-                                                        {fmt(c.precioUnitario)}
-                                                        {c.descuento > 0 && <span className="ml-1 text-[12px] text-[#051650] font-bold">-{c.descuento}%</span>}
+                                                        {fmt(c.precioUnitario ?? 0)}
+                                                        {(c.descuento ?? 0) > 0 && <span className="ml-1 text-[12px] text-[#051650] font-bold">-{c.descuento}%</span>}
                                                     </td>
-                                                    <td className="py-2.5 text-right font-bold text-slate-700">{fmt(c.importeLinea)}</td>
+                                                    <td className="py-2.5 text-right font-bold text-slate-700">{fmt(c.importeLinea ?? 0)}</td>
                                                     <td className="py-2.5 text-center">{estadoLineaIcon(c.estado)}</td>
                                                 </tr>
                                             ))}
@@ -354,15 +354,15 @@ const Economica: React.FC<EconomicaProps> = ({
                                             <p className="text-slate-400 font-bold">Total presupuesto</p>
                                             <p className="text-[#051650] font-bold text-base">{fmt(p.importeTotal)}</p>
                                         </div>
-                                        {p.importePagado > 0 && (
+                                        {(p.importePagado ?? 0) > 0 && (
                                             <>
                                                 <div className="text-right">
                                                     <p className="text-slate-400 font-bold">Pagado</p>
-                                                    <p className="text-[#051650] font-bold text-base">{fmt(p.importePagado)}</p>
+                                                    <p className="text-[#051650] font-bold text-base">{fmt(p.importePagado ?? 0)}</p>
                                                 </div>
                                                 <div className="text-right">
                                                     <p className="text-slate-400 font-bold">Pendiente</p>
-                                                    <p className="text-[#E03555] font-bold text-base">{fmt(p.importePendiente)}</p>
+                                                    <p className="text-[#E03555] font-bold text-base">{fmt(p.importePendiente ?? 0)}</p>
                                                 </div>
                                             </>
                                         )}

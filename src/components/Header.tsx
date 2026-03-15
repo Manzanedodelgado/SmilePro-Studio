@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { type Area } from '../types';
 import { navigationItems } from '../navigation';
-import { Search, Bell, Settings, HelpCircle, Users, Calendar, BarChart2, Home, Package, MessageSquare, LogOut, X, Clock, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
+import { Search, Bell, Settings, HelpCircle, Package, LogOut, X, Clock, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getNotificaciones, type Notificacion } from '../services/notificaciones.service';
 

@@ -239,7 +239,6 @@ const RadiologiaViewer: React.FC<Props> = ({
     const imgRef = useRef<HTMLImageElement>(null);
     const [zoom, setZoom] = useState(1);
     const [pan, setPan] = useState({ x: 0, y: 0 });
-    const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
     const [current, setCurrent] = useState<Measurement | null>(null);
     const [pendingText, setPendingText] = useState<{ pos: MeasurePoint } | null>(null);
     const [textInput, setTextInput] = useState('');
@@ -442,11 +441,6 @@ const RadiologiaViewer: React.FC<Props> = ({
                 alt="Radiografía"
                 draggable={false}
                 style={imageStyle}
-                onLoad={() => {
-                    if (imgRef.current) {
-                        setImgSize({ w: imgRef.current.naturalWidth, h: imgRef.current.naturalHeight });
-                    }
-                }}
             />
 
             {/* SVG Mediciones */}

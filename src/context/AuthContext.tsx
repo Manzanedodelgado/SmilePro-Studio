@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { AuthUser, getUser, signOut as sbSignOut } from '../services/auth.service';
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { type AuthUser, getUser, signOut as sbSignOut } from '../services/auth.service';
 import { setAuditUser, clearAuditUser } from '../services/audit.service';
 import { setSessionToken } from '../services/db';
 

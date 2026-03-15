@@ -5,7 +5,6 @@
 //  TODO: exponer /api/ai/ia-control en el backend cuando se necesite.
 // ─────────────────────────────────────────────────────────────────
 
-const API_BASE = 'http://localhost:3000/api/ai';
 const PAUSE_MINUTES = 5;
 
 export interface IAControlStatus {

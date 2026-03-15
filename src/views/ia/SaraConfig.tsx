@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bot, Brain, Star, BookOpen, Shield, MessageSquare, Send, ArrowRight, Save, Plus, X, Sliders } from 'lucide-react';
+import { Bot, Star, BookOpen, Shield, Send, ArrowRight, Save, Plus, X } from 'lucide-react';
 
 const TONES = ['Cálida y empática', 'Profesional y formal', 'Cercana y amigable', 'Eficiente y directa'];
 const LANG = ['Español neutro', 'Español peninsular', 'Bilingüe ES/EN'];

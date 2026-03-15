@@ -4,7 +4,7 @@
 //  Fuentes: citas del día (sin confirmar, urgentes), stock bajo.
 //  Se ejecuta en background y devuelve alertas accionables.
 // ─────────────────────────────────────────────────────────────────
-import { getCitasByFecha, dateToISO } from './citas.service';
+import { getCitasByFecha } from './citas.service';
 import { getItemsInventario } from './inventario.service';
 import type { Cita, ItemInventario } from '../types';
 

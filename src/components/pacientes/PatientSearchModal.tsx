@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Paciente } from '../../types';
+import { type Paciente } from '../../types';
 import { searchPacientes, createPaciente, isDbConfigured } from '../../services/pacientes.service';
 import { X, Search, ChevronRight, UserPlus, Camera, Upload, Shield, User, Phone, MapPin, Briefcase, AlertTriangle, Pill, Users } from 'lucide-react';
 

@@ -212,6 +212,5 @@ export const dbUpsert = async <T>(
     return Array.isArray(data) ? data[0] : data;
 };
 
-// Sesión (legacy — se mantiene para compatibilidad)
-let _sessionToken: string | null = null;
-export const setSessionToken = (token: string | null) => { _sessionToken = token; };
+// Sesión (legacy — compatibilidad; el token no se usa en este servicio REST)
+export const setSessionToken = (_token: string | null): void => { /* no-op */ };

@@ -62,12 +62,12 @@ export const buscarEntidad = async (
         const resultadosPacientes: EntidadBusqueda[] = pacientes
             .slice(0, limit)
             .map(p => ({
-                id: String(p.NumPac ?? p.numPac ?? ''),
+                id: String(p.numPac ?? ''),
                 tipo: 'paciente' as EntidadTipo,
-                nombre: [p.Nombre ?? p.nombre, p.Apellidos ?? p.apellidos].filter(Boolean).join(' '),
-                telefono: (p.Telefono ?? p.telefono ?? p.Movil ?? p.movil) as string | undefined,
-                email: (p.Email ?? p.email) as string | undefined,
-                numPac: String(p.NumPac ?? p.numPac ?? ''),
+                nombre: [p.nombre, p.apellidos].filter(Boolean).join(' '),
+                telefono: (p.telefono) as string | undefined,
+                email: undefined as string | undefined,
+                numPac: String(p.numPac ?? ''),
             }));
 
         // ── Mapear contactos (backend) (sólo los que coincidan con q) ──

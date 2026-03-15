@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bot, Brain, Star, BookOpen, Shield, MessageSquare, Send, ArrowRight, Save, Plus, X, Sliders, Loader2 } from 'lucide-react';
+import { Bot, Star, BookOpen, Shield, Send, ArrowRight, Save, Plus, X, Loader2 } from 'lucide-react';
 import { askIA, isAIConfigured } from '../../services/ia-dental.service';
 
 const TONES = ['Cálida y empática', 'Profesional y formal', 'Cercana y amigable', 'Eficiente y directa'];

@@ -14,16 +14,16 @@ import RadiologiaViewer, {
 } from '../components/radiologia/RadiologiaViewer';
 import {
     Upload, Download, RotateCcw, Search, FolderOpen,
-    Move, Ruler, Type, Sliders, FileImage, Info,
+    Move, Ruler, Type, Sliders, Info,
     FlipHorizontal, FlipVertical, RefreshCw, Palette,
-    ChevronRight, Trash2, Maximize2, AlertCircle,
+    Trash2,
     MousePointer2, CornerDownRight, RectangleHorizontal,
     Circle, Minus,
 } from 'lucide-react';
 import {
     type EstudioRadiologico, type ImageType, type ColorMap,
-    getEstudios, addEstudio, deleteEstudio,
-    IMAGE_TYPES, COLOR_MAPS,
+    addEstudio, deleteEstudio,
+    COLOR_MAPS,
 } from '../services/imagen.service';
 
 // ── Props ──────────────────────────────────────────────────────────────────────
@@ -195,8 +195,8 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
     const [selectedId, setSelectedId] = useState<string | null>(DEMO_STUDIES[0].id);
     const [filterType, setFilterType] = useState<'all' | ImageType>('all');
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedPatient, setSelectedPatient] = useState<string>('all');
-    const [isUploading, setIsUploading] = useState(false);
+    const [selectedPatient, _setSelectedPatient] = useState<string>('all');
+    const [_isUploading, setIsUploading] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const fileMapRef = useRef<Map<string, File>>(new Map());
@@ -682,7 +682,7 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
                             Selecciona una herramienta y haz clic en la imagen para añadir mediciones.
                         </p>
                     )}
-                    {measurements.map((m, i) => (
+                    {measurements.map((m) => (
                         <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', background: '#141820', borderRadius: 5, marginBottom: 3, border: `1px solid ${m.color}33` }}>
                             <span style={{ width: 8, height: 8, borderRadius: '50%', background: m.color, flexShrink: 0 }} />
                             <span style={{ color: '#94a3b8', fontSize: 10, flex: 1 }}>

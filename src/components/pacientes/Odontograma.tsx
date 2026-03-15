@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Zap, Trash2, RotateCcw, Info, Save, Loader2 } from 'lucide-react';
+import { Zap, RotateCcw, Info, Save, Loader2 } from 'lucide-react';
 import { getOdontograma, saveOdontograma } from '../../services/odontograma.service';
 import { analyzeOdontograma, isAIConfigured } from '../../services/ia-dental.service';
 
@@ -76,8 +76,7 @@ const DienteVista: React.FC<{
     activeTool: EstadoCara;
     tooltip: string | null;
     setTooltip: (t: string | null) => void;
-}> = ({ data, isUpper, onCaraClick, activeTool, tooltip, setTooltip }) => {
-    const cfg = ESTADOS.find(e => e.id === activeTool)!;
+}> = ({ data, isUpper, onCaraClick, activeTool: _activeTool, tooltip: _tooltip, setTooltip: _setTooltip }) => {
 
     const getClasses = (cara: CaraNombre) => {
         const e = ESTADOS.find(s => s.id === data.caras[cara])!;
@@ -99,8 +98,8 @@ const DienteVista: React.FC<{
                         points={polygonPoints[cara]}
                         className={getClasses(cara)}
                         onClick={() => onCaraClick(cara)}
-                        onMouseEnter={() => setTooltip(`Pieza ${data.numero} — ${cara.charAt(0).toUpperCase() + cara.slice(1)}`)}
-                        onMouseLeave={() => setTooltip(null)}
+                        onMouseEnter={() => _setTooltip(`Pieza ${data.numero} — ${cara.charAt(0).toUpperCase() + cara.slice(1)}`)}
+                        onMouseLeave={() => _setTooltip(null)}
                     />
                 ))}
             </svg>
@@ -116,7 +115,7 @@ interface OdontogramaProps {
     numPac?: string;
 }
 
-const Odontograma: React.FC<OdontogramaProps> = ({ onSuggestionUpdate, numPac }) => {
+const Odontograma: React.FC<OdontogramaProps> = ({ onSuggestionUpdate: _onSuggestionUpdate, numPac }) => {
     // Lazy initializer — getDemoState() solo se ejecuta UNA vez al montar, no en cada render
     const [dientes, setDientes] = useState<DienteData[]>(getDemoState);
     const [activeTool, setActiveTool] = useState<EstadoCara>('caries');
@@ -179,7 +178,6 @@ const Odontograma: React.FC<OdontogramaProps> = ({ onSuggestionUpdate, numPac })
     }, [dientes]);
 
     // Stats
-    const totalCaras = 32 * 5;
     const stats = ESTADOS.filter(e => e.id !== 'normal').map(e => ({
         ...e,
         count: dientes.reduce((acc, d) =>

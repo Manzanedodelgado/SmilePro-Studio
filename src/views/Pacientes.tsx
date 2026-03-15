@@ -2,18 +2,17 @@
 import React, { useState, useEffect } from 'react';
 import SOAPEditor from '../components/pacientes/SOAPEditor';
 import PatientSearchModal from '../components/pacientes/PatientSearchModal';
-import AlertasPanel from '../components/pacientes/AlertasPanel';
 import Odontograma from '../components/pacientes/Odontograma';
 import Periodontograma from '../components/pacientes/Periodontograma';
 import Economica from '../components/pacientes/Economica';
 import Documentos from '../components/pacientes/Documentos';
-import { SOAPNote, Paciente } from '../types';
+import { type SOAPNote, type Paciente, type Area } from '../types';
 import {
-    Activity, CheckCircle, Clock, Brain, Camera,
+    Activity, CheckCircle, Brain, Camera,
     FileText, CircleDollarSign, ChevronDown, ChevronUp,
-    Stethoscope, ShieldCheck, ShieldAlert, Pencil,
+    ShieldCheck, ShieldAlert, Pencil,
     Phone, Calendar, MessageSquare, ArrowLeftRight, ExternalLink, Maximize2,
-    Gavel, UserPlus, TrendingUp, AlertTriangle, X, Plus, Save, Pill, Search
+    Gavel, UserPlus, X, Plus, Save, Pill, Search
 } from 'lucide-react';
 import {
     getPatientPanoramicas, isRomexisConfigured, type RomexisPanoramica
@@ -29,7 +28,7 @@ import {
 import {
     getSoapNotes, createSoapNote, updateSoapNote,
 } from '../services/soap.service';
-import { getEntradasMedicas, getTratamientosPaciente } from '../services/citas.service';
+import { getEntradasMedicas } from '../services/citas.service';
 import { searchVademecum, type Medicamento } from '../data/vademecum';
 import { Badge } from '../components/UI';
 
@@ -37,6 +36,10 @@ interface PacientesProps {
     activeSubArea: string;
     onSubAreaChange: (subArea: string) => void;
     showToast: (message: string) => void;
+    requestedNumPac?: string | null;
+    onRequestedHandled?: () => void;
+    onPatientChange?: (p: Paciente | null) => void;
+    onNavigate?: (area: Area, subArea?: string, citaData?: Partial<import('../types').Cita>, waData?: { phone: string; name: string }) => void;
 }
 
 // Color por especialidad
@@ -50,20 +53,6 @@ const especialidadConfig: Record<string, { dot: string; badge: string; border: s
     'General': { dot: 'bg-slate-400', badge: 'bg-slate-50 text-slate-600 border-slate-200', border: 'border-l-slate-400' },
 };
 const getEsp = (esp: string) => especialidadConfig[esp] ?? especialidadConfig['General'];
-
-/** Infiere la especialidad dominante a partir de los nombre de tratamientos */
-const inferEspecialidad = (tratamientos: string[]): string => {
-    const joined = tratamientos.join(' ').toLowerCase();
-    if (/implante|osteo|interfase|aditamento|seno|prgf|plasma/.test(joined)) return 'Implantología';
-    if (/ortodoncia|retenedor|bracket|alineador/.test(joined)) return 'Ortodoncia';
-    if (/endodoncia|conducto|pulp/.test(joined)) return 'Endodoncia';
-    if (/curetaje|periodoncia|raspado|sondaje/.test(joined)) return 'Periodoncia';
-    if (/prótesis|corona|puente|póntico|prostodoncia/.test(joined)) return 'Prostodoncia';
-    if (/cirugía|exodoncia|extracción|alvéolo/.test(joined)) return 'Cirugía Oral';
-    if (/blanqueamiento|carilla|estética|composite/.test(joined)) return 'Estética Dental';
-    if (/limpieza|higiene|tartrectomía|profilaxis/.test(joined)) return 'Higiene';
-    return 'Odontología General';
-};
 
 
 const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, showToast }) => {
@@ -144,7 +133,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
     const handleSaveNote = async (noteData: {
         subjetivo: string; objetivo: string; analisis: string; plan: string;
         eva: number; fecha?: string; especialidad?: string;
-        tratamiento_id?: number; tratamiento_nombre?: string;
+        tratamiento_id?: string | number; tratamiento_nombre?: string;
         pieza?: number; cuadrante?: number; arcada?: string;
     }) => {
         const fechaDisplay = noteData.fecha
@@ -169,10 +158,10 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
             cuadrante: noteData.cuadrante,
             arcada: noteData.arcada,
         };
-        if (paciente.numPac) {
-            const savedNote = await createSoapNote(paciente.numPac, newNote);
+        if (paciente!.numPac) {
+            const savedNote = await createSoapNote(paciente!.numPac, newNote);
             const finalNote = savedNote ?? newNote;
-            setPaciente(prev => ({ ...prev, historial: [finalNote, ...prev.historial] }));
+            setPaciente(prev => prev ? { ...prev, historial: [finalNote, ...prev.historial] } : prev);
             showToast('Evolutivo registrado legalmente');
         }
     };
@@ -180,7 +169,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
     const handleUpdateNote = async (id: string, data: {
         subjetivo: string; objetivo: string; analisis: string; plan: string;
         eva: number; fecha?: string; especialidad?: string;
-        tratamiento_id?: number; tratamiento_nombre?: string;
+        tratamiento_id?: string | number; tratamiento_nombre?: string;
         pieza?: number; cuadrante?: number; arcada?: string;
     }) => {
         await updateSoapNote(id, {
@@ -195,7 +184,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
             cuadrante: data.cuadrante,
             arcada: data.arcada,
         });
-        setPaciente(prev => ({
+        setPaciente(prev => prev ? ({
             ...prev,
             historial: prev.historial.map(n =>
                 n.id === id
@@ -218,27 +207,24 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                     }
                     : n
             ),
-        }));
+        }) : prev);
         setEditingNoteId(null);
         setExpandedNoteId(id);
         showToast('Entrada clínica actualizada');
     };
 
-    const handleAlertsChange = (newAlerts: { alergias: string[]; deuda: boolean }) => {
-        setPaciente(prev => ({ ...prev, ...newAlerts }));
-        showToast("Alertas de seguridad actualizadas");
-    };
+
 
     // ── Handlers alergias ──────────────────────────────────────
     const handleAddAllergy = async () => {
         const nombre = newAllergyText.trim();
-        if (!paciente.numPac) return;
+        if (!paciente?.numPac) return;
         const newA: PatientAllergy = {
             id: crypto.randomUUID(), paciente_id: paciente.numPac, nombre, severidad: 'moderada'
         };
         setAllergies(prev => [...prev, newA]);
         setNewAllergyText('');
-        if (isSupabaseConfigured()) await upsertAllergy({ paciente_id: paciente.numPac, nombre, severidad: 'moderada' });
+        if (isSupabaseConfigured()) await upsertAllergy({ paciente_id: paciente!.numPac, nombre, severidad: 'moderada' });
         showToast(`Alergia "${nombre}" añadida`);
     };
 
@@ -250,7 +236,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
 
     // ── Handlers medicación ────────────────────────────────────
     const handleAddMedication = async (med: Medicamento) => {
-        if (!paciente.numPac) return;
+        if (!paciente?.numPac) return;
         const newMed: PatientMedication = {
             id: crypto.randomUUID(), paciente_id: paciente.numPac,
             nombre: med.nombre, importante: med.importante,
@@ -281,7 +267,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
 
 
     const handleDocumentSigned = () => {
-        setPaciente(prev => ({ ...prev, consentimientosFirmados: true }));
+        setPaciente(prev => prev ? { ...prev, consentimientosFirmados: true } as Paciente : prev);
         showToast("Consentimientos OK");
     };
 
@@ -302,10 +288,12 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
 
     // Edad calculada
     const edad = paciente ? new Date().getFullYear() - new Date(paciente.fechaNacimiento).getFullYear() : 0;
-    const ultimaVisita = paciente?.historial[0]?.fecha ?? '—';
 
 
-    const renderHistorial = () => (
+
+    const renderHistorial = () => {
+        if (!paciente) return null;
+        return (
         <div className="grid gap-3 animate-in fade-in duration-400 h-[calc(100vh-240px)] min-h-[500px]" style={{ gridTemplateColumns: '70fr 30fr' }}>
 
             {/* ── COL 1: IZQUIERDA (Top: Historial, Bottom: SOAP) ──────────────── */}
@@ -396,7 +384,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                                             <div className="mx-2 mb-3">
                                                 <SOAPEditor
                                                     onSave={(data) => handleUpdateNote(note.id, data)}
-                                                    alergiasPaciente={paciente.alergias}
+                                                    alergiasPaciente={paciente!.alergias}
                                                     onCancel={() => setEditingNoteId(null)}
                                                     initialData={{
                                                         subjetivo: note.subjetivo,
@@ -452,7 +440,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
 
                 {/* ── BOTTOM-LEFT: EDITOR SOAP (50%, sin scroll) ──────────────── */}
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
-                    <SOAPEditor onSave={handleSaveNote} alergiasPaciente={paciente.alergias} />
+                    <SOAPEditor onSave={handleSaveNote} alergiasPaciente={paciente!.alergias} />
                 </div>
             </div>
 
@@ -562,7 +550,8 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                 </div>
             </div>
         </div>
-    );
+        );
+    };
 
 
 
@@ -577,7 +566,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
             case 'Económica':
             case 'Presupuestos': return <Economica />;
             case 'Documentos y Consentimientos':
-            case 'Documentos': return <Documentos onDocumentSigned={handleDocumentSigned} />;
+            case 'Documentos': return <Documentos numPac={paciente?.numPac ?? ''} nombrePaciente={paciente ? `${paciente.nombre} ${paciente.apellidos}` : undefined} telefono={paciente?.telefono} onDocumentSigned={handleDocumentSigned} />;
             case 'Historia Clínica':
             case 'Historial Clínico':
             default: return renderHistorial();

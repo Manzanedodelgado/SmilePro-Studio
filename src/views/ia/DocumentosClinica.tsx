@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { FileText, Printer, Download, Search, ChevronRight, X, Edit3, Check, Clipboard, Shield, Receipt, Heart } from 'lucide-react';
+import { FileText, Printer, Download, Search, ChevronRight, X, Edit3, Clipboard, Shield, Receipt, Heart } from 'lucide-react';
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
 type DocCat = 'consentimiento' | 'cuestionario' | 'presupuesto' | 'instrucciones' | 'lopd' | 'interno';

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageSquare, Mail, FileText, Clipboard, Edit3, Save, X, Plus, Copy, Check } from 'lucide-react';
+import { MessageSquare, Mail, FileText, Clipboard, Edit3, Save, X, Copy, Check } from 'lucide-react';
 
 type TemplateType = 'whatsapp' | 'sms' | 'email' | 'documento' | 'cuestionario';
 interface Template { id: string; name: string; type: TemplateType; category: string; content: string; vars: string[] }

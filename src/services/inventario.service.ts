@@ -3,7 +3,7 @@
 //  Inventario — backend local (Node.js/Prisma).
 //  SIN dependencia de db.ts / backend.
 // ─────────────────────────────────────────────────────────────────
-import { ItemInventario, Lote, EstadoLote } from '../types';
+import { type ItemInventario, type Lote, type EstadoLote } from '../types';
 import { logger } from './logger';
 
 const API_BASE = 'http://localhost:3000/api/inventory';

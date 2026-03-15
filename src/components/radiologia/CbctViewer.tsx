@@ -12,9 +12,8 @@ import React, {
     useEffect, useLayoutEffect, useRef, useState, useCallback
 } from 'react';
 import {
-    X, Activity, Download, FileImage,
+    X, Activity, Download,
     ChevronLeft, ChevronRight, Maximize2, Minimize2,
-    FlipHorizontal2 as FlipH
 } from 'lucide-react';
 import {
     loadDicomVolume,
@@ -100,7 +99,7 @@ export interface CbctViewerProps {
 
 interface PanelProps {
     meta: ViewMeta;
-    canvasRef: React.RefObject<HTMLCanvasElement>;
+    canvasRef: React.RefObject<HTMLCanvasElement | null>;
     slice: number;
     maxSlices: number;
     onSlice: (v: number) => void;
@@ -213,7 +212,7 @@ const ViewPanel: React.FC<PanelProps> = React.memo(({
 const CbctViewer: React.FC<CbctViewerProps> = ({
     file, patientName, onClose,
     wc, ww, layout, invert,
-    onWCChange, onWWChange, onLayoutChange,
+    onWCChange: _onWCChange, onWWChange: _onWWChange, onLayoutChange,
     onVolumeLoaded, onProgress,
     panoRefExternal, mipRefExternal, cefaRefExternal,
 }) => {
@@ -410,7 +409,7 @@ const CbctViewer: React.FC<CbctViewerProps> = ({
                     <div className="flex items-center gap-1.5">
                         <button
                             onClick={() => {
-                                const map: Record<string, React.RefObject<HTMLCanvasElement>> = {
+                                const map: Record<string, React.RefObject<HTMLCanvasElement | null>> = {
                                     axial: axRef, coronal: corRef, sagital: sagRef,
                                     panoramica: panoRef, mip: mipRef, cefa: cefaRef
                                 };
@@ -486,7 +485,7 @@ const CbctViewer: React.FC<CbctViewerProps> = ({
                     }
 
                     const meta = VIEWS.find(x => x.id === layout)!;
-                    const refMap: Record<ViewId, React.RefObject<HTMLCanvasElement>> = {
+                    const refMap: Record<ViewId, React.RefObject<HTMLCanvasElement | null>> = {
                         axial: axRef, coronal: corRef, sagital: sagRef,
                         panoramica: panoRef, mip: mipRef, cefa: cefaRef,
                     };

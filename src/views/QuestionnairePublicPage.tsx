@@ -118,6 +118,7 @@ const QuestionnairePublicPage: React.FC<Props> = ({ token }) => {
         protesis: 'No',
         ultimaVisitaDentista: '< 6 meses',
         higieneOral: '2 veces/día',
+        aceptaLopd: false,
         aceptaPoliticaPrivacidad: false,
         aceptaTratamientoDatos: false,
     });

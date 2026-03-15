@@ -12,7 +12,12 @@ export interface LineaPresupuesto {
     idPre: number;
     descripcion: string;
     pieza?: string;
+    arcada?: string;
+    cantidad?: number;
     precioPresupuesto: number;
+    precioUnitario?: number;
+    descuento?: number;
+    importeLinea?: number;
     importeCobrado: number;
     estado: 'Pendiente' | 'En tratamiento' | 'Finalizado' | 'Anulado';
     fecha?: string;
@@ -25,11 +30,14 @@ export interface Presupuesto {
     importeTotal: number;
     importeCobrado: number;
     importePendiente: number;
+    importePagado?: number;
     lineasPendientes: number;
     lineasFinalizadas: number;
     estado: 'Pendiente' | 'Aceptado' | 'En curso' | 'Finalizado' | 'Rechazado' | 'Caducado';
     estadoWeb?: string;
     fechaInicio?: string;
+    fecha?: string;
+    fechaAceptacion?: string;
 }
 
 export const getPresupuestosByPaciente = async (_numPac: string, _idPac?: string): Promise<Presupuesto[]> => {
@@ -41,6 +49,9 @@ export const getResumenEconomico = async (_numPac: string, _idPac?: string) => (
     totalPresupuestado: 0,
     totalCobrado: 0,
     totalPendiente: 0,
+    totalFacturado: 0,
+    totalPagado: 0,
+    deudaPendiente: 0,
     presupuestosCount: 0,
 });
 

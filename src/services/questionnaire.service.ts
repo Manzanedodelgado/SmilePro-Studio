@@ -43,6 +43,7 @@ export interface QuestionnaireData {
     ortodoncia?: boolean;
     protesis?: 'No' | 'Parcial removible' | 'Total removible' | 'Fija';
     miedosDentista?: string;
+    aceptaLopd: boolean;
     aceptaPoliticaPrivacidad: boolean;
     aceptaTratamientoDatos: boolean;
 }

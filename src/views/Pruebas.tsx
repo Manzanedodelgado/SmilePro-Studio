@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-    Calendar, Clock, RefreshCw, Plus, ChevronLeft, ChevronRight,
+    Calendar, RefreshCw, Plus, ChevronLeft, ChevronRight,
     CheckCircle2, Zap, Activity, X, Edit2, Trash2, Users, TrendingUp
 } from 'lucide-react';
 import { getCitasByFecha, updateCita, createCita, deleteCita } from '../services/citas.service';
-import { Cita } from '../types';
+import { type Cita, type EstadoCita } from '../types';
 
 // ─── Time helpers ──────────────────────────────────────────────────────────────
 const toMin = (h: string) => { const [hh, mm] = h.split(':').map(Number); return hh * 60 + mm; };
@@ -119,13 +119,13 @@ const CitaModal: React.FC<{ cita: Partial<Cita> | null; onClose: () => void; onS
                             </select>
                         </Field>
                         <Field label="Estado">
-                            <select className={INPUT} value={form.estado ?? 'planificada'} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))}>
+                            <select className={INPUT} value={form.estado ?? 'planificada'} onChange={e => setForm(p => ({ ...p, estado: e.target.value as EstadoCita }))}>
                                 {ESTADOS.map(e => <option key={e}>{e}</option>)}
                             </select>
                         </Field>
                     </div>
                     <Field label="Notas">
-                        <textarea className={`${INPUT} resize-none`} rows={2} value={form.observaciones ?? ''} onChange={e => setForm(p => ({ ...p, observaciones: e.target.value }))} placeholder="Observaciones..." />
+                        <textarea className={`${INPUT} resize-none`} rows={2} value={form.notas ?? ''} onChange={e => setForm(p => ({ ...p, notas: e.target.value }))} placeholder="Observaciones..." />
                     </Field>
                 </div>
                 {/* Footer */}
@@ -211,9 +211,6 @@ const TimelineCol: React.FC<{
 
             {/* Franja de descanso entre tramos */}
             {SEGMENTS.length > 1 && (() => {
-                const breakTop = SEGMENTS[0][1] * PX_H - SEGMENTS[0][0] * PX_H;
-                const rawBreak = (SEGMENTS[1][0] - SEGMENTS[0][1]);
-                const _ = rawBreak; // gap visual indicado con pattern
                 return (
                     <div className="absolute left-0 right-0 flex items-center justify-center z-10 pointer-events-none"
                         style={{ top: horaToY(toHHMM(SEGMENTS[0][1] * 60)), height: 20 }}>

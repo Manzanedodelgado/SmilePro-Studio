@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Search, Send, Phone,
-    CheckCheck, Bot, Sparkles, Wifi, WifiOff,
+    CheckCheck, Bot, Wifi, WifiOff,
     QrCode, RefreshCw, Tag, CheckCircle2, Paperclip,
     AlertCircle, UserRound, PlusCircle, X, Pause,
-    Copy, Reply, Forward, CornerUpLeft, Smile, Zap,
-    Calendar, Hash, ChevronDown, Info, MessageSquare
+    Copy, CornerUpLeft, Smile, Zap,
+    Info, MessageSquare
 } from 'lucide-react';
 import { searchPacientes } from '../services/pacientes.service';
 import {
-    ConversacionUI, MensajeUI, InstanceStatus,
+    type ConversacionUI, type MensajeUI, type InstanceStatus,
     isEvolutionConfigured, isChatwootConfigured,
     getInstanceStatus, getQRCode,
     getChatwootConversaciones, getChatwootMensajes,

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Calendar, Euro, Ban, CheckCircle2, Clock, Users,
+    Calendar, Euro, Ban, CheckCircle2, Users,
     MessageSquare, ChevronRight, Activity, AlertTriangle,
-    TrendingUp, FileText, Phone, Zap, RefreshCw, Stethoscope
+    TrendingUp, FileText, Zap, RefreshCw, Stethoscope
 } from 'lucide-react';
 import { getCitasByFecha } from '../services/citas.service';
 import { getGestoriaStats } from '../services/facturacion.service';
-import { Cita } from '../types';
+import { type Cita } from '../types';
 
 interface DashboardProps {
     activeSubArea: string;
@@ -69,7 +69,6 @@ const HoyEnClinica: React.FC<{ onNavigate: DashboardProps['onNavigate'] }> = ({ 
     const total = citas.length;
     const finalizadas = citas.filter(c => c.estado === 'finalizada').length;
     const enCurso = citas.filter(c => citaEnCurso(c)).length;
-    const pendientes = citas.filter(c => ['confirmada', 'espera', 'planificada'].includes(c.estado)).length;
     const canceladas = citas.filter(c => ['anulada', 'cancelada'].includes(c.estado)).length;
 
     const proxima = citas.find(c => {
@@ -263,7 +262,7 @@ const HoyEnClinica: React.FC<{ onNavigate: DashboardProps['onNavigate'] }> = ({ 
 // ══════════════════════════════════════════════════════════════════════════════
 const Rendimiento: React.FC<{ onNavigate: DashboardProps['onNavigate'] }> = ({ onNavigate }) => {
     const [stats, setStats] = useState<{
-        ingresosBrutos: string; facturasConteo: number; ticketMedio: string;
+        ingresosBrutos: string; facturasConteo: number;
     } | null>(null);
     const [citasSemana, setCitasSemana] = useState<number[]>([]);
     const [cancelSemana, setCancelSemana] = useState<number[]>([]);

@@ -4,7 +4,7 @@
 //  Datos reales: 47.712 citas en PostgreSQL local (réplica GELITE DCitas).
 //  SIN dependencia de db.ts / backend.
 // ─────────────────────────────────────────────────────────────────
-import { Cita, EstadoCita, TratamientoCategoria } from '../types';
+import { type Cita, type EstadoCita, type TratamientoCategoria } from '../types';
 import { logger } from './logger';
 
 const API_BASE = 'http://localhost:3000/api/appointments';

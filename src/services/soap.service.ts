@@ -3,7 +3,7 @@
 //  Notas SOAP — usa /api/clinical/records del backend.
 //  SIN dependencia de db.ts / backend.
 // ─────────────────────────────────────────────────────────────────
-import { SOAPNote } from '../types';
+import { type SOAPNote } from '../types';
 import { logger } from './logger';
 
 const API_BASE = 'http://localhost:3000/api/clinical';

@@ -4,7 +4,7 @@ import { type Cita } from './types';
 import { type ColorMap, type EstudioRadiologico } from './services/imagen.service';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import { type Area, type Paciente } from './types';
+import { type Area } from './types';
 import { navigationItems } from './navigation';
 import Dashboard from './views/Dashboard';
 import Agenda from './views/Agenda';
@@ -40,7 +40,6 @@ const App: React.FC = () => {
     const [activeSubArea, setActiveSubArea] = useState<string>('Jornada de Hoy');
     const [toastMessage, setToastMessage] = useState<string | null>(null);
     const [pendingCita, setPendingCita] = useState<Partial<Cita> | null>(null);
-    const [pendingWhatsapp, setPendingWhatsapp] = useState<{ phone: string; name: string } | null>(null);
     const pendingWhatsappRef = React.useRef<{ phone: string; name: string } | null>(null);
 
     // ─ Estado IA de Radiología (compartido entre Sidebar y Radiologia) ─
@@ -51,7 +50,6 @@ const App: React.FC = () => {
     const [radSelectedStudy, setRadSelectedStudy] = useState<EstudioRadiologico | null>(null);
 
     // Paciente persistido para restauración al volver + señal de selección externa (ej: desde Dashboard)
-    const [persistedPaciente, setPersistedPaciente] = useState<import('./types').Paciente | null>(null);
     const [requestedNumPac, setRequestedNumPac] = useState<string | null>(null);
     const persistedSubAreaRef = React.useRef<string>('Historia Clínica');
 
@@ -192,11 +190,11 @@ const App: React.FC = () => {
                                     setActiveSubArea(subArea);
                                     persistedSubAreaRef.current = subArea;
                                 }}
-                                onPatientChange={(p) => setPersistedPaciente(p)}
-                                onNavigate={(area, subArea, citaData, waData) => {
+                                onPatientChange={(_p) => {}}
+                                onNavigate={(area: Area, subArea?: string, citaData?: Partial<Cita>, waData?: { phone: string; name: string }) => {
                                     // Guardar en ref ANTES de setActiveArea para que esté disponible
                                     // en el primer render del componente Whatsapp (evita race condition)
-                                    if (waData) { pendingWhatsappRef.current = waData; setPendingWhatsapp(waData); }
+                                    if (waData) { pendingWhatsappRef.current = waData; }
                                     setActiveArea(area);
                                     if (subArea) setActiveSubArea(subArea);
                                     if (citaData) setPendingCita(citaData);

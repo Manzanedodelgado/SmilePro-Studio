@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { usePermission } from '../hooks/usePermission';
-import { ItemInventario, Lote } from '../types';
+import { type ItemInventario } from '../types';
 import {
     Package,
     Boxes,
@@ -9,7 +9,6 @@ import {
     AlertTriangle,
     History,
     Download,
-    Verified,
     Calendar,
     Cpu,
     ArrowRight,
@@ -36,7 +35,7 @@ const Inventario: React.FC<InventarioProps> = ({ activeSubArea }) => {
         />
     );
 
-    const { user } = useAuth();
+    const { user: _user } = useAuth();
     const [activeTab, setActiveTab] = useState('visual');
     const [searchTerm, setSearchTerm] = useState('');
     const [inventory, setInventory] = useState<ItemInventario[]>([]);
@@ -165,7 +164,7 @@ const Inventario: React.FC<InventarioProps> = ({ activeSubArea }) => {
                                 <div className="mb-6">
                                     <h3 className="font-bold text-slate-900 dark:text-white text-lg leading-tight mb-1 group-hover:text-blue-600 transition-colors uppercase tracking-tight">{item.nombre}</h3>
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <Badge variant="gray">{item.sku}</Badge>
+                                        <Badge variant="slate">{item.sku}</Badge>
                                         {isLowStock && <Badge variant="rose">Reposición Urgente</Badge>}
                                         {isExpiringSoon && !isLowStock && <Badge variant="amber">Caducidad {nextExpiring.fechaCaducidad}</Badge>}
                                     </div>

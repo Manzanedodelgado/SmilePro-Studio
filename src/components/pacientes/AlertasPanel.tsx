@@ -9,7 +9,7 @@ interface AlertasPanelProps {
     showToast: (message: string) => void;
 }
 
-const AlertasPanel: React.FC<AlertasPanelProps> = ({ initialAlerts, onAlertsChange, showToast }) => {
+const AlertasPanel: React.FC<AlertasPanelProps> = ({ initialAlerts, onAlertsChange, showToast: _showToast }) => {
     const [tieneDeuda, setTieneDeuda] = useState(initialAlerts.deuda);
     const [alergias, setAlergias] = useState(initialAlerts.alergias);
     const [newAlergiaInput, setNewAlergiaInput] = useState('');

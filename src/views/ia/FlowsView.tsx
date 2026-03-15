@@ -1,5 +1,5 @@
 import React from 'react';
-import { GitBranch, Bell, HeartPulse, RefreshCcw, FileText, CreditCard, AlertTriangle, Settings2, CheckCircle2, XCircle, UserPlus, ArrowDown, Send, MessageSquare, Calendar, Star, Receipt, Building2, Clipboard, Stethoscope } from 'lucide-react';
+import { GitBranch, Bell, HeartPulse, RefreshCcw, FileText, CreditCard, AlertTriangle, CheckCircle2, XCircle, UserPlus, ArrowDown, Send, MessageSquare, Calendar, Star, Receipt, Building2, Clipboard, Stethoscope } from 'lucide-react';
 
 interface Flow { id: string; name: string; trigger: string; color: string; steps: { icon: React.ElementType; label: string; sub: string }[] }
 

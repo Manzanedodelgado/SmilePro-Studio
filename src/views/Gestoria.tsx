@@ -4,8 +4,6 @@ import {
     TrendingUp,
     TrendingDown,
     Receipt,
-    Wallet,
-    Building,
     Scale,
     Plus,
     Download,
@@ -15,7 +13,6 @@ import {
     ArrowUpRight,
     ArrowDownRight,
     FileText,
-    CreditCard,
     PieChart,
     ChevronRight,
     Clock,
@@ -36,7 +33,7 @@ import {
     X,
     Eye
 } from 'lucide-react';
-import { getFacturas, getMovimientosBanco, getGestoriaStats, FacturaUI, MovimientoBancoUI } from '../services/facturacion.service';
+import { getFacturas, getMovimientosBanco, getGestoriaStats, type FacturaUI, type MovimientoBancoUI } from '../services/facturacion.service';
 import { isDbConfigured } from '../services/db';
 import { fetchInvoiceEmails, isGmailConfigured, isGmailAuthorized, startGmailAuth, disconnectGmail, handleOAuthRedirect } from '../services/gmail.service';
 import { parseAllInvoiceEmails, loadFacturasFromSupabase, updateFacturaEstado, type FacturaExtraida } from '../services/invoice-parser.service';

@@ -20,7 +20,6 @@ const fetchWithTimeout = (url: string, opts: RequestInit = {}, ms = 30_000): Pro
     const id = setTimeout(() => ctrl.abort(), ms);
     return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(id));
 };
-import { logger } from './logger';
 
 const EVO_URL_RAW = (import.meta.env.VITE_EVOLUTION_API_URL as string | undefined) || 'https://comunicaciones-evolution-api.ayjla6.easypanel.host';
 const EVO_KEY = (import.meta.env.VITE_EVOLUTION_API_KEY as string | undefined) || '429683C4C977415CAAFCCE10F7D57E11';
