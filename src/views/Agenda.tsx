@@ -55,13 +55,13 @@ const PALETTE: Record<string, { bg: string; border: string; text: string; pill: 
     'Prótesis Fija': { bg: 'linear-gradient(135deg,#118DF0CC,#5BB4F5CC)', border: '#118DF0', text: '#fff', pill: '#118DF0' },
     'Periodoncia': { bg: 'linear-gradient(135deg,#3B82F6CC,#60A5FACC)', border: '#3B82F6', text: '#fff', pill: '#3B82F6' },
     'Control': { bg: 'linear-gradient(135deg,#93C5FDCC,#BFDBFECC)', border: '#93C5FD', text: '#051650', pill: '#93C5FD' },
-    'Urgencia': { bg: 'linear-gradient(135deg,#FF4B68CC,#FF8099CC)', border: '#FF4B68', text: '#fff', pill: '#FF4B68' },
+    'Urgencia': { bg: 'linear-gradient(135deg,#ec489999,#f472b6aa)', border: '#ec4899', text: '#fff', pill: '#ec4899' },
 };
 const getPalette = (tto: string) => PALETTE[tto] ?? { bg: 'linear-gradient(135deg,#00418299,#0056b3AA)', border: '#004182', text: '#fff', pill: '#004182' };
 
 const EC: Record<string, { label: string; dot: string; cls: string }> = {
     confirmada: { label: 'Confirmada', dot: '#118DF0', cls: 'bg-blue-50 text-[#004182] border-blue-200' },
-    espera: { label: 'En espera', dot: '#FBFFA3', cls: 'bg-[#FEFDE8] text-[#051650] border-[#FBFFA3]' },
+    espera: { label: 'En espera', dot: '#ec4899', cls: 'bg-pink-50 text-pink-700 border-pink-200' },
     gabinete: { label: 'En gabinete', dot: '#004182', cls: 'bg-blue-100 text-[#051650] border-blue-300' },
     finalizada: { label: 'Finalizada', dot: '#93C5FD', cls: 'bg-[#F0F8FF] text-[#004182] border-[#BFDBFE]' },
     anulada: { label: 'Anulada', dot: '#FF4B68', cls: 'bg-[#FFF0F3] text-[#FF4B68] border-[#FFC0CB]' },
@@ -415,10 +415,15 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
         return nombreAgendaByIdUsu(topIdUsu);
     };
 
+    const addTitle = (name: string) => {
+        if (!name || /^Dr[a]?\./i.test(name)) return name;
+        const firstName = name.trim().split(/\s+/)[0];
+        return firstName.endsWith('a') || firstName.endsWith('A') ? `Dra. ${name}` : `Dr. ${name}`;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    const g1DoctorLabel = useMemo(() => dominantAgendaLabel('G1') || agendaConfigStore?.doctores?.[0]?.nombre || 'Gabinete 1', [filteredCitas, agendaConfigStore]);
+    const g1DoctorLabel = useMemo(() => addTitle(dominantAgendaLabel('G1') || agendaConfigStore?.doctores?.[0]?.nombre || 'Gabinete 1'), [filteredCitas, agendaConfigStore]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    const g2DoctorLabel = useMemo(() => dominantAgendaLabel('G2') || 'Auxiliar', [filteredCitas]);
+    const g2DoctorLabel = useMemo(() => addTitle(dominantAgendaLabel('G2') || 'Auxiliar'), [filteredCitas]);
 
     const getTimeRange = (c: typeof citas[0]) => {
         const [hh, mm] = c.horaInicio.split(':').map(Number);
@@ -591,7 +596,7 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
                 <div className={`relative flex-1 ml-3 flex items-center gap-3 pl-3 pr-4 h-[calc(100%-8px)] rounded-md border ${isEditing ? 'border-blue-400 bg-blue-50/50 shadow-md shadow-blue-500/10 z-10' : 'border-slate-200/80 bg-white shadow-sm hover:border-blue-300 hover:shadow-md transition-all'}`}>
                     <div className="w-1 h-3/5 min-h-[20px] rounded-full flex-shrink-0 shadow-sm" style={{ background: pal.border }} />
                     <div className="flex-shrink-0 text-center leading-none flex items-center justify-center mt-0">
-                        <span className="text-[12px] font-bold text-[#051650]">{cita.pacienteNumPac || '****'}</span>
+                        <span className="text-[12px] font-bold text-[#051650] w-[2.5rem] text-right flex-shrink-0">{cita.pacienteNumPac || '****'}</span>
                     </div>
                     <div className="flex-1 flex items-center gap-2 min-w-0 mt-0 pl-2 border-l border-slate-100">
                         <p className="text-[13px] font-bold text-[#051650] shrink-0">{cita.nombrePaciente || 'Sin datos'}</p>
@@ -721,7 +726,12 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
                             return (
                                 <div key={min}
                                     className="absolute border-b border-slate-200 hover:bg-white transition-all cursor-pointer group"
-                                    style={{ top: i * SLOT_H, height: SLOT_H, left: 0, right: 0 }}
+                                    style={{
+                                        top: i * SLOT_H, height: SLOT_H, left: 0, right: 0,
+                                        background: i % 2 === 0
+                                            ? 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'
+                                            : 'linear-gradient(135deg, #f1f5f9 0%, #e8edf4 100%)',
+                                    }}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         setEditingCita({ id: generateId(), gabinete: gab, pacienteNumPac: '', nombrePaciente: '', horaInicio: timeStr, duracionMinutos: 30, tratamiento: 'Control', categoria: 'Diagnostico', estado: 'planificada', doctor: doc, alertasMedicas: [], alertasLegales: [], alertasFinancieras: false, notas: '' });
@@ -742,7 +752,7 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
 
                     {/* Citas absolutas — solapamiento por z-index (inicio más tardío encima) */}
                     <div className="absolute inset-0 pointer-events-none" style={{ left: '4.5rem', zIndex: 2 }}>
-                        {segCitas.map(cita => {
+                        {segCitas.map((cita, citaIdx) => {
                             const cStart  = parseTime(cita.horaInicio);
                             const safeDur = Math.min(cita.duracionMinutos || 30, 240);
                             const hPx  = Math.max(SLOT_H, Math.ceil(safeDur / 15) * SLOT_H);
@@ -768,17 +778,31 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
                             const cfg = ec(cita.estado);
                             const isEditing = editingCita?.id === cita.id;
 
+                            const isOverlapped = segCitas.some(other => {
+                                if (other.id === cita.id) return false;
+                                const oStart = parseTime(other.horaInicio);
+                                const oEnd   = oStart + Math.min(other.duracionMinutos || 30, 240);
+                                return oStart < cStart && oEnd > cStart;
+                            });
+
                             return (
                                 <div key={cita.id} draggable
                                     onDragStart={(e) => handleDragStart(e, cita.id!)}
                                     onDragOver={handleDragOver}
                                     onDrop={(e) => handleDrop(e, cita.gabinete as 'G1'|'G2', cita.horaInicio)}
+                                    onClick={() => setEditingCita({ ...cita })}
                                     onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.pageX, y: e.pageY, cita }); }}
-                                    className="absolute cursor-move group pointer-events-auto"
-                                    style={{ top: topPx + 3, height: hPx - 6, left: 6, right: 6, zIndex: zIdx }}>
-                                    <div className={`flex items-center gap-3 pl-3 pr-3 h-full rounded-md border ${isEditing ? 'border-blue-400 bg-blue-50/50 shadow-md shadow-blue-500/10' : 'border-slate-200/80 bg-white shadow-sm hover:border-blue-300 hover:shadow-md transition-all'}`}>
+                                    className="absolute cursor-pointer group pointer-events-auto"
+                                    style={{ top: topPx + 1, height: hPx - 2, left: 6, right: 6, zIndex: zIdx }}>
+                                    <div className={`flex items-start gap-3 pl-3 pr-3 pt-1.5 h-full rounded-md transition-all ${
+                                        isEditing
+                                            ? 'border-2 border-blue-400 bg-blue-50/50 shadow-md shadow-blue-500/10'
+                                            : isOverlapped
+                                                ? 'border border-t-2 border-[#0c2a80]/70 bg-white hover:border-[#0c2a80]/90 shadow-sm hover:shadow-md'
+                                                : 'border border-[#0c2a80]/40 bg-white hover:border-[#0c2a80]/70 shadow-sm hover:shadow-md'
+                                    }`} style={{ boxShadow: 'inset 0 7px 16px rgba(5,22,80,0.22), 0 1px 3px rgba(0,0,0,0.08)' }}>
                                         <div className="w-1 h-3/5 min-h-[16px] rounded-full flex-shrink-0" style={{ background: pal.border }} />
-                                        <span className="text-[12px] font-bold text-[#051650] flex-shrink-0">{cita.pacienteNumPac || '****'}</span>
+                                        <span className="text-[12px] font-bold text-[#051650] flex-shrink-0 w-[2.5rem] text-right">{cita.pacienteNumPac || '****'}</span>
                                         <div className="flex-1 flex items-center gap-2 min-w-0 pl-2 border-l border-slate-100">
                                             <p className="text-[13px] font-bold text-[#051650] shrink-0 truncate max-w-[160px]">{cita.nombrePaciente || 'Sin datos'}</p>
                                             <span className="text-slate-200 shrink-0">|</span>
@@ -1078,60 +1102,48 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
                         {/* Settings Dropdown */}
                         {showSettingsMenu && (
                             <div
-                                className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 z-[100] overflow-hidden py-1 animate-in fade-in zoom-in-95 duration-200"
+                                className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 z-[100] overflow-hidden py-1"
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 <div className="px-3 py-2 border-b border-slate-100 flex items-center gap-2">
-                                    <Settings className="w-4 h-4 text-slate-400" />
-                                    <span className="text-[13px] font-bold text-[#051650] uppercase tracking-wide">Opciones Agenda</span>
+                                    <Settings className="w-3.5 h-3.5 text-slate-400" />
+                                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Opciones Agenda</span>
                                 </div>
 
                                 <button
                                     onClick={() => { setShowConfiguracion(true); setShowSettingsMenu(false); }}
-                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-slate-50 text-left transition-colors group"
+                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-blue-50 text-left transition-colors group"
                                 >
-                                    <div className="w-6 h-6 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors"><Settings className="w-3.5 h-3.5" /></div>
-                                    <div className="flex flex-col">
-                                        <span className="text-[12px] font-bold text-slate-700 leading-none">Gestión de Citas</span>
-                                        <span className="text-[13px] text-slate-400 font-medium">Configurar horarios y reglas</span>
-                                    </div>
+                                    <Settings className="w-3.5 h-3.5 text-[#118DF0] shrink-0" />
+                                    <span className="text-[12px] font-bold text-[#051650]">Gestión de Citas</span>
                                 </button>
 
-                                <div className="h-px bg-slate-100 my-1 mx-2" />
+                                <div className="h-px bg-slate-100 mx-2" />
 
                                 <button
                                     onClick={() => { toggleVista(); setShowSettingsMenu(false); }}
-                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-slate-50 text-left transition-colors group"
+                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-blue-50 text-left transition-colors group"
                                 >
-                                    <div className="w-6 h-6 rounded-md bg-violet-50 text-violet-600 flex items-center justify-center shrink-0 group-hover:bg-violet-100 transition-colors"><Filter className="w-3.5 h-3.5" /></div>
-                                    <div className="flex flex-col">
-                                        <span className="text-[12px] font-bold text-slate-700 leading-none">Vistas: {vistaGabinete === 'ALL' ? 'Todos Doctores' : (vistaGabinete === 'G1' ? 'Dr. Rubio' : 'Dra. García')}</span>
-                                        <span className="text-[13px] text-slate-400 font-medium">Alternar agendas visibles</span>
-                                    </div>
+                                    <Filter className="w-3.5 h-3.5 text-[#118DF0] shrink-0" />
+                                    <span className="text-[12px] font-bold text-[#051650]">Vista: {vistaGabinete === 'ALL' ? 'Todos' : vistaGabinete}</span>
                                 </button>
 
-                                <div className="h-px bg-slate-100 my-1 mx-2" />
+                                <div className="h-px bg-slate-100 mx-2" />
 
                                 <button
                                     onClick={() => { blockSlots(); setShowSettingsMenu(false); }}
-                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-slate-50 text-left transition-colors group"
+                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-red-50 text-left transition-colors group"
                                 >
-                                    <div className="w-6 h-6 rounded-md bg-[#FFF0F3] text-[#E03555] flex items-center justify-center shrink-0 group-hover:bg-[#FFE0E6] transition-colors"><Lock className="w-3.5 h-3.5" /></div>
-                                    <div className="flex flex-col">
-                                        <span className="text-[12px] font-bold text-slate-700 leading-none">Bloquear Tramos</span>
-                                        <span className="text-[13px] text-slate-400 font-medium">Insertar bloqueo selectivo</span>
-                                    </div>
+                                    <Lock className="w-3.5 h-3.5 text-[#FF4B68] shrink-0" />
+                                    <span className="text-[12px] font-bold text-[#051650]">Bloquear Tramos</span>
                                 </button>
 
                                 <button
                                     onClick={() => { unblockSlots(); setShowSettingsMenu(false); }}
-                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-slate-50 text-left transition-colors group"
+                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-blue-50 text-left transition-colors group"
                                 >
-                                    <div className="w-6 h-6 rounded-md bg-blue-50 text-[#051650] flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors"><Unlock className="w-3.5 h-3.5" /></div>
-                                    <div className="flex flex-col">
-                                        <span className="text-[12px] font-bold text-slate-700 leading-none">Desbloquear Tramos</span>
-                                        <span className="text-[13px] text-slate-400 font-medium">Liberar bloqueos (bio)</span>
-                                    </div>
+                                    <Unlock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                    <span className="text-[12px] font-bold text-[#051650]">Desbloquear Tramos</span>
                                 </button>
                             </div>
                         )}
@@ -1162,12 +1174,11 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
                             { (vistaGabinete === 'ALL' || vistaGabinete === 'G1') && (
                                 <div className="bg-white rounded-xl shadow-2xl shadow-slate-300/50 border-[1.5px] border-[#051650] overflow-hidden flex flex-col h-fit">
                                     {/* GAB 1 HEADER */}
-                                    <div className="bg-[#051650] text-white px-6 py-2 flex items-center justify-between sticky top-0 z-30 shadow-md">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-2.5 h-2.5 rounded-full bg-blue-400 shadow-[0_0_10px_rgba(96,165,250,0.8)] animate-pulse" />
-                                            <h3 className="text-[14px] font-bold tracking-wide">{g1DoctorLabel}</h3>
+                                    <div className="bg-[#051650] text-white py-2 flex items-center justify-between sticky top-0 z-30 shadow-md">
+                                        <div className="flex items-center" style={{ paddingLeft: 'calc(4.5rem + 18px)' }}>
+                                            <span className="flex items-center gap-1.5 text-[12px] font-bold text-white uppercase tracking-wider bg-[#0c2a80] px-2.5 py-0.5 rounded-md"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 rounded-[2px] overflow-hidden"><rect x="0" y="0" width="6" height="6" fill="#FF4B68"/><rect x="6" y="0" width="6" height="6" fill="#FBFFA3"/><rect x="0" y="6" width="6" height="6" fill="#118DF0"/><rect x="6" y="6" width="6" height="6" fill="#004182"/></svg>{g1DoctorLabel}</span>
                                         </div>
-                                        <span className="text-[10px] font-bold bg-[#FBFFA3] px-2 py-0.5 rounded-md uppercase tracking-widest text-[#051650] border border-[#FBFFA3]/50">Gabinete 1</span>
+                                        <span className="text-[10px] font-bold bg-[#0ea5e9] text-white px-2 py-0.5 rounded-md uppercase tracking-widest mr-4">Gabinete 1</span>
                                     </div>
                                     {/* GAB 1 LIST */}
                                     <div className="flex-1 bg-slate-50/80" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '4px 4px' }}>
@@ -1179,12 +1190,11 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
                             { (vistaGabinete === 'ALL' || vistaGabinete === 'G2') && (
                                 <div className="bg-white rounded-xl shadow-2xl shadow-slate-300/50 border-[1.5px] border-[#051650] overflow-hidden flex flex-col h-fit">
                                     {/* GAB 2 HEADER */}
-                                    <div className="bg-[#051650] text-white px-6 py-2 flex items-center justify-between sticky top-0 z-30 shadow-md">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-2.5 h-2.5 rounded-full bg-blue-300 shadow-[0_0_10px_rgba(147,197,253,0.8)] animate-pulse" />
-                                            <h3 className="text-[14px] font-bold tracking-wide">{g2DoctorLabel}</h3>
+                                    <div className="bg-[#051650] text-white py-2 flex items-center justify-between sticky top-0 z-30 shadow-md">
+                                        <div className="flex items-center" style={{ paddingLeft: 'calc(4.5rem + 18px)' }}>
+                                            <span className="flex items-center gap-1.5 text-[12px] font-bold text-white uppercase tracking-wider bg-[#0c2a80] px-2.5 py-0.5 rounded-md"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 rounded-[2px] overflow-hidden"><rect x="0" y="0" width="6" height="6" fill="#FF4B68"/><rect x="6" y="0" width="6" height="6" fill="#FBFFA3"/><rect x="0" y="6" width="6" height="6" fill="#118DF0"/><rect x="6" y="6" width="6" height="6" fill="#004182"/></svg>{g2DoctorLabel}</span>
                                         </div>
-                                        <span className="text-[10px] font-bold bg-[#FBFFA3] px-2 py-0.5 rounded-md uppercase tracking-widest text-[#051650] border border-[#FBFFA3]/50">Espacio auxiliar</span>
+                                        <span className="text-[10px] font-bold bg-[#0ea5e9] text-white px-2 py-0.5 rounded-md uppercase tracking-widest mr-4">Espacio auxiliar</span>
                                     </div>
                                     {/* GAB 2 LIST */}
                                     <div className="flex-1 bg-slate-50/80" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '4px 4px' }}>

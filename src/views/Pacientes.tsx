@@ -8,6 +8,7 @@ import Documentos from '../components/pacientes/Documentos';
 import Economica from '../components/pacientes/Economica';
 import EntradasMedicas from '../components/pacientes/EntradasMedicas';
 import QuestionnairePanel from '../components/pacientes/QuestionnairePanel';
+import RadiologyTab from '../components/pacientes/RadiologyTab';
 import { type SOAPNote, type Paciente, type Area } from '../types';
 import {
     Activity, Brain, Camera,
@@ -301,7 +302,16 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                         {loadingRX
                             ? <div className="w-full h-full flex items-center justify-center"><span className="w-5 h-5 border-2 border-slate-600 border-t-blue-400 rounded-full animate-spin" /></div>
                             : panoramicas.length === 0
-                                ? <div className="w-full h-full flex items-center justify-center text-slate-600 text-xs font-bold">Sin radiografías</div>
+                                ? <>
+                                    <img
+                                        src="/rx-demo-panoramica.png"
+                                        className="w-full h-full object-cover opacity-80"
+                                        alt="Panorámica demo"
+                                        style={{ filter: 'contrast(1.2) brightness(0.85)' }}
+                                    />
+                                    <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-slate-900 to-transparent" />
+                                    <div className="absolute top-2 right-2 bg-amber-400/90 text-slate-900 text-[9px] font-black uppercase px-1.5 py-0.5 rounded tracking-wider">Demo</div>
+                                </>
                                 : <>
                                     <img
                                         src={panoramicas[panoramicaIdx]?.url}
@@ -352,7 +362,14 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                         {loadingFotos
                             ? <div className="w-full h-full flex items-center justify-center"><span className="w-5 h-5 border-2 border-slate-200 border-t-blue-400 rounded-full animate-spin" /></div>
                             : fotos.length === 0
-                                ? <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs font-bold">Sin fotos en Google Drive</div>
+                                ? <>
+                                    <img
+                                        src="/foto-demo-intraoral.png"
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                        alt="Foto intraoral demo"
+                                    />
+                                    <div className="absolute top-2 right-2 bg-amber-400/90 text-slate-900 text-[9px] font-black uppercase px-1.5 py-0.5 rounded tracking-wider">Demo</div>
+                                </>
                                 : <>
                                     <img
                                         src={fotos[fotoIdx]?.url}
@@ -417,6 +434,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
             case 'Documentos y Consentimientos':
             case 'Documentos': return <Documentos numPac={paciente?.numPac ?? ''} nombrePaciente={paciente ? `${paciente.nombre} ${paciente.apellidos}` : undefined} telefono={paciente?.telefono} onDocumentSigned={handleDocumentSigned} />;
             case 'Anamnesis': return paciente ? <QuestionnairePanel paciente={paciente} onUpdated={(p) => setPaciente(p)} /> : null;
+            case 'Radiología': return <RadiologyTab numPac={paciente?.numPac} />;
             case 'Historia Clínica':
             case 'Historial Clínico':
             default: return renderHistorial();

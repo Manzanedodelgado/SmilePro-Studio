@@ -1,7 +1,6 @@
 
 import React, { useState } from 'react';
 import { type Cita } from './types';
-import { type ColorMap, type EstudioRadiologico } from './services/imagen.service';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import { type Area } from './types';
@@ -13,7 +12,6 @@ import IAAutomatizacion from './views/IAAutomatizacion';
 import Gestoria from './views/Gestoria';
 import Whatsapp from './views/Whatsapp';
 import Inventario from './views/Inventario';
-import Radiologia from './views/Radiologia';
 import Login from './views/Login';
 import QuestionnairePublicPage from './views/QuestionnairePublicPage';
 import SignPage from './views/SignPage';
@@ -41,13 +39,6 @@ const App: React.FC = () => {
     const [toastMessage, setToastMessage] = useState<string | null>(null);
     const [pendingCita, setPendingCita] = useState<Partial<Cita> | null>(null);
     const pendingWhatsappRef = React.useRef<{ phone: string; name: string } | null>(null);
-
-    // ─ Estado IA de Radiología (compartido entre Sidebar y Radiologia) ─
-    const [radBrightness, setRadBrightness] = useState(0);
-    const [radContrast, setRadContrast] = useState(0);
-    const [radSharpness, setRadSharpness] = useState(0);
-    const [radColorMap, setRadColorMap] = useState<ColorMap>('grayscale');
-    const [radSelectedStudy, setRadSelectedStudy] = useState<EstudioRadiologico | null>(null);
 
     // Paciente persistido para restauración al volver + señal de selección externa (ej: desde Dashboard)
     const [requestedNumPac, setRequestedNumPac] = useState<string | null>(null);
@@ -88,19 +79,6 @@ const App: React.FC = () => {
             }
             // Pacientes se maneja fuera del switch — siempre montado para preservar estado
             case 'Pacientes': return null;
-            case 'Radiología':
-                return <Radiologia
-                    activeSubArea={activeSubArea}
-                    brightness={radBrightness}
-                    contrast={radContrast}
-                    sharpness={radSharpness}
-                    colorMap={radColorMap}
-                    onBrightnessChange={setRadBrightness}
-                    onContrastChange={setRadContrast}
-                    onSharpnessChange={setRadSharpness}
-                    onColorMapChange={setRadColorMap}
-                    onStudySelect={setRadSelectedStudy}
-                />;
             case 'IA & Automatización':
                 return <IAAutomatizacion
                     activeSubArea={activeSubArea}
@@ -183,48 +161,40 @@ const App: React.FC = () => {
                             activeArea={activeArea}
                             activeSubArea={activeSubArea}
                             onNavigate={handleNavigation}
-                            radControls={activeArea === 'Radiología' ? {
-                                brightness: radBrightness, contrast: radContrast,
-                                sharpness: radSharpness, colorMap: radColorMap,
-                                onBrightness: setRadBrightness, onContrast: setRadContrast,
-                                onSharpness: setRadSharpness, onColorMap: setRadColorMap,
-                                selectedStudy: radSelectedStudy,
-                            } : undefined}
                         />
                     </div>
                 )}
                 <main className="flex-1 flex flex-col overflow-hidden relative">
                     {/* PACIENTES: siempre montado, oculto con CSS cuando no es activo — preserva estado del paciente */}
-                    <div style={{ display: activeArea === 'Pacientes' ? 'contents' : 'none' }}
-                        className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 custom-scrollbar bg-clinical-soft/30">
-                        <div className="max-w-[1600px] mx-auto">
-                            <Pacientes
-                                activeSubArea={activeArea === 'Pacientes' ? activeSubArea : persistedSubAreaRef.current}
-                                requestedNumPac={requestedNumPac}
-                                onRequestedHandled={() => setRequestedNumPac(null)}
-                                onSubAreaChange={(subArea) => {
-                                    setActiveSubArea(subArea);
-                                    persistedSubAreaRef.current = subArea;
-                                }}
-                                onPatientChange={(_p) => {}}
-                                onNavigate={(area: Area, subArea?: string, citaData?: Partial<Cita>, waData?: { phone: string; name: string }) => {
-                                    // Guardar en ref ANTES de setActiveArea para que esté disponible
-                                    // en el primer render del componente Whatsapp (evita race condition)
-                                    if (waData) { pendingWhatsappRef.current = waData; }
-                                    setActiveArea(area);
-                                    if (subArea) setActiveSubArea(subArea);
-                                    if (citaData) setPendingCita(citaData);
-                                }}
-                                showToast={showToast}
-                            />
+                    <div style={{ display: activeArea === 'Pacientes' ? 'contents' : 'none' }}>
+                        <div className={`flex-1 custom-scrollbar ${activeSubArea === 'Radiología' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-6 lg:p-8 bg-clinical-soft/30'}`}>
+                            <div className={activeSubArea === 'Radiología' ? 'h-full' : 'max-w-[1600px] mx-auto animate-fade-in'}>
+                                <Pacientes
+                                    activeSubArea={activeArea === 'Pacientes' ? activeSubArea : persistedSubAreaRef.current}
+                                    requestedNumPac={requestedNumPac}
+                                    onRequestedHandled={() => setRequestedNumPac(null)}
+                                    onSubAreaChange={(subArea) => {
+                                        setActiveSubArea(subArea);
+                                        persistedSubAreaRef.current = subArea;
+                                    }}
+                                    onPatientChange={(_p) => {}}
+                                    onNavigate={(area: Area, subArea?: string, citaData?: Partial<Cita>, waData?: { phone: string; name: string }) => {
+                                        if (waData) { pendingWhatsappRef.current = waData; }
+                                        setActiveArea(area);
+                                        if (subArea) setActiveSubArea(subArea);
+                                        if (citaData) setPendingCita(citaData);
+                                    }}
+                                    showToast={showToast}
+                                />
+                            </div>
                         </div>
                     </div>
 
                     {/* Resto de áreas: montaje/desmontaje normal */}
                     {activeArea !== 'Pacientes' && (
-                        (activeArea === 'Agenda' || activeArea === 'Whatsapp' || activeArea === 'Radiología')
+                        (activeArea === 'Agenda' || activeArea === 'Whatsapp')
                             ? (activeArea === 'Whatsapp'
-                                ? <div className="flex-1 flex flex-col overflow-hidden p-4 min-h-0">{renderContent()}</div>
+                                ? <div className="flex-1 flex flex-col overflow-hidden p-4 md:p-6 lg:p-8 min-h-0">{renderContent()}</div>
                                 : renderContent())
                             : (
                                 <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 custom-scrollbar bg-clinical-soft/30">

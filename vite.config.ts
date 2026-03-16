@@ -22,8 +22,13 @@ export default defineConfig({
       },
     },
   },
+  // Fix: Cornerstone3D workers internos usan IIFE → forzar ES para compatibilidad con code-splitting
+  worker: {
+    format: 'es',
+  },
   optimizeDeps: {
     exclude: ['@cornerstonejs/dicom-image-loader'],
+    include: ['@cornerstonejs/core', '@cornerstonejs/tools', 'dicom-parser'],
   },
   build: {
     target: 'esnext',

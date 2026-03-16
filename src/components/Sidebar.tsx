@@ -1,26 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { type Area } from '../types';
 import { navigationItems } from '../navigation';
-import { type ColorMap, COLOR_MAPS, type EstudioRadiologico } from '../services/imagen.service';
 import { getCitasByFecha } from '../services/citas.service';
 import {
     LayoutDashboard, Calendar, Users, BarChart2, Package, Settings, MessageSquare,
     Search, UserPlus, ChevronRight, Activity, Clock, AlertCircle,
     PlusCircle, AlertTriangle, FileText, Grid, CreditCard,
     Brain, FileCheck, ClipboardList, ShoppingCart, QrCode, Receipt, PieChart,
-    Palette, Wand2, CheckCircle2
+    Palette
 } from 'lucide-react';
 
 interface SidebarProps {
     activeArea: Area;
     activeSubArea: string;
     onNavigate: (area: Area, subArea: string, numPac?: string) => void;
-    radControls?: {
-        brightness: number; contrast: number; sharpness: number; colorMap: ColorMap;
-        onBrightness: (v: number) => void; onContrast: (v: number) => void;
-        onSharpness: (v: number) => void; onColorMap: (v: ColorMap) => void;
-        selectedStudy: EstudioRadiologico | null;
-    };
 }
 
 // P-002 FIX: Hook de operativa en tiempo real desde DCitas
@@ -79,10 +72,8 @@ const useOperativaHoy = () => {
     return { espera, gabinete };
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate, radControls }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate }) => {
     const [isHovered, setIsHovered] = useState(false);
-    const [isEnhancing, setIsEnhancing] = useState(false);
-    const [enhanceSuccess, setEnhanceSuccess] = useState(false);
     const currentMenuItem = navigationItems.find(item => item.name === activeArea);
 
     if (!currentMenuItem?.children) {
@@ -150,16 +141,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
     };
 
     const isAgenda = activeArea === 'Agenda';
-    const isRadiologia = activeArea === 'Radiología';
-
-    const handleEnhanceIA = async () => {
-        if (!radControls) return;
-        setIsEnhancing(true);
-        await new Promise(r => setTimeout(r, 1500));
-        setIsEnhancing(false);
-        setEnhanceSuccess(true);
-        setTimeout(() => setEnhanceSuccess(false), 2000);
-    };
 
 
 
@@ -268,204 +249,83 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
                             );
                         })}
                     </nav>
-
-                    {/* WIDGET RADIOLOGÍA: Controles IA */}
-                    {isRadiologia && radControls && (
-                        <div className={`border-t border-white/10 overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[2000px] opacity-100 pt-4 mt-2' : 'max-h-0 opacity-0'}`}>
-                            {/* Header */}
-                            <div className="flex items-center gap-2 mb-3 px-1">
-                                <Brain className="w-3.5 h-3.5 text-purple-400" />
-                                <span className="text-[12px] font-bold text-white/80 uppercase tracking-wider">IA Imagen</span>
-                            </div>
-
-                            {/* Sliders */}
-                            <div className="space-y-3 px-1">
-                                {[
-                                    { label: 'Brillo', val: radControls.brightness, set: radControls.onBrightness, min: -100, max: 100 },
-                                    { label: 'Contraste', val: radControls.contrast, set: radControls.onContrast, min: -100, max: 100 },
-                                    { label: 'Nitidez', val: radControls.sharpness, set: radControls.onSharpness, min: 0, max: 100 },
-                                ].map(({ label, val, set, min, max }) => (
-                                    <div key={label}>
-                                        <div className="flex justify-between mb-1">
-                                            <span className="text-[12px] font-semibold text-white/70 uppercase tracking-wide">{label}</span>
-                                            <span className="text-[12px] font-mono text-blue-300">{val > 0 ? `+${val}` : val}</span>
-                                        </div>
-                                        <input type="range" min={min} max={max} value={val}
-                                            onChange={e => set(Number(e.target.value))}
-                                            className="w-full h-[2px] appearance-none bg-white/20 rounded-full cursor-pointer accent-blue-400" />
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Botón Mejorar IA */}
-                            <button onClick={handleEnhanceIA} disabled={isEnhancing}
-                                className={`mt-3 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-[12px] font-bold uppercase tracking-wider transition-all ${isEnhancing ? 'bg-white/10 text-white/70 cursor-not-allowed'
-                                    : enhanceSuccess ? 'bg-green-500/20 text-green-300 border border-green-500/30'
-                                        : 'bg-gradient-to-r from-blue-600/80 to-purple-600/80 text-white hover:from-blue-500 hover:to-purple-500'
-                                    }`}>
-                                {isEnhancing ? (
-                                    <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Procesando…</>
-                                ) : enhanceSuccess ? (
-                                    <><CheckCircle2 className="w-3.5 h-3.5" />Mejorado ✓</>
-                                ) : (
-                                    <><Wand2 className="w-3.5 h-3.5" />Mejorar con IA</>
-                                )}
-                            </button>
-
-                            {/* Colorización */}
-                            <div className="mt-3">
-                                <p className="text-[12px] font-bold text-white/70 uppercase tracking-wider mb-2 px-1 flex items-center gap-1">
-                                    <Palette className="w-3 h-3" /> Colorización
-                                </p>
-                                <div className="grid grid-cols-2 gap-1">
-                                    {COLOR_MAPS.map(cm => (
-                                        <button key={cm.value}
-                                            onClick={() => radControls.onColorMap(cm.value)}
-                                            className={`px-2 py-1.5 rounded-lg text-[12px] font-bold transition-all border ${radControls.colorMap === cm.value
-                                                ? 'bg-blue-600/30 text-blue-200 border-blue-500/50'
-                                                : 'border-white/10 text-white/70 hover:text-white hover:bg-white/10'
-                                                }`}
-                                            style={{ borderLeft: `2px solid ${cm.preview?.[0] ?? '#3b82f6'}` }}>
-                                            {cm.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Metadatos DICOM */}
-                            {radControls.selectedStudy?.dicomMeta && (
-                                <div className="mt-3 border-t border-white/10 pt-3">
-                                    <p className="text-[12px] font-bold text-white/70 uppercase tracking-wider mb-2 px-1 flex items-center gap-1">
-                                        <Activity className="w-3 h-3" /> Metadatos DICOM
-                                    </p>
-                                    <div className="space-y-1 text-[12px] px-1">
-                                        {([
-                                            ['Modalidad', radControls.selectedStudy.dicomMeta.modality],
-                                            ['Fecha', radControls.selectedStudy.dicomMeta.studyDate],
-                                            ['kVp', radControls.selectedStudy.dicomMeta.kvp?.toString()],
-                                            ['Doctor', radControls.selectedStudy.doctor],
-                                            ['Institución', radControls.selectedStudy.dicomMeta.institutionName],
-                                        ] as [string, string | undefined][]).filter(([, v]) => v).map(([k, v]) => (
-                                            <div key={k} className="flex gap-1">
-                                                <span className="text-white/70 flex-shrink-0 w-14">{k}:</span>
-                                                <span className="text-white/70 truncate">{v}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Ruta en servidor */}
-                            {radControls.selectedStudy?.rutaOrigen && (
-                                <div className="mt-2 border-t border-white/10 pt-2 px-1">
-                                    <p className="text-[12px] text-white/70 font-bold uppercase tracking-wider mb-1">Ruta</p>
-                                    <p className="text-[12px] font-mono text-white/70 break-all leading-relaxed">{radControls.selectedStudy.rutaOrigen}</p>
-                                </div>
-                            )}
-
-                            {/* Anotaciones */}
-                            {(radControls.selectedStudy?.anotaciones?.length ?? 0) > 0 && (
-                                <div className="mt-2 border-t border-white/10 pt-2">
-                                    <p className="text-[12px] font-bold text-white/70 uppercase tracking-wider mb-2 px-1">
-                                        Anotaciones ({radControls.selectedStudy!.anotaciones.length})
-                                    </p>
-                                    <div className="space-y-1">
-                                        {radControls.selectedStudy!.anotaciones.map(an => (
-                                            <div key={an.id} className="flex items-start gap-1.5 bg-white/5 rounded-lg px-2 py-1.5">
-                                                <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-0.5" style={{ backgroundColor: an.color }} />
-                                                <div>
-                                                    <p className="text-[12px] text-white/70 leading-tight">{an.texto}</p>
-                                                    <p className="text-[12px] text-white/70">{an.autor}</p>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Tags */}
-                            {(radControls.selectedStudy?.tags?.length ?? 0) > 0 && (
-                                <div className="mt-2 border-t border-white/10 pt-2 px-1">
-                                    <p className="text-[12px] text-white/70 font-bold uppercase tracking-wider mb-1.5">Tags</p>
-                                    <div className="flex flex-wrap gap-1">
-                                        {radControls.selectedStudy!.tags.map(t => (
-                                            <span key={t} className="text-[12px] px-1.5 py-0.5 bg-white/10 text-white/70 rounded border border-white/10">{t}</span>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {isAgenda && isExpanded && (
-                        /* VISTA OPERATIVA (AGENDA) */
+                    {isAgenda && (
                         <div className="mt-2 border-t border-white/10 pt-4">
-                            <div className="animate-fade-in space-y-6">
-                                {/* WIDGET 2: Sala de Espera */}
-                                <div>
-                                    <div className="flex items-center justify-between mb-2 px-1">
-                                        <div className="flex items-center gap-2 text-white/80">
-                                            <div className="relative">
-                                                <Clock className="w-3.5 h-3.5" />
-                                                <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-[#FBFFA3] animate-pulse" title="Datos Simulados"></span>
+                            {/* Full widgets — visible solo expandido */}
+                            <div className={`transition-all duration-300 ${isExpanded ? 'opacity-100 max-h-[600px]' : 'opacity-0 max-h-0 overflow-hidden pointer-events-none'}`}>
+                                <div className="space-y-6">
+                                    {/* WIDGET: Sala de Espera */}
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2 px-1">
+                                            <div className="flex items-center gap-2 text-white/80">
+                                                <div className="relative">
+                                                    <Clock className="w-3.5 h-3.5" />
+                                                    <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-[#FBFFA3] animate-pulse" title="Datos Simulados"></span>
+                                                </div>
+                                                <span className="text-[12px] font-bold uppercase tracking-wider">Sala de Espera</span>
                                             </div>
-                                            <span className="text-[12px] font-bold uppercase tracking-wider">Sala de Espera</span>
+                                            <span className="bg-pink-500 text-white text-[12px] font-bold px-1.5 py-0.5 rounded-md">{stats.espera.length}</span>
                                         </div>
-                                        <span className="bg-[#0ea5e9] text-white text-[12px] font-bold px-1.5 py-0.5 rounded-md">{stats.espera.length}</span>
+                                        <div className="space-y-1.5">
+                                            {stats.espera.map((p) => (
+                                                <div key={p.id}
+                                                    onClick={() => p.numPac && !p.numPac.startsWith('CTX-') ? onNavigate('Pacientes', 'Historia Clínica', p.numPac) : undefined}
+                                                    className={`bg-white p-2.5 rounded-lg flex items-center gap-3 transition-all border border-slate-100 ${p.numPac && !p.numPac.startsWith('CTX-') ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-200' : 'cursor-default'}`}
+                                                >
+                                                    <div className={`w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0 ${parseInt(p.tiempo) > 10 ? 'bg-red-500/20 text-red-500 border border-[#FF4B68]/30' : 'bg-blue-500/20 text-[#051650] border border-blue-500/30'}`}>
+                                                        <div className="flex flex-col items-center leading-none">
+                                                            <span className="text-[13px] font-bold">{p.tiempo.split(' ')[0]}</span>
+                                                            <span className="text-[12px] font-bold uppercase">min</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-[12px] font-bold text-slate-800 truncate leading-tight">{p.nombre}</p>
+                                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                                            <span className="text-[12px] font-semibold text-slate-500 uppercase tracking-wide truncate">{p.trat}</span>
+                                                            {p.alerta === "Látex" && <span className="w-1.5 h-1.5 bg-[#FF6E87] rounded-full"></span>}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
-                                    <div className="space-y-1.5">
-                                        {stats.espera.map((p) => (
-                                            <div key={p.id}
-                                                onClick={() => p.numPac && !p.numPac.startsWith('CTX-') ? onNavigate('Pacientes', 'Historia Clínica', p.numPac) : undefined}
-                                                className={`bg-white p-2.5 rounded-lg flex items-center gap-3 transition-all border border-slate-100 ${p.numPac && !p.numPac.startsWith('CTX-') ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-200' : 'cursor-default'}`}
+
+                                    {/* WIDGET: En Gabinete */}
+                                    <div>
+                                        <div className="flex items-center justify-between mb-3 px-1 mt-2">
+                                            <div className="flex items-center gap-2 text-white/80">
+                                                <Activity className="w-3.5 h-3.5" />
+                                                <span className="text-[12px] font-bold uppercase tracking-widest">En Gabinete</span>
+                                            </div>
+                                            <span className="bg-[#0ea5e9] text-white text-[12px] font-bold px-1.5 py-0.5 rounded-md">{stats.gabinete.length}</span>
+                                        </div>
+                                        {stats.gabinete.length === 0 ? (
+                                            <p className="text-[12px] text-white/40 px-1 italic">Sin pacientes en gabinete</p>
+                                        ) : stats.gabinete.map(g => (
+                                            <div key={g.id}
+                                                onClick={() => g.numPac && !g.numPac.startsWith('CTX-') ? onNavigate('Pacientes', 'Historia Clínica', g.numPac) : undefined}
+                                                className={`bg-white border-l-4 border-l-[#051650] border border-slate-200 p-3 rounded-lg flex items-center gap-3 transition-all mb-1.5 ${g.numPac && !g.numPac.startsWith('CTX-') ? 'cursor-pointer hover:bg-blue-50' : 'cursor-default hover:bg-slate-50'}`}
                                             >
-                                                <div className={`w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0 ${parseInt(p.tiempo) > 10 ? 'bg-red-500/20 text-red-500 border border-[#FF4B68]/30' : 'bg-blue-500/20 text-[#051650] border border-blue-500/30'}`}>
-                                                    <div className="flex flex-col items-center leading-none">
-                                                        <span className="text-[13px] font-bold">{p.tiempo.split(' ')[0]}</span>
-                                                        <span className="text-[12px] font-bold uppercase">min</span>
-                                                    </div>
-                                                </div>
+                                                <div className="w-10 h-10 rounded-lg bg-[#051650] text-white flex items-center justify-center flex-shrink-0 font-bold text-sm">{g.gab}</div>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-[12px] font-bold text-slate-800 truncate leading-tight">{p.nombre}</p>
-                                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                                        <span className="text-[12px] font-semibold text-slate-500 uppercase tracking-wide truncate">{p.trat}</span>
-                                                        {p.alerta === "Látex" && <span className="w-1.5 h-1.5 bg-[#FF6E87] rounded-full"></span>}
-                                                    </div>
+                                                    <p className="text-[13px] font-bold text-slate-800 truncate leading-tight">{g.nombre.split(',')[0] || g.nombre}</p>
+                                                    <span className="text-[12px] font-bold text-slate-500 uppercase tracking-wide">{g.doctor} • {g.tiempo}</span>
                                                 </div>
+                                                <span className="w-2 h-2 rounded-full bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.5)]"></span>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
+                            </div>
 
-                                {/* WIDGET 3: En Gabinete */}
-                                <div>
-                                    <div className="flex items-center justify-between mb-3 px-1 mt-2">
-                                        <div className="flex items-center gap-2 text-white/80">
-                                            <Activity className="w-3.5 h-3.5" />
-                                            <span className="text-[12px] font-bold uppercase tracking-widest">En Gabinete</span>
-                                        </div>
-                                        <span className="bg-[#0ea5e9] text-white text-[12px] font-bold px-1.5 py-0.5 rounded-md">{stats.gabinete.length}</span>
-                                    </div>
-                                    {stats.gabinete.length === 0 ? (
-                                        <p className="text-[12px] text-white/40 px-1 italic">Sin pacientes en gabinete</p>
-                                    ) : stats.gabinete.map(g => (
-                                        <div key={g.id}
-                                            onClick={() => g.numPac && !g.numPac.startsWith('CTX-') ? onNavigate('Pacientes', 'Historia Clínica', g.numPac) : undefined}
-                                            className={`bg-white border-l-4 border-l-[#051650] border border-slate-200 p-3 rounded-lg flex items-center gap-3 transition-all mb-1.5 ${g.numPac && !g.numPac.startsWith('CTX-') ? 'cursor-pointer hover:bg-blue-50' : 'cursor-default hover:bg-slate-50'}`}
-                                        >
-                                            <div className="w-10 h-10 rounded-lg bg-[#051650] text-white flex items-center justify-center flex-shrink-0 font-bold text-sm">
-                                                {g.gab}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-[13px] font-bold text-slate-800 truncate leading-tight">{g.nombre.split(',')[0] || g.nombre}</p>
-                                                <span className="text-[12px] font-bold text-slate-500 uppercase tracking-wide">{g.doctor} • {g.tiempo}</span>
-                                            </div>
-                                            <span className="w-2 h-2 rounded-full bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.5)]"></span>
-                                        </div>
-                                    ))}
+                            {/* Badges compactos — visibles solo colapsado */}
+                            <div className={`flex flex-col gap-3 items-center transition-all duration-300 ${!isExpanded ? 'opacity-100 max-h-[200px]' : 'opacity-0 max-h-0 overflow-hidden pointer-events-none'}`}>
+                                <div className="w-9 h-9 rounded-lg bg-pink-500 flex items-center justify-center shadow-inner" title={`${stats.espera.length} en espera`}>
+                                    <span className="text-[14px] font-black text-white">{stats.espera.length}</span>
                                 </div>
-
-
+                                <div className="w-9 h-9 rounded-lg bg-[#0ea5e9] flex items-center justify-center shadow-inner" title={`${stats.gabinete.length} en consulta`}>
+                                    <span className="text-[14px] font-black text-white">{stats.gabinete.length}</span>
+                                </div>
                             </div>
                         </div>
                     )}

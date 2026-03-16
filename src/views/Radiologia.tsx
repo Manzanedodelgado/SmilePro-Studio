@@ -1,28 +1,18 @@
 /**
  * Radiologia.tsx — Módulo completo de radiología SmilePro
- *
- * Layout 3 columnas:
- *  · Izquierda (240px): galería de estudios agrupada por paciente
- *  · Centro: toolbar + visor (RadiologiaViewer ó CbctViewer)
- *  · Derecha (268px): controles W/L, presets DICOM, mapas de color, metadatos, mediciones
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-
-type MeasureTool = 'select' | 'pan' | 'wl' | 'ruler' | 'angle' | 'roiRect' | 'roiEllipse' | 'arrow' | 'text';
-interface Measurement { id: string; tipo: string; points: { x: number; y: number }[]; value?: number; unit?: string; }
+const DicomViewer = React.lazy(() => import('../components/radiologia/DicomViewer'));
 import {
     Upload, Download, RotateCcw, Search, FolderOpen,
-    Move, Ruler, Type, Sliders, Info,
-    FlipHorizontal, FlipVertical, RefreshCw, Palette,
-    Trash2,
-    MousePointer2, CornerDownRight, RectangleHorizontal,
-    Circle, Minus,
+    FlipHorizontal, FlipVertical, RefreshCw, Palette, Trash2,
+    MousePointer2, Move, Sliders, Ruler, CornerDownRight,
+    RectangleHorizontal, Circle, Minus, Type, Info,
 } from 'lucide-react';
 import {
     type EstudioRadiologico, type ImageType, type ColorMap,
-    addEstudio, deleteEstudio,
-    COLOR_MAPS,
+    addEstudio, deleteEstudio, COLOR_MAPS,
 } from '../services/imagen.service';
 
 // ── Props ──────────────────────────────────────────────────────────────────────
@@ -39,6 +29,8 @@ interface RadiologiaProps {
     onColorMapChange?: (v: ColorMap) => void;
     onStudySelect?: (study: EstudioRadiologico | null) => void;
 }
+
+type ActiveTool = 'select' | 'pan' | 'wl' | 'ruler' | 'angle' | 'roiRect' | 'roiEllipse' | 'arrow' | 'text';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -58,6 +50,18 @@ const tipoIcon: Record<ImageType, string> = {
     panoramica: '🦷', dicom: '🔬', intraoral: '📷', extraoral: '📸',
     cefalometrica: '📐', periapical: '🔍',
 };
+
+const SliderRow: React.FC<{ label: string; value: number; min: number; max: number; onChange: (v: number) => void }> = ({ label, value, min, max, onChange }) => (
+    <div style={{ marginBottom: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+            <span style={{ color: '#64748b', fontSize: 11 }}>{label}</span>
+            <span style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600 }}>{value > 0 ? `+${value}` : value}</span>
+        </div>
+        <input type="range" min={min} max={max} value={value}
+            onChange={e => onChange(Number(e.target.value))}
+            style={{ width: '100%', accentColor: '#3b82f6', cursor: 'pointer' }} />
+    </div>
+);
 
 // ── Demo data ──────────────────────────────────────────────────────────────────
 
@@ -171,25 +175,22 @@ const DEMO_STUDIES: EstudioRadiologico[] = [
     },
 ];
 
-// ── Toolbar config ─────────────────────────────────────────────────────────────
-
-const TOOL_BUTTONS: { id: MeasureTool; title: string; Icon: React.FC<{ className?: string }> }[] = [
-    { id: 'select', title: 'Seleccionar', Icon: ({ className }) => <MousePointer2 className={className} /> },
-    { id: 'pan',    title: 'Mover (Pan)', Icon: ({ className }) => <Move className={className} /> },
-    { id: 'wl',     title: 'Brillo/Contraste (W/L)', Icon: ({ className }) => <Sliders className={className} /> },
-    { id: 'ruler',  title: 'Regla', Icon: ({ className }) => <Ruler className={className} /> },
-    { id: 'angle',  title: 'Ángulo', Icon: ({ className }) => <CornerDownRight className={className} /> },
-    { id: 'roiRect', title: 'ROI Rectángulo', Icon: ({ className }) => <RectangleHorizontal className={className} /> },
-    { id: 'roiEllipse', title: 'ROI Elipse', Icon: ({ className }) => <Circle className={className} /> },
-    { id: 'arrow',  title: 'Flecha', Icon: ({ className }) => <Minus className={className} /> },
-    { id: 'text',   title: 'Texto', Icon: ({ className }) => <Type className={className} /> },
+const TOOL_BUTTONS: { id: ActiveTool; title: string; Icon: React.FC<{ style?: React.CSSProperties }> }[] = [
+    { id: 'select', title: 'Seleccionar',         Icon: ({ style }) => <MousePointer2 style={style} /> },
+    { id: 'pan',    title: 'Mover',                Icon: ({ style }) => <Move style={style} /> },
+    { id: 'wl',     title: 'Brillo/Contraste W/L', Icon: ({ style }) => <Sliders style={style} /> },
+    { id: 'ruler',  title: 'Regla',                Icon: ({ style }) => <Ruler style={style} /> },
+    { id: 'angle',  title: 'Ángulo',               Icon: ({ style }) => <CornerDownRight style={style} /> },
+    { id: 'roiRect',title: 'ROI Rectángulo',        Icon: ({ style }) => <RectangleHorizontal style={style} /> },
+    { id: 'roiEllipse', title: 'ROI Elipse',        Icon: ({ style }) => <Circle style={style} /> },
+    { id: 'arrow',  title: 'Flecha',               Icon: ({ style }) => <Minus style={style} /> },
+    { id: 'text',   title: 'Texto',                Icon: ({ style }) => <Type style={style} /> },
 ];
 
 // ── Componente principal ───────────────────────────────────────────────────────
 
 const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect }) => {
 
-    // ── Galería ───────────────────────────────────────────────────────────────
     const [estudios, setEstudios] = useState<EstudioRadiologico[]>(DEMO_STUDIES);
     const [selectedId, setSelectedId] = useState<string | null>(DEMO_STUDIES[0].id);
     const [filterType, setFilterType] = useState<'all' | ImageType>('all');
@@ -201,12 +202,9 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
     const fileMapRef = useRef<Map<string, File>>(new Map());
     const [dicomFile, setDicomFile] = useState<File | null>(null);
 
-    // ── Herramienta activa ────────────────────────────────────────────────────
-    const [activeTool, setActiveTool] = useState<MeasureTool>('select');
+    const [activeTool, setActiveTool] = useState<ActiveTool>('select');
     const [romexisMsg, setRomexisMsg] = useState<string | null>(null);
-    const [measurements, setMeasurements] = useState<Measurement[]>([]);
 
-    // ── Ajustes imagen (RadiologiaViewer) ─────────────────────────────────────
     const [brightness, setBrightness] = useState(0);
     const [contrast, setContrast] = useState(0);
     const [invertImg, setInvertImg] = useState(false);
@@ -215,40 +213,28 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
     const [rotation, setRotation] = useState(0);
     const [colorMap, setColorMap] = useState<ColorMap>('grayscale');
 
-
-    // ── Notificar padre ───────────────────────────────────────────────────────
     useEffect(() => {
         const s = estudios.find(e => e.id === selectedId) ?? null;
         onStudySelect?.(s);
     }, [selectedId, estudios]);
 
-    // ── Derivados ─────────────────────────────────────────────────────────────
     const selected = estudios.find(e => e.id === selectedId) ?? null;
     const isDicom = selected?.tipo === 'dicom';
-    const displayUrl = selected
-        ? (selected.colorizedUrl ?? selected.enhancedUrl ?? selected.originalUrl)
-        : null;
+    const displayUrl = selected ? (selected.colorizedUrl ?? selected.enhancedUrl ?? selected.originalUrl) : null;
 
-    // Sincronizar ajustes al seleccionar imagen
     useEffect(() => {
         if (!selected) return;
         setBrightness(selected.brightness);
         setContrast(selected.contrast);
         setColorMap(selected.colorMap);
-        setInvertImg(false);
-        setFlipH(false);
-        setFlipV(false);
-        setRotation(0);
-        setMeasurements([]);
+        setInvertImg(false); setFlipH(false); setFlipV(false); setRotation(0);
     }, [selectedId]);
 
-    // ── Filtrado galería ──────────────────────────────────────────────────────
     const filtered = estudios.filter(e => {
         const matchType = filterType === 'all' || e.tipo === filterType;
         const matchPat = selectedPatient === 'all' || e.pacienteNumPac === selectedPatient;
         const q = searchQuery.toLowerCase();
-        const matchQ = !q || e.nombre.toLowerCase().includes(q) || e.descripcion.toLowerCase().includes(q)
-            || e.tags.some(t => t.includes(q));
+        const matchQ = !q || e.nombre.toLowerCase().includes(q) || e.descripcion.toLowerCase().includes(q) || e.tags.some(t => t.includes(q));
         return matchType && matchPat && matchQ;
     });
 
@@ -256,91 +242,55 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
         .map(p => ({ patient: p, studies: filtered.filter(e => e.pacienteNumPac === p.id) }))
         .filter(g => g.studies.length > 0);
 
-    // ── Upload ────────────────────────────────────────────────────────────────
     const handleFiles = useCallback(async (files: FileList | null) => {
         if (!files || files.length === 0) return;
         setIsUploading(true);
         for (const file of Array.from(files)) {
             const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
             const isDcm = ['dcm', 'dic', 'dicom'].includes(ext);
-            const tipo: ImageType = isDcm ? 'dicom'
-                : ['jpg', 'jpeg', 'png', 'bmp', 'webp'].includes(ext) ? 'panoramica' : 'extraoral';
+            const tipo: ImageType = isDcm ? 'dicom' : ['jpg', 'jpeg', 'png', 'bmp', 'webp'].includes(ext) ? 'panoramica' : 'extraoral';
             try {
-                const nuevo = await addEstudio(file, {
-                    pacienteNumPac: 'ACTUAL', tipo, doctor: 'Dra. Rubio',
-                    descripcion: 'Importado desde archivo',
-                });
+                const nuevo = await addEstudio(file, { pacienteNumPac: 'ACTUAL', tipo, doctor: 'Dra. Rubio', descripcion: 'Importado desde archivo' });
                 fileMapRef.current.set(nuevo.id, file);
                 setEstudios(prev => [nuevo, ...prev]);
                 setSelectedId(nuevo.id);
                 if (nuevo.tipo === 'dicom') setDicomFile(file);
-            } catch (err) {
-                console.error('[Radiologia] Upload error:', err);
-            }
+            } catch (err) { console.error('[Radiologia] Upload error:', err); }
         }
         setIsUploading(false);
     }, []);
 
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        handleFiles(e.dataTransfer.files);
-    };
+    const handleDrop = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); handleFiles(e.dataTransfer.files); };
 
-    // ── Acciones toolbar ──────────────────────────────────────────────────────
     const handleRotateCW = () => setRotation(r => (r + 90) % 360);
-    const handleReset = () => {
-        setBrightness(0); setContrast(0); setInvertImg(false);
-        setFlipH(false); setFlipV(false); setRotation(0);
-        setMeasurements([]);
-    };
+    const handleReset = () => { setBrightness(0); setContrast(0); setInvertImg(false); setFlipH(false); setFlipV(false); setRotation(0); };
 
     const handleDownload = () => {
         if (!displayUrl || !selected) return;
         const filename = `${selected.nombre.replace(/\.[^.]+$/, '')}_SmilePro.png`;
         if (displayUrl.startsWith('blob:') || displayUrl.startsWith('data:')) {
-            // Archivo local — descarga directa
-            const a = document.createElement('a');
-            a.href = displayUrl;
-            a.download = filename;
-            a.click();
+            const a = document.createElement('a'); a.href = displayUrl; a.download = filename; a.click();
         } else {
-            // URL remota — CORS impide descarga directa, abre en nueva pestaña
             window.open(displayUrl, '_blank', 'noopener,noreferrer');
         }
     };
 
     const openInRomexis = async () => {
         const filePath = selected?.rutaOrigen;
-        if (!filePath) {
-            setRomexisMsg('Este estudio no tiene ruta de origen registrada.');
-            setTimeout(() => setRomexisMsg(null), 3000);
-            return;
-        }
-        try {
-            await navigator.clipboard.writeText(filePath);
-            setRomexisMsg('Ruta copiada al portapapeles');
-        } catch {
-            // Fallback: prompt para copiar manualmente
-            window.prompt('Copia esta ruta y ábrela en Planmeca Romexis:', filePath);
-            return;
-        }
+        if (!filePath) { setRomexisMsg('Sin ruta de origen'); setTimeout(() => setRomexisMsg(null), 3000); return; }
+        try { await navigator.clipboard.writeText(filePath); setRomexisMsg('Ruta copiada'); }
+        catch { window.prompt('Copia esta ruta y ábrela en Planmeca Romexis:', filePath); return; }
         setTimeout(() => setRomexisMsg(null), 3000);
     };
 
     const openInWeasis = () => {
         const filePath = selected?.rutaOrigen;
-        const uri = filePath
-            ? `weasis://?${encodeURIComponent(`$dicom:get -l "${filePath}"`)}`
-            : 'weasis://';
-        window.location.href = uri;
+        window.location.href = filePath ? `weasis://?${encodeURIComponent(`$dicom:get -l "${filePath}"`)}` : 'weasis://';
     };
 
     const handleColorMap = (map: ColorMap) => {
-        // Aplica directamente en estado — RadiologiaViewer usa CSS filters,
-        // no necesita processEstudio (que falla con CORS en URLs remotas)
         setColorMap(map);
-        setEstudios(prev => prev.map((e: EstudioRadiologico) => e.id === selectedId ? { ...e, colorMap: map } : e));
+        setEstudios(prev => prev.map(e => e.id === selectedId ? { ...e, colorMap: map } : e));
     };
 
     const handleDelete = (id: string) => {
@@ -350,7 +300,6 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
         if (selectedId === id) setSelectedId(estudios[0]?.id ?? null);
     };
 
-    // ── Gestión de Archivos (subárea alternativa) ─────────────────────────────
     if (activeSubArea === 'Gestión de Archivos') {
         return (
             <div className="flex items-center justify-center p-12 bg-white rounded-2xl border border-dashed border-slate-300">
@@ -363,7 +312,7 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
         );
     }
 
-    // ── RENDER PRINCIPAL ──────────────────────────────────────────────────────
+    const iconStyle = { width: 14, height: 14 };
 
     return (
         <div
@@ -378,49 +327,30 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
                 </div>
             )}
 
-            {/* ── PANEL IZQUIERDO: galería ─────────────────────────────────── */}
+            {/* ── PANEL IZQUIERDO ───────────────────────────────────────────── */}
             <div style={{ width: 240, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid #1e2535', background: '#0d1018' }}>
-                {/* Cabecera */}
                 <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid #1e2535' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                         <span style={{ color: '#e2e8f0', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', flex: 1 }}>Estudios</span>
-                        <button
-                            title="Importar archivo"
-                            onClick={() => fileInputRef.current?.click()}
-                            style={{ background: '#1e40af', border: 'none', borderRadius: 5, padding: '4px 8px', color: '#93c5fd', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
-                        >
+                        <button onClick={() => fileInputRef.current?.click()}
+                            style={{ background: '#1e40af', border: 'none', borderRadius: 5, padding: '4px 8px', color: '#93c5fd', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
                             <Upload style={{ width: 11, height: 11 }} /> Importar
                         </button>
                     </div>
-                    {/* Búsqueda */}
                     <div style={{ position: 'relative', marginBottom: 8 }}>
                         <Search style={{ position: 'absolute', left: 7, top: '50%', transform: 'translateY(-50%)', width: 12, height: 12, color: '#475569' }} />
-                        <input
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            placeholder="Buscar estudio…"
-                            style={{ width: '100%', background: '#141820', border: '1px solid #1e2535', borderRadius: 6, padding: '5px 8px 5px 24px', color: '#94a3b8', fontSize: 11, outline: 'none', boxSizing: 'border-box' }}
-                        />
+                        <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar estudio…"
+                            style={{ width: '100%', background: '#141820', border: '1px solid #1e2535', borderRadius: 6, padding: '5px 8px 5px 24px', color: '#94a3b8', fontSize: 11, outline: 'none', boxSizing: 'border-box' }} />
                     </div>
-                    {/* Filtro tipo */}
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                         {(['all', 'panoramica', 'periapical', 'dicom', 'cefalometrica', 'intraoral', 'extraoral'] as const).map(t => (
-                            <button key={t}
-                                onClick={() => setFilterType(t)}
-                                style={{
-                                    background: filterType === t ? '#1e40af' : '#141820',
-                                    border: `1px solid ${filterType === t ? '#3b82f6' : '#1e2535'}`,
-                                    borderRadius: 4, padding: '2px 6px', color: filterType === t ? '#93c5fd' : '#475569',
-                                    cursor: 'pointer', fontSize: 10, fontWeight: 600,
-                                }}
-                            >
+                            <button key={t} onClick={() => setFilterType(t)}
+                                style={{ background: filterType === t ? '#1e40af' : '#141820', border: `1px solid ${filterType === t ? '#3b82f6' : '#1e2535'}`, borderRadius: 4, padding: '2px 6px', color: filterType === t ? '#93c5fd' : '#475569', cursor: 'pointer', fontSize: 10, fontWeight: 600 }}>
                                 {t === 'all' ? 'Todo' : t === 'dicom' ? 'CBCT' : t.charAt(0).toUpperCase() + t.slice(1)}
                             </button>
                         ))}
                     </div>
                 </div>
-
-                {/* Lista agrupada */}
                 <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0' }}>
                     {grouped.map(({ patient, studies }) => (
                         <div key={patient.id}>
@@ -428,29 +358,15 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
                                 {patient.nombre.split(',')[0]}
                             </div>
                             {studies.map(est => (
-                                <div
-                                    key={est.id}
-                                    onClick={() => {
-                                        setSelectedId(est.id);
-                                        setDicomFile(fileMapRef.current.get(est.id) ?? null);
-                                    }}
-                                    style={{
-                                        padding: '7px 12px',
-                                        cursor: 'pointer',
-                                        background: selectedId === est.id ? '#1e3a5f' : 'transparent',
-                                        borderLeft: selectedId === est.id ? '3px solid #3b82f6' : '3px solid transparent',
-                                        transition: 'background 0.15s',
-                                    }}
-                                >
+                                <div key={est.id} onClick={() => { setSelectedId(est.id); setDicomFile(fileMapRef.current.get(est.id) ?? null); }}
+                                    style={{ padding: '7px 12px', cursor: 'pointer', background: selectedId === est.id ? '#1e3a5f' : 'transparent', borderLeft: selectedId === est.id ? '3px solid #3b82f6' : '3px solid transparent', transition: 'background 0.15s' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                                         <span style={{ fontSize: 14 }}>{tipoIcon[est.tipo]}</span>
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <p style={{ color: selectedId === est.id ? '#93c5fd' : '#94a3b8', fontSize: 11, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>
                                                 {est.nombre.replace(/\.[^.]+$/, '')}
                                             </p>
-                                            <p style={{ color: '#475569', fontSize: 10, margin: 0 }}>
-                                                {formatDate(est.fecha)} · {formatBytes(est.fileSize)}
-                                            </p>
+                                            <p style={{ color: '#475569', fontSize: 10, margin: 0 }}>{formatDate(est.fecha)} · {formatBytes(est.fileSize)}</p>
                                         </div>
                                         {!DEMO_STUDIES.some(d => d.id === est.id) && (
                                             <button onClick={ev => { ev.stopPropagation(); handleDelete(est.id); }}
@@ -470,86 +386,65 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
                             ))}
                         </div>
                     ))}
-                    {filtered.length === 0 && (
-                        <div style={{ padding: 20, textAlign: 'center', color: '#334155', fontSize: 12 }}>
-                            Sin resultados
-                        </div>
-                    )}
+                    {filtered.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#334155', fontSize: 12 }}>Sin resultados</div>}
                 </div>
-
-                <input ref={fileInputRef} type="file" accept=".dcm,.dic,.dicom,.jpg,.jpeg,.png,.bmp,.webp"
-                    multiple style={{ display: 'none' }}
-                    onChange={e => handleFiles(e.target.files)} />
+                <input ref={fileInputRef} type="file" accept=".dcm,.dic,.dicom,.jpg,.jpeg,.png,.bmp,.webp" multiple style={{ display: 'none' }} onChange={e => handleFiles(e.target.files)} />
             </div>
 
-            {/* ── CENTRO: toolbar + visor ──────────────────────────────────── */}
+            {/* ── CENTRO ───────────────────────────────────────────────────── */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
 
                 {/* Toolbar */}
                 <div style={{ height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 2, padding: '0 10px', background: '#0d1018', borderBottom: '1px solid #1e2535', overflowX: 'auto' }}>
 
-                    {/* Herramientas de medición */}
-                    {TOOL_BUTTONS.map(({ id, title, Icon }) => (
+                    {/* Herramientas (solo imagen estándar) */}
+                    {!dicomFile && TOOL_BUTTONS.map(({ id, title, Icon }) => (
                         <button key={id} title={title} onClick={() => setActiveTool(id)}
-                            style={{
-                                width: 30, height: 30, border: 'none', borderRadius: 5, cursor: 'pointer',
-                                background: activeTool === id ? '#1e40af' : 'transparent',
-                                color: activeTool === id ? '#93c5fd' : '#475569',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                transition: 'background 0.12s',
-                            }}>
-                            <Icon className="w-3.5 h-3.5" />
+                            style={{ width: 30, height: 30, border: 'none', borderRadius: 5, cursor: 'pointer', background: activeTool === id ? '#1e40af' : 'transparent', color: activeTool === id ? '#93c5fd' : '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.12s' }}>
+                            <Icon style={iconStyle} />
                         </button>
                     ))}
 
                     <div style={{ width: 1, height: 22, background: '#1e2535', margin: '0 4px' }} />
 
-                    {/* Transformaciones (solo RadiologiaViewer) */}
-                    {!isDicom && <>
-                        <button title="Invertir colores" onClick={() => setInvertImg(v => !v)}
-                            style={{ width: 30, height: 30, border: 'none', borderRadius: 5, cursor: 'pointer', background: invertImg ? '#1e40af' : 'transparent', color: invertImg ? '#93c5fd' : '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <span style={{ fontSize: 14 }}>⊘</span>
-                        </button>
-                        <button title="Voltear horizontal" onClick={() => setFlipH(v => !v)}
-                            style={{ width: 30, height: 30, border: 'none', borderRadius: 5, cursor: 'pointer', background: flipH ? '#1e40af' : 'transparent', color: flipH ? '#93c5fd' : '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <FlipHorizontal style={{ width: 14, height: 14 }} />
-                        </button>
-                        <button title="Voltear vertical" onClick={() => setFlipV(v => !v)}
-                            style={{ width: 30, height: 30, border: 'none', borderRadius: 5, cursor: 'pointer', background: flipV ? '#1e40af' : 'transparent', color: flipV ? '#93c5fd' : '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <FlipVertical style={{ width: 14, height: 14 }} />
-                        </button>
-                        <button title="Rotar 90° CW" onClick={handleRotateCW}
-                            style={{ width: 30, height: 30, border: 'none', borderRadius: 5, cursor: 'pointer', background: 'transparent', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <RefreshCw style={{ width: 14, height: 14 }} />
-                        </button>
-                    </>}
+                    {/* Transformaciones */}
+                    <button title="Invertir" onClick={() => setInvertImg(v => !v)}
+                        style={{ width: 30, height: 30, border: 'none', borderRadius: 5, cursor: 'pointer', background: invertImg ? '#1e40af' : 'transparent', color: invertImg ? '#93c5fd' : '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>⊘</button>
+                    <button title="Voltear horizontal" onClick={() => setFlipH(v => !v)}
+                        style={{ width: 30, height: 30, border: 'none', borderRadius: 5, cursor: 'pointer', background: flipH ? '#1e40af' : 'transparent', color: flipH ? '#93c5fd' : '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <FlipHorizontal style={iconStyle} />
+                    </button>
+                    <button title="Voltear vertical" onClick={() => setFlipV(v => !v)}
+                        style={{ width: 30, height: 30, border: 'none', borderRadius: 5, cursor: 'pointer', background: flipV ? '#1e40af' : 'transparent', color: flipV ? '#93c5fd' : '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <FlipVertical style={iconStyle} />
+                    </button>
+                    <button title="Rotar 90°" onClick={handleRotateCW}
+                        style={{ width: 30, height: 30, border: 'none', borderRadius: 5, cursor: 'pointer', background: 'transparent', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <RefreshCw style={iconStyle} />
+                    </button>
 
                     <div style={{ width: 1, height: 22, background: '#1e2535', margin: '0 4px' }} />
 
                     <button title="Reiniciar vista" onClick={handleReset}
                         style={{ width: 30, height: 30, border: 'none', borderRadius: 5, cursor: 'pointer', background: 'transparent', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <RotateCcw style={{ width: 14, height: 14 }} />
+                        <RotateCcw style={iconStyle} />
                     </button>
-                    <button title="Descargar imagen" onClick={handleDownload}
+                    <button title="Descargar" onClick={handleDownload}
                         style={{ width: 30, height: 30, border: 'none', borderRadius: 5, cursor: 'pointer', background: 'transparent', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Download style={{ width: 14, height: 14 }} />
+                        <Download style={iconStyle} />
                     </button>
 
                     <div style={{ width: 1, height: 22, background: '#1e2535', margin: '0 4px' }} />
 
-                    {/* Abrir en apps externas */}
-                    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-                        <button title="Copiar ruta de Romexis al portapapeles" onClick={openInRomexis}
-                            style={{ padding: '3px 8px', border: `1px solid ${romexisMsg ? '#22d3ee' : '#1e2535'}`, borderRadius: 5, cursor: 'pointer', background: romexisMsg ? '#0e4d5c' : 'transparent', color: romexisMsg ? '#22d3ee' : '#475569', fontSize: 10, fontWeight: 600, transition: 'all 0.2s' }}>
-                            {romexisMsg ?? 'Romexis'}
-                        </button>
-                    </div>
-                    <button title="Abrir en Weasis (DICOM viewer gratuito)" onClick={openInWeasis}
+                    <button onClick={openInRomexis}
+                        style={{ padding: '3px 8px', border: `1px solid ${romexisMsg ? '#22d3ee' : '#1e2535'}`, borderRadius: 5, cursor: 'pointer', background: romexisMsg ? '#0e4d5c' : 'transparent', color: romexisMsg ? '#22d3ee' : '#475569', fontSize: 10, fontWeight: 600, transition: 'all 0.2s' }}>
+                        {romexisMsg ?? 'Romexis'}
+                    </button>
+                    <button onClick={openInWeasis}
                         style={{ padding: '3px 8px', border: '1px solid #1e2535', borderRadius: 5, cursor: 'pointer', background: 'transparent', color: '#475569', fontSize: 10, fontWeight: 600 }}>
                         Weasis
                     </button>
 
-                    {/* Nombre estudio */}
                     {selected && (
                         <div style={{ marginLeft: 'auto', color: '#334155', fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 280 }}>
                             {selected.nombre}
@@ -558,81 +453,68 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
                 </div>
 
                 {/* Visor */}
-                <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative', background: '#060809' }}>
-                    {!selected || !displayUrl ? (
-                        <div style={{ textAlign: 'center', color: '#334155' }}>
-                            <p style={{ fontSize: 13, marginBottom: 6 }}>Selecciona un estudio</p>
-                            <p style={{ fontSize: 11 }}>o arrastra un archivo DICOM / imagen</p>
+                <div style={{ flex: 1, minHeight: 0 }}>
+                    {!selected ? (
+                        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#334155', gap: 8 }}>
+                            <span style={{ fontSize: 40 }}>🦷</span>
+                            <p style={{ fontSize: 13 }}>Selecciona un estudio o arrastra un archivo</p>
                         </div>
-                    ) : isDicom && !dicomFile ? (
-                        /* DICOM de red sin archivo local → panel informativo */
-                        <div style={{ textAlign: 'center', color: '#475569', padding: 32 }}>
-                            <div style={{ fontSize: 40, marginBottom: 12 }}>🔬</div>
-                            <p style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8', marginBottom: 6 }}>Estudio DICOM</p>
-                            <p style={{ fontSize: 11, marginBottom: 16, lineHeight: 1.6 }}>
-                                Este estudio está almacenado en el servidor de imágenes.<br />
-                                Usa el botón <strong style={{ color: '#22d3ee' }}>Romexis</strong> o <strong style={{ color: '#94a3b8' }}>Weasis</strong> para abrirlo.
+                    ) : dicomFile ? (
+                        <React.Suspense fallback={<div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontSize: 12 }}>Cargando visor DICOM…</div>}>
+                            <DicomViewer file={dicomFile} />
+                        </React.Suspense>
+                    ) : isDicom && selected.rutaOrigen ? (
+                        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#475569', padding: 32, textAlign: 'center', gap: 10 }}>
+                            <span style={{ fontSize: 48 }}>🔬</span>
+                            <p style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8' }}>Estudio DICOM en servidor</p>
+                            <p style={{ fontSize: 11, lineHeight: 1.7, maxWidth: 320 }}>
+                                Usa <strong style={{ color: '#22d3ee' }}>Romexis</strong> o <strong style={{ color: '#94a3b8' }}>Weasis</strong> para abrirlo,<br />
+                                o <strong style={{ color: '#60a5fa' }}>importa el .dcm</strong> con el botón de la galería.
                             </p>
-                            {selected.rutaOrigen && (
-                                <code style={{ display: 'block', background: '#0d1018', border: '1px solid #1e2535', borderRadius: 6, padding: '6px 10px', fontSize: 10, color: '#64748b', wordBreak: 'break-all' }}>
-                                    {selected.rutaOrigen}
-                                </code>
-                            )}
+                            <code style={{ background: '#0d1018', border: '1px solid #1e2535', borderRadius: 6, padding: '6px 10px', fontSize: 10, color: '#475569', wordBreak: 'break-all', maxWidth: 340 }}>
+                                {selected.rutaOrigen}
+                            </code>
                         </div>
                     ) : (
-                        /* Imagen (estándar o DICOM importado) con filtros CSS */
-                        <img
-                            src={displayUrl}
-                            alt={selected.nombre}
-                            style={{
-                                maxWidth: '100%',
-                                maxHeight: '100%',
-                                objectFit: 'contain',
-                                filter: [
-                                    `brightness(${1 + brightness / 100})`,
-                                    `contrast(${1 + contrast / 100})`,
-                                    invertImg ? 'invert(1)' : '',
-                                ].filter(Boolean).join(' '),
-                                transform: [
-                                    `rotate(${rotation}deg)`,
-                                    flipH ? 'scaleX(-1)' : '',
-                                    flipV ? 'scaleY(-1)' : '',
-                                ].filter(Boolean).join(' '),
-                                transition: 'filter 0.15s, transform 0.15s',
-                            }}
-                        />
+                        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#060809', overflow: 'hidden' }}>
+                            {displayUrl && (
+                                <img key={displayUrl} src={displayUrl} alt={selected.nombre}
+                                    style={{
+                                        maxWidth: '100%', maxHeight: '100%', objectFit: 'contain',
+                                        filter: [
+                                            `brightness(${1 + brightness / 100})`,
+                                            `contrast(${1 + contrast / 100})`,
+                                            invertImg ? 'invert(1)' : '',
+                                            colorMap !== 'grayscale' ? 'saturate(1.5)' : '',
+                                        ].filter(Boolean).join(' '),
+                                        transform: [
+                                            `rotate(${rotation}deg)`,
+                                            flipH ? 'scaleX(-1)' : '',
+                                            flipV ? 'scaleY(-1)' : '',
+                                        ].filter(Boolean).join(' '),
+                                        transition: 'filter 0.15s, transform 0.15s',
+                                    }}
+                                />
+                            )}
+                        </div>
                     )}
                 </div>
             </div>
 
-            {/* ── PANEL DERECHO: controles ─────────────────────────────────── */}
+            {/* ── PANEL DERECHO ─────────────────────────────────────────────── */}
             <div style={{ width: 268, flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #1e2535', background: '#0d1018', overflowY: 'auto' }}>
 
-                {/* Ajuste de imagen */}
-                {(!isDicom || dicomFile || !selected?.rutaOrigen) && (
+                {/* Ajuste imagen (solo si no es DicomViewer — éste tiene sus propios controles) */}
+                {!dicomFile && (
                     <div style={{ padding: '10px 14px', borderBottom: '1px solid #1e2535' }}>
-                        <p style={{ color: '#64748b', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-                            Ajuste de imagen
-                        </p>
+                        <p style={{ color: '#64748b', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Ajuste de imagen</p>
                         <SliderRow label="Brillo" value={brightness} min={-100} max={100} onChange={setBrightness} />
                         <SliderRow label="Contraste" value={contrast} min={-100} max={100} onChange={setContrast} />
                     </div>
                 )}
 
-                {/* Info DICOM — controles en Romexis (solo si es estudio de red, no local) */}
-                {isDicom && !dicomFile && (
-                    <div style={{ padding: '10px 14px', borderBottom: '1px solid #1e2535' }}>
-                        <p style={{ color: '#64748b', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
-                            Imagen DICOM
-                        </p>
-                        <p style={{ color: '#334155', fontSize: 11, lineHeight: 1.5, margin: 0 }}>
-                            Los controles W/L, presets y layout 3D están disponibles dentro de Planmeca Romexis.
-                        </p>
-                    </div>
-                )}
-
                 {/* Mapa de color */}
-                {(!isDicom || dicomFile || !selected?.rutaOrigen) && (
+                {!dicomFile && (
                     <div style={{ padding: '10px 14px', borderBottom: '1px solid #1e2535' }}>
                         <p style={{ color: '#64748b', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
                             <Palette style={{ display: 'inline', width: 10, height: 10, marginRight: 4 }} />
@@ -641,12 +523,7 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                             {COLOR_MAPS.map(cm => (
                                 <button key={cm.value} title={cm.label} onClick={() => handleColorMap(cm.value as ColorMap)}
-                                    style={{
-                                        padding: '3px 8px', border: `1px solid ${colorMap === cm.value ? '#3b82f6' : '#1e2535'}`,
-                                        borderRadius: 4, cursor: 'pointer', fontSize: 10,
-                                        background: colorMap === cm.value ? '#1e40af' : '#141820',
-                                        color: colorMap === cm.value ? '#93c5fd' : '#64748b',
-                                    }}>
+                                    style={{ padding: '3px 8px', border: `1px solid ${colorMap === cm.value ? '#3b82f6' : '#1e2535'}`, borderRadius: 4, cursor: 'pointer', fontSize: 10, background: colorMap === cm.value ? '#1e40af' : '#141820', color: colorMap === cm.value ? '#93c5fd' : '#64748b' }}>
                                     {cm.label}
                                 </button>
                             ))}
@@ -662,9 +539,9 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
                             Metadatos DICOM
                         </p>
                         {[
-                            ['Descripción', selected.dicomMeta.studyDescription],
                             ['Modalidad', selected.dicomMeta.modality],
-                            ['Fecha estudio', selected.dicomMeta.studyDate?.replace(/(\d{4})(\d{2})(\d{2})/, '$3/$2/$1')],
+                            ['Descripción', selected.dicomMeta.studyDescription],
+                            ['Fecha', selected.dicomMeta.studyDate?.replace(/(\d{4})(\d{2})(\d{2})/, '$3/$2/$1')],
                             ['kVp', selected.dicomMeta.kvp?.toString()],
                             ['mA', selected.dicomMeta.tubeCurrent?.toString()],
                             ['Exposición', selected.dicomMeta.exposureTime ? `${selected.dicomMeta.exposureTime} ms` : undefined],
@@ -672,72 +549,32 @@ const Radiologia: React.FC<RadiologiaProps> = ({ activeSubArea, onStudySelect })
                             ['Institución', selected.dicomMeta.institutionName],
                             ['Tamaño', formatBytes(selected.fileSize)],
                         ].filter(([, v]) => v).map(([k, v]) => (
-                            <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                <span style={{ color: '#475569', fontSize: 10 }}>{k}</span>
-                                <span style={{ color: '#94a3b8', fontSize: 10, fontWeight: 600, maxWidth: 130, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</span>
+                            <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, gap: 6 }}>
+                                <span style={{ color: '#475569', fontSize: 10, flexShrink: 0 }}>{k}</span>
+                                <span style={{ color: '#94a3b8', fontSize: 10, fontWeight: 600, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</span>
                             </div>
                         ))}
                     </div>
                 )}
 
-
-                {/* Mediciones */}
-                <div style={{ padding: '10px 14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <p style={{ color: '#64748b', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
-                            Mediciones ({measurements.length})
-                        </p>
-                        {measurements.length > 0 && (
-                            <button onClick={() => setMeasurements([])}
-                                style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 10 }}>
-                                Limpiar
-                            </button>
+                {/* Descripción */}
+                {selected && (
+                    <div style={{ padding: '10px 14px' }}>
+                        <p style={{ color: '#64748b', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Estudio</p>
+                        {selected.descripcion && <p style={{ color: '#475569', fontSize: 11, lineHeight: 1.5, margin: '0 0 6px' }}>{selected.descripcion}</p>}
+                        <p style={{ color: '#334155', fontSize: 10, margin: 0 }}>{selected.doctor} · {formatDate(selected.fecha)}</p>
+                        {selected.tags.length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 8 }}>
+                                {selected.tags.map(tag => (
+                                    <span key={tag} style={{ background: '#141820', color: '#475569', fontSize: 9, padding: '2px 6px', borderRadius: 3, border: '1px solid #1e2535' }}>{tag}</span>
+                                ))}
+                            </div>
                         )}
-                    </div>
-                    {measurements.length === 0 && (
-                        <p style={{ color: '#334155', fontSize: 11, textAlign: 'center', padding: '8px 0' }}>
-                            Selecciona una herramienta y haz clic en la imagen para añadir mediciones.
-                        </p>
-                    )}
-                    {measurements.map((m) => (
-                        <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', background: '#141820', borderRadius: 5, marginBottom: 3, border: `1px solid ${m.color}33` }}>
-                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: m.color, flexShrink: 0 }} />
-                            <span style={{ color: '#94a3b8', fontSize: 10, flex: 1 }}>
-                                {m.tool.replace('roi', 'ROI ').replace('ruler', 'Regla').replace('angle', 'Ángulo').replace('arrow', 'Flecha').replace('text', 'Texto').replace('roiRect', 'ROI Rect').replace('roiEllipse', 'ROI Elipse')}
-                                {m.label ? ` — ${m.label}` : ''}
-                            </span>
-                            <button onClick={() => setMeasurements(prev => prev.filter(x => x.id !== m.id))}
-                                style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 12, lineHeight: 1 }}>
-                                ✕
-                            </button>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Descripción estudio */}
-                {selected?.descripcion && (
-                    <div style={{ padding: '10px 14px', borderTop: '1px solid #1e2535' }}>
-                        <p style={{ color: '#64748b', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Descripción</p>
-                        <p style={{ color: '#475569', fontSize: 11, lineHeight: 1.5, margin: 0 }}>{selected.descripcion}</p>
-                        <p style={{ color: '#334155', fontSize: 10, marginTop: 4 }}>{selected.doctor} · {formatDate(selected.fecha)}</p>
                     </div>
                 )}
             </div>
         </div>
     );
 };
-
-// ── SliderRow helper ───────────────────────────────────────────────────────────
-
-const SliderRow: React.FC<{ label: string; value: number; min: number; max: number; onChange: (v: number) => void }> = ({ label, value, min, max, onChange }) => (
-    <div style={{ marginBottom: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-            <span style={{ color: '#64748b', fontSize: 11 }}>{label}</span>
-            <span style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600 }}>{value}</span>
-        </div>
-        <input type="range" min={min} max={max} value={value} onChange={e => onChange(Number(e.target.value))}
-            style={{ width: '100%', accentColor: '#3b82f6', cursor: 'pointer' }} />
-    </div>
-);
 
 export default Radiologia;
