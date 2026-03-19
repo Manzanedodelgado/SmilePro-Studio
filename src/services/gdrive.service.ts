@@ -7,6 +7,8 @@
 //  Backend: GET /api/gdrive/photos/:numPac?apellidos=&nombre=
 // ─────────────────────────────────────────────────────────────────
 
+import { authFetch } from './db';
+
 const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000';
 
 export const isGDriveConfigured = (): boolean => true; // Siempre activo via backend proxy
@@ -44,15 +46,9 @@ export const getPatientPhotos = async (
     if (!numPac) return MOCK_PHOTOS;
 
     try {
-        const token = localStorage.getItem('smilepro_token');
         const params = new URLSearchParams({ apellidos, nombre });
-        const res = await fetch(
-            `${API_BASE}/api/gdrive/photos/${encodeURIComponent(numPac)}?${params}`,
-            {
-                headers: {
-                    'Authorization': token ? `Bearer ${token}` : '',
-                },
-            }
+        const res = await authFetch(
+            `${API_BASE}/api/gdrive/photos/${encodeURIComponent(numPac)}?${params}`
         );
 
         if (!res.ok) return MOCK_PHOTOS;
@@ -72,13 +68,9 @@ export const createPatientDriveFolder = async (
     nombre: string
 ): Promise<{ id: string; name: string; url: string } | null> => {
     try {
-        const token = localStorage.getItem('smilepro_token');
-        const res = await fetch(`${API_BASE}/api/gdrive/patient-folder`, {
+        const res = await authFetch(`${API_BASE}/api/gdrive/patient-folder`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': token ? `Bearer ${token}` : '',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ numPac, apellidos, nombre }),
         });
         if (!res.ok) return null;
