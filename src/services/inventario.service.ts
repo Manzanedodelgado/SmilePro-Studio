@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────────
 import { type ItemInventario, type Lote, type EstadoLote } from '../types';
 import { logger } from './logger';
+import { authFetch } from './db';
 
 const API_BASE = 'http://localhost:3000/api/inventory';
 
@@ -31,7 +32,7 @@ const mapProduct = (r: any): ItemInventario => ({
 
 export const getItemsInventario = async (): Promise<ItemInventario[]> => {
     try {
-        const res = await fetch(`${API_BASE}/products`);
+        const res = await authFetch(`${API_BASE}/products`);
         if (!res.ok) return [];
         const json = await res.json();
         return (json.data ?? []).map(mapProduct);
@@ -43,7 +44,7 @@ export const getItemsInventario = async (): Promise<ItemInventario[]> => {
 
 export const updateStock = async (productId: string, quantity: number, reason?: string): Promise<boolean> => {
     try {
-        const res = await fetch(`${API_BASE}/movements`, {
+        const res = await authFetch(`${API_BASE}/movements`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ productId, quantity, reason: reason ?? 'Ajuste manual' }),
@@ -57,7 +58,7 @@ export const updateStock = async (productId: string, quantity: number, reason?: 
 
 export const addLote = async (productId: string, lotNumber: string, quantity: number, expiryDate?: string): Promise<boolean> => {
     try {
-        const res = await fetch(`${API_BASE}/lots`, {
+        const res = await authFetch(`${API_BASE}/lots`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ productId, lotNumber, quantity, expiryDate }),

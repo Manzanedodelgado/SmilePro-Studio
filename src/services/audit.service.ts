@@ -4,6 +4,8 @@
 //  SIN dependencia de db.ts / backend.
 // ─────────────────────────────────────────────────────────────────
 
+import { authFetch } from './db';
+
 const API_BASE = 'http://localhost:3000/api/admin';
 
 export type AuditAction =
@@ -65,7 +67,7 @@ export const clearAuditUser = () => {
 
 export const logAudit = (entry: AuditEntry): void => {
     // Fire-and-forget — no bloquea la UI
-    fetch(`${API_BASE}/audit`, {
+    authFetch(`${API_BASE}/audit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -82,7 +84,7 @@ export const logAudit = (entry: AuditEntry): void => {
 
 export const getAuditLog = async (_limit = 50): Promise<AuditRow[]> => {
     try {
-        const res = await fetch(`${API_BASE}/audit`);
+        const res = await authFetch(`${API_BASE}/audit`);
         if (!res.ok) return [];
         const json = await res.json();
         return json.data ?? [];

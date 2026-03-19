@@ -13,6 +13,7 @@
 
 import type { GmailInvoiceEmail } from './gmail.service';
 import { downloadAttachment } from './gmail.service';
+import { authFetch } from './db';
 
 export interface FacturaExtraida {
     // Identificación
@@ -471,7 +472,7 @@ export const saveFacturasToBackend = async (
         estado: f.estado,
     }));
 
-    await fetch(`${API_URL}/api/accounting/email-invoices/batch`, {
+    await authFetch(`${API_URL}/api/accounting/email-invoices/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(rows),
@@ -484,9 +485,8 @@ export const saveFacturasToBackend = async (
 export const loadFacturasFromBackend = async (): Promise<FacturaExtraida[]> => {
     if (!API_URL) return [];
     try {
-        const res = await fetch(
+        const res = await authFetch(
             `${API_URL}/api/accounting/email-invoices?order=fecha_email.desc&limit=200`,
-            { headers: { 'Content-Type': 'application/json' } },
         );
         if (!res.ok) return [];
         const rows = await res.json() as Record<string, unknown>[];
@@ -524,7 +524,7 @@ export const updateFacturaEstado = async (
     estado: FacturaExtraida['estado'],
 ): Promise<void> => {
     if (!API_URL || gmailMessageId.startsWith('mock-')) return;
-    await fetch(
+    await authFetch(
         `${API_URL}/api/accounting/email-invoices/${encodeURIComponent(gmailMessageId)}/estado`,
         {
             method: 'PATCH',

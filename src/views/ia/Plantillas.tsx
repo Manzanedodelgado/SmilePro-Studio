@@ -1,5 +1,22 @@
 import React, { useState } from 'react';
-import { MessageSquare, Mail, FileText, Clipboard, Edit3, Save, X, Copy, Check } from 'lucide-react';
+import { MessageSquare, Mail, FileText, Clipboard, Edit3, Save, X, Copy, Check, Loader2 } from 'lucide-react';
+
+import { authFetch } from '../../services/db';
+
+const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000';
+
+const persistTemplate = async (t: Template): Promise<boolean> => {
+    try {
+        const res = await authFetch(`${API_BASE}/api/ai/templates/${t.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: t.name, content: t.content, type: t.type, category: t.category, vars: t.vars }),
+        });
+        return res.ok;
+    } catch {
+        return false;
+    }
+};
 
 type TemplateType = 'whatsapp' | 'sms' | 'email' | 'documento' | 'cuestionario';
 interface Template { id: string; name: string; type: TemplateType; category: string; content: string; vars: string[] }
@@ -181,13 +198,17 @@ export const Plantillas: React.FC = () => {
     const [search, setSearch] = useState('');
     const [editing, setEditing] = useState<Template | null>(null);
     const [copied, setCopied] = useState<string | null>(null);
+    const [saving, setSaving] = useState(false);
 
     const filtered = templates
         .filter(t => filterType === 'all' || t.type === filterType)
         .filter(t => !search || t.name.toLowerCase().includes(search.toLowerCase()));
 
-    const handleSave = (t: Template) => {
+    const handleSave = async (t: Template) => {
+        setSaving(true);
+        await persistTemplate(t);
         setTemplates(p => p.map(x => x.id === t.id ? t : x));
+        setSaving(false);
         setEditing(null);
     };
 
@@ -244,8 +265,9 @@ export const Plantillas: React.FC = () => {
                         <textarea value={editing.content} onChange={e => setEditing({ ...editing, content: e.target.value })} rows={12}
                             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[13px] text-slate-700 font-mono focus:outline-none focus:ring-2 focus:ring-[#0056b3]/20 resize-none" />
                     </div>
-                    <button onClick={() => handleSave(editing)} className="flex items-center gap-2 px-4 py-2 bg-[#0056b3] text-white rounded-xl text-[12px] font-bold uppercase hover:bg-[#004494] transition-all">
-                        <Save className="w-3.5 h-3.5" />Guardar plantilla
+                    <button onClick={() => handleSave(editing)} disabled={saving} className="flex items-center gap-2 px-4 py-2 bg-[#0056b3] text-white rounded-xl text-[12px] font-bold uppercase hover:bg-[#004494] transition-all disabled:opacity-60">
+                        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        {saving ? 'Guardando...' : 'Guardar plantilla'}
                     </button>
                 </div>
             ) : (

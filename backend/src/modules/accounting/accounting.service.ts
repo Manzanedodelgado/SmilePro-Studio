@@ -276,8 +276,92 @@ export const AccountingService = {
         return { data, pagination: buildPagination(1, 50, data.length) };
     },
     createPayment: async (input: any) => ({ id: 'readonly', ...input }),
-    getBudgets: async (_q: any) => ({ data: [], pagination: buildPagination(1, 20, 0) }),
-    getBudgetById: async (id: string) => ({ id, items: [], total: 0 }),
+    getBudgets: async (q: any) => {
+        const page = Math.max(1, parseInt(q.page ?? '1', 10));
+        const pageSize = Math.min(200, parseInt(q.pageSize ?? '50', 10));
+        const skip = (page - 1) * pageSize;
+
+        const where: any = {};
+        if (q.patientId) {
+            // patientId can be NumPac (string) or IdPac (number)
+            const idNum = parseInt(q.patientId, 10);
+            if (!isNaN(idNum)) {
+                where.IdPac = idNum;
+            } else {
+                // Lookup IdPac from NumPac
+                const pac = await prisma.pacientes.findFirst({ where: { NumPac: q.patientId }, select: { IdPac: true } });
+                if (!pac) return { data: [], pagination: buildPagination(page, pageSize, 0) };
+                where.IdPac = pac.IdPac;
+            }
+        }
+
+        const [rows, total] = await Promise.all([
+            prisma.presu.findMany({ where, orderBy: { fechareg: 'desc' }, skip, take: pageSize }),
+            prisma.presu.count({ where }),
+        ]);
+
+        if (rows.length === 0) return { data: [], pagination: buildPagination(page, pageSize, total) };
+
+        // Load lines for all presupuestos
+        const idents = rows.map(r => r.Ident).filter(Boolean);
+        const lineas = idents.length > 0
+            ? await prisma.presuTto.findMany({ where: { Id_Presu: { in: idents } }, orderBy: { LinPre: 'asc' } })
+            : [];
+        const linMap = new Map<number, typeof lineas>();
+        for (const l of lineas) {
+            if (l.Id_Presu == null) continue;
+            if (!linMap.has(l.Id_Presu)) linMap.set(l.Id_Presu, []);
+            linMap.get(l.Id_Presu)!.push(l);
+        }
+
+        const ESTADO_MAP: Record<number, string> = {
+            0: 'Borrador', 1: 'Pendiente', 2: 'Aceptado', 3: 'En curso',
+            4: 'Finalizado', 5: 'Rechazado', 6: 'Caducado',
+        };
+
+        const data = rows.map(r => {
+            const ls = linMap.get(r.Ident) ?? [];
+            const importeTotal   = ls.reduce((s, l) => s + toNum(l.ImportePre), 0);
+            const importeCobrado = ls.reduce((s, l) => s + toNum(l.ImportePre) * (toNum(l.StaTto) === 4 ? 1 : 0), 0);
+            return {
+                id: r.Ident,
+                idPac: String(r.IdPac),
+                lineas: ls.map(l => ({
+                    id: String(l.Ident),
+                    idPre: r.Ident,
+                    descripcion: l.Notas ?? '',
+                    pieza: l.PiezasNum != null ? String(l.PiezasNum) : undefined,
+                    cantidad: toNum(l.Unidades) || 1,
+                    precioPresupuesto: toNum(l.ImportePre),
+                    precioUnitario: toNum(l.ImporteUni ?? l.ImportePre),
+                    descuento: toNum(l.Dto),
+                    importeLinea: toNum(l.ImportePre),
+                    importeCobrado: 0,
+                    estado: toNum(l.StaTto) === 4 ? 'Finalizado' : toNum(l.StaTto) === 5 ? 'Anulado' : toNum(l.StaTto) === 2 ? 'En tratamiento' : 'Pendiente',
+                    fecha: l.FecIni?.toISOString().slice(0, 10),
+                })),
+                importeTotal,
+                importeCobrado,
+                importePendiente: importeTotal - importeCobrado,
+                importePagado: importeCobrado,
+                lineasPendientes: ls.filter(l => toNum(l.StaTto) !== 4 && toNum(l.StaTto) !== 5).length,
+                lineasFinalizadas: ls.filter(l => toNum(l.StaTto) === 4).length,
+                estado: ESTADO_MAP[r.Estado] ?? 'Pendiente',
+                fecha: r.FecPresup?.toISOString().slice(0, 10),
+                fechaInicio: r.FecPresup?.toISOString().slice(0, 10),
+                fechaAceptacion: r.FecAcepta?.toISOString().slice(0, 10),
+                notas: r.Notas ?? undefined,
+            };
+        });
+
+        return { data, pagination: buildPagination(page, pageSize, total) };
+    },
+    getBudgetById: async (id: string) => {
+        const r = await prisma.presu.findFirst({ where: { Ident: parseInt(id, 10) } });
+        if (!r) return { id, items: [], total: 0 };
+        const ls = await prisma.presuTto.findMany({ where: { Id_Presu: r.Ident }, orderBy: { LinPre: 'asc' } });
+        return { id: r.Ident, items: ls, total: ls.reduce((s, l) => s + toNum(l.ImportePre), 0) };
+    },
     createBudget: async (input: any) => ({ id: 'readonly', ...input }),
     approveBudget: async (id: string) => ({ id, status: 'approved' }),
     getPatientBalance,

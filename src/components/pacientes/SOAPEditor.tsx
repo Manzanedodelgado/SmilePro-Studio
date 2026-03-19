@@ -5,6 +5,7 @@ import {
     CheckCircle, Loader2, Calendar, Save, X, Search
 } from 'lucide-react';
 import { searchTratamientos, getCategorias, type Tratamiento } from '../../services/tratamientos.service';
+import { analyzeTranscriptWithAI, isAIConfiguredSync } from '../../services/ia-dental.service';
 
 interface SOAPEditorProps {
     onSave: (noteData: {
@@ -41,61 +42,25 @@ const PIEZAS_ADULTO = [
     41, 42, 43, 44, 45, 46, 47, 48,
 ];
 
-const SIN_DATOS = 'Sin datos relacionados';
-
-/** Analiza el transcript y llena los campos SOAP con IA (mock rule-based) */
-function analyzeTranscript(transcript: string): {
+/** Fallback rule-based cuando la IA no está disponible */
+function analyzeTranscriptFallback(transcript: string): {
     subjetivo: string; objetivo: string; analisis: string; plan: string; eva: number;
 } {
     const t = transcript.toLowerCase();
-
     const evaMatch = t.match(/eva\s*(\d+)|dolor\s*(\d+)(?:\s*sobre\s*10)?|(\d+)\s*(?:sobre|de)\s*10/);
     const eva = evaMatch ? parseInt(evaMatch[1] ?? evaMatch[2] ?? evaMatch[3] ?? '0') : 0;
 
-    const subjetivoPatterns = [
-        /(?:paciente (?:refiere|dice|comenta|indica|menciona|acude|viene)[^.]*\.)/gi,
-        /(?:motivo de consulta[^.]*\.)/gi,
-        /(?:dolor (?:en|de)[^.]*\.)/gi,
-    ];
-    const subjetivoPartes: string[] = [];
-    subjetivoPatterns.forEach(r => {
-        const m = transcript.match(r);
-        if (m) subjetivoPartes.push(...m);
-    });
-
-    const objetivoPatterns = [
-        /(?:(?:a la exploración|exploración clínica|radiografía|rx|sondaje)[^.]*\.)/gi,
-        /(?:(?:encía|mucosa|tejidos|implante)[^.]*\.)/gi,
-    ];
-    const objetivoPartes: string[] = [];
-    objetivoPatterns.forEach(r => {
-        const m = transcript.match(r);
-        if (m) objetivoPartes.push(...m);
-    });
-
-    const analisisPatterns = [
-        /(?:(?:diagnóstico|diagnosi|se trata de|compatible con|juicio clínico)[^.]*\.)/gi,
-    ];
-    const analisisPartes: string[] = [];
-    analisisPatterns.forEach(r => {
-        const m = transcript.match(r);
-        if (m) analisisPartes.push(...m);
-    });
-
-    const planPatterns = [
-        /(?:(?:se procede|se realiza|se aplica|tratamiento|plan|prescrib|siguiente visita|próxima cita)[^.]*\.)/gi,
-    ];
-    const planPartes: string[] = [];
-    planPatterns.forEach(r => {
-        const m = transcript.match(r);
-        if (m) planPartes.push(...m);
-    });
+    const extract = (patterns: RegExp[]) => {
+        const parts: string[] = [];
+        patterns.forEach(r => { const m = transcript.match(r); if (m) parts.push(...m); });
+        return parts.join(' ').trim();
+    };
 
     return {
-        subjetivo: subjetivoPartes.length ? subjetivoPartes.join(' ').trim() : SIN_DATOS,
-        objetivo: objetivoPartes.length ? objetivoPartes.join(' ').trim() : SIN_DATOS,
-        analisis: analisisPartes.length ? analisisPartes.join(' ').trim() : SIN_DATOS,
-        plan: planPartes.length ? planPartes.join(' ').trim() : SIN_DATOS,
+        subjetivo: extract([/(?:paciente (?:refiere|dice|comenta|indica|menciona|acude|viene)[^.]*\.)/gi, /(?:motivo de consulta[^.]*\.)/gi, /(?:dolor (?:en|de)[^.]*\.)/gi]),
+        objetivo:  extract([/(?:(?:a la exploración|exploración clínica|radiografía|rx|sondaje)[^.]*\.)/gi, /(?:(?:encía|mucosa|tejidos|implante)[^.]*\.)/gi]),
+        analisis:  extract([/(?:(?:diagnóstico|diagnosi|se trata de|compatible con|juicio clínico)[^.]*\.)/gi]),
+        plan:      extract([/(?:(?:se procede|se realiza|se aplica|tratamiento|plan|prescrib|siguiente visita|próxima cita)[^.]*\.)/gi]),
         eva,
     };
 }
@@ -133,6 +98,8 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const recognitionRef = useRef<any>(null);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    // Ref para evitar stale closure en recognition.onend
+    const isListeningRef = useRef(false);
 
     // Load categorías on mount
     useEffect(() => {
@@ -195,11 +162,13 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
         };
         recognition.onerror = () => stopListening(accumulated);
         recognition.onend = () => {
-            if (listenState === 'listening') stopListening(accumulated);
+            // Usar ref en lugar de listenState para evitar stale closure
+            if (isListeningRef.current) stopListening(accumulated);
         };
 
         recognitionRef.current = recognition;
         recognition.start();
+        isListeningRef.current = true;
         setListenState('listening');
         setListenSec(0);
 
@@ -207,24 +176,33 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
     };
 
     const stopListening = (finalTranscript?: string) => {
+        isListeningRef.current = false;
         recognitionRef.current?.stop();
         if (timerRef.current) clearInterval(timerRef.current);
         const text = finalTranscript ?? transcript;
         if (!text.trim()) { setListenState('idle'); return; }
 
         setListenState('analyzing');
-        setTimeout(() => {
-            const filled = analyzeTranscript(text);
+
+        const applyFilled = (filled: { subjetivo: string; objetivo: string; analisis: string; plan: string; eva: number }) => {
             setNota(prev => ({
                 ...prev,
-                subjetivo: filled.subjetivo !== SIN_DATOS ? filled.subjetivo : prev.subjetivo,
-                objetivo: filled.objetivo !== SIN_DATOS ? filled.objetivo : prev.objetivo,
-                analisis: filled.analisis !== SIN_DATOS ? filled.analisis : prev.analisis,
-                plan: filled.plan !== SIN_DATOS ? filled.plan : prev.plan,
-                eva: filled.eva > 0 ? filled.eva : prev.eva,
+                subjetivo: filled.subjetivo ? filled.subjetivo : prev.subjetivo,
+                objetivo:  filled.objetivo  ? filled.objetivo  : prev.objetivo,
+                analisis:  filled.analisis  ? filled.analisis  : prev.analisis,
+                plan:      filled.plan      ? filled.plan      : prev.plan,
+                eva:       filled.eva > 0   ? filled.eva       : prev.eva,
             }));
             setListenState('done');
-        }, 1200);
+        };
+
+        if (isAIConfiguredSync()) {
+            analyzeTranscriptWithAI(text).then(applyFilled).catch(() => {
+                applyFilled(analyzeTranscriptFallback(text));
+            });
+        } else {
+            setTimeout(() => applyFilled(analyzeTranscriptFallback(text)), 800);
+        }
     };
 
     const selectTratamiento = (tto: Tratamiento) => {
@@ -246,7 +224,6 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
             return;
         }
         setSaving(true);
-        await new Promise(r => setTimeout(r, 600));
         onSave({
             ...nota,
             tratamiento_id: selectedTto?.id ?? initialData?.tratamiento_id,
@@ -269,7 +246,7 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
         }
     };
 
-    const textAreaCls = "w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 font-medium outline-none focus:border-[#051650] focus:ring-2 focus:ring-[#051650]/10 resize-none transition-all placeholder:text-slate-300";
+    const textAreaCls = "w-full px-3.5 py-2.5 bg-white border border-slate-200/60 rounded-xl text-[13px] text-slate-700 font-medium outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 focus:shadow-sm resize-none transition-all placeholder:text-slate-300 leading-relaxed";
 
     const listenIcon = listenState === 'listening'
         ? <MicOff className="w-5 h-5 text-white" />
@@ -277,69 +254,72 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
             ? <Loader2 className="w-5 h-5 text-white animate-spin" />
             : <Mic className="w-5 h-5 text-white" />;
 
-    const listenBg = listenState === 'listening'
-        ? 'bg-red-500 animate-pulse shadow-red-400/50'
-        : listenState === 'analyzing'
-            ? 'bg-amber-500'
-            : 'bg-[#051650] hover:bg-blue-800';
-
     const tipoApp = selectedTto?.tipo_aplicacion ?? 'boca';
 
     return (
-        <form onSubmit={handleSave} className="flex flex-col h-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            {/* Header */}
-            <div className="bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center justify-between flex-wrap gap-2 shrink-0">
-                <div className="flex items-center gap-2">
-                    <Stethoscope className="w-4 h-4 text-[#051650]" />
-                    <h3 className="text-xs font-black uppercase tracking-widest text-[#051650]">
-                        {initialData ? 'Editar Evolutivo' : 'Nuevo Evolutivo'}
-                    </h3>
+        <form onSubmit={handleSave} className="flex flex-col h-full bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
+            {/* Header — premium gradient */}
+            <div className="bg-gradient-to-r from-[#051650] to-blue-800 px-5 py-3 flex items-center justify-between flex-wrap gap-2 shrink-0">
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center backdrop-blur-sm border border-white/10">
+                        <Stethoscope className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                        <h3 className="text-[12px] font-black uppercase tracking-widest text-white">
+                            {initialData ? 'Editar Evolutivo' : 'Nuevo Evolutivo'}
+                        </h3>
+                        <p className="text-[9px] text-white/50 font-medium">Registro médico legal — SOAP</p>
+                    </div>
                     <button
                         type="button"
                         onClick={() => listenState === 'listening' ? stopListening() : startListening()}
                         disabled={listenState === 'analyzing'}
-                        className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ml-1 ${listenBg}`}
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ml-2 ${listenState === 'listening'
+                            ? 'bg-red-500 animate-pulse shadow-lg shadow-red-500/30'
+                            : listenState === 'analyzing'
+                                ? 'bg-amber-500'
+                                : 'bg-white/15 hover:bg-white/25 border border-white/10'}`}
                         title="IA Dental — Escucha Activa"
                     >
                         {listenIcon}
                     </button>
-                    {listenState === 'listening' && <span className="text-[10px] text-red-500 font-bold animate-pulse">Escuchando... {String(Math.floor(listenSec / 60)).padStart(2, '0')}:{String(listenSec % 60).padStart(2, '0')}</span>}
-                    {listenState === 'analyzing' && <span className="text-[10px] text-amber-500 font-bold">Analizando...</span>}
-                    {listenState === 'done' && <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />}
+                    {listenState === 'listening' && <span className="text-[10px] text-red-300 font-bold animate-pulse">REC {String(Math.floor(listenSec / 60)).padStart(2, '0')}:{String(listenSec % 60).padStart(2, '0')}</span>}
+                    {listenState === 'analyzing' && <span className="text-[10px] text-amber-300 font-bold">Analizando...</span>}
+                    {listenState === 'done' && <CheckCircle className="w-4 h-4 text-emerald-400" />}
                 </div>
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    <div className="flex items-center gap-1.5 bg-white/10 rounded-lg px-2.5 py-1.5 border border-white/10">
+                        <Calendar className="w-3.5 h-3.5 text-white/60" />
                         <input
                             type="date"
                             value={nota.fecha}
                             onChange={e => setNota({ ...nota, fecha: e.target.value })}
-                            className="text-xs font-bold text-slate-600 bg-transparent outline-none border-b border-dashed border-slate-300 focus:border-[#051650] transition-colors"
+                            className="text-[11px] font-bold text-white bg-transparent outline-none [color-scheme:dark]"
                         />
                     </div>
                     <div className="relative">
                         <select
                             value={nota.especialidad}
                             onChange={e => setNota({ ...nota, especialidad: e.target.value })}
-                            className="appearance-none bg-white border border-slate-200 text-xs font-bold rounded-lg pl-3 pr-7 py-1 outline-none text-slate-600 uppercase cursor-pointer hover:border-[#051650] transition-all"
+                            className="appearance-none bg-white/10 border border-white/10 text-[11px] font-bold rounded-lg pl-3 pr-7 py-1.5 outline-none text-white cursor-pointer hover:bg-white/20 transition-all"
                         >
-                            {ESPECIALIDADES.map(e => <option key={e} value={e}>{e}</option>)}
+                            {ESPECIALIDADES.map(e => <option key={e} value={e} className="text-slate-800 bg-white">{e}</option>)}
                         </select>
-                        <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-1.5 pointer-events-none" />
+                        <ChevronDown className="w-3 h-3 text-white/60 absolute right-2 top-2 pointer-events-none" />
                     </div>
                 </div>
             </div>
 
-            <div className="p-3 pb-2 flex-1 flex flex-col gap-3 min-h-0 overflow-y-auto custom-scrollbar">
+            <div className="p-4 pb-3 flex-1 flex flex-col gap-3 min-h-0 overflow-y-auto custom-scrollbar">
 
                 {/* ── SELECTOR DE TRATAMIENTO ── */}
-                <div ref={ttoRef} className={`border rounded-lg p-2.5 transition-all ${!selectedTto && !initialData?.tratamiento_id
-                        ? 'border-amber-300 bg-amber-50/50'
-                        : 'border-slate-200 bg-white'
+                <div ref={ttoRef} className={`border rounded-xl p-3 transition-all ${!selectedTto && !initialData?.tratamiento_id
+                        ? 'border-amber-300 bg-amber-50/30 shadow-sm shadow-amber-100'
+                        : 'border-slate-200/60 bg-slate-50/30'
                     }`}>
-                    <label className="text-[10px] font-black text-[#051650] uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+                    <label className="text-[10px] font-black text-[#051650] uppercase tracking-wider flex items-center gap-1.5 mb-2">
                         <span className="w-2 h-2 rounded-full bg-violet-500" /> Tratamiento
-                        <span className="text-amber-500 text-[8px] font-normal normal-case ml-1">(obligatorio)</span>
+                        <span className="text-amber-500 text-[8px] font-semibold normal-case ml-1">(obligatorio)</span>
                     </label>
 
                     <div className="flex gap-2 items-start">
@@ -350,7 +330,7 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
                                 <select
                                     value={categoriaFilter}
                                     onChange={e => setCategoriaFilter(e.target.value)}
-                                    className="appearance-none bg-slate-50 border border-slate-200 text-[10px] font-bold rounded-lg pl-2 pr-5 py-1.5 outline-none text-slate-600 cursor-pointer hover:border-[#051650] transition-all w-28 shrink-0"
+                                    className="appearance-none bg-white border border-slate-200/60 text-[10px] font-bold rounded-lg pl-2.5 pr-5 py-2 outline-none text-slate-600 cursor-pointer hover:border-blue-300 focus:ring-2 focus:ring-blue-500/10 transition-all w-28 shrink-0 shadow-sm"
                                 >
                                     <option value="">Todas</option>
                                     {categorias.map(c => <option key={c} value={c}>{c}</option>)}
@@ -358,19 +338,19 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
 
                                 {/* Search input */}
                                 <div className="relative flex-1">
-                                    <Search className="w-3 h-3 text-slate-400 absolute left-2 top-2" />
+                                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
                                     <input
                                         type="text"
                                         value={ttoSearch}
                                         onChange={e => { setTtoSearch(e.target.value); setSelectedTto(null); }}
                                         onFocus={() => ttoSearch && setShowTtoDropdown(true)}
                                         placeholder="Buscar tratamiento..."
-                                        className="w-full pl-7 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 outline-none focus:border-[#051650] focus:ring-2 focus:ring-[#051650]/10 transition-all placeholder:text-slate-300"
+                                        className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200/60 rounded-lg text-[12px] font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 transition-all placeholder:text-slate-300 shadow-sm"
                                     />
                                     {selectedTto && (
                                         <button type="button" onClick={() => { setSelectedTto(null); setTtoSearch(''); }}
-                                            className="absolute right-2 top-1.5 text-slate-400 hover:text-slate-600">
-                                            <X className="w-3 h-3" />
+                                            className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 transition-colors">
+                                            <X className="w-3.5 h-3.5" />
                                         </button>
                                     )}
                                 </div>
@@ -378,19 +358,19 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
 
                             {/* Results dropdown */}
                             {showTtoDropdown && ttoResults.length > 0 && (
-                                <div className="absolute z-50 top-full mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                <div className="absolute z-50 top-full mt-1.5 w-full bg-white border border-slate-200/60 rounded-xl shadow-xl max-h-48 overflow-y-auto animate-scale-in">
                                     {ttoResults.map(tto => (
                                         <button
                                             key={tto.id} type="button"
                                             onClick={() => selectTratamiento(tto)}
-                                            className="w-full text-left px-3 py-1.5 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors"
+                                            className="w-full text-left px-3.5 py-2 hover:bg-blue-50/50 border-b border-slate-50 last:border-0 transition-colors"
                                         >
-                                            <span className="text-xs font-semibold text-slate-700">{tto.nombre}</span>
+                                            <span className="text-[12px] font-bold text-slate-700">{tto.nombre}</span>
                                             <span className="ml-2 text-[9px] font-medium text-slate-400">
                                                 {tto.categoria} · {tto.tipo_aplicacion === 'pieza' ? '🦷' : tto.tipo_aplicacion === 'cuadrante' ? '◔' : tto.tipo_aplicacion === 'arcada' ? '◡' : '○'}
                                             </span>
                                             {tto.precio > 0 && (
-                                                <span className="ml-2 text-[9px] font-bold text-emerald-600">{tto.precio.toFixed(2)}€</span>
+                                                <span className="ml-2 text-[10px] font-black text-emerald-600">{tto.precio.toFixed(2)}€</span>
                                             )}
                                         </button>
                                     ))}
@@ -403,7 +383,7 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
                             <select
                                 value={pieza ?? ''}
                                 onChange={e => setPieza(Number(e.target.value) || undefined)}
-                                className="appearance-none bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg pl-2 pr-5 py-1.5 outline-none text-slate-600 w-20 shrink-0"
+                                className="appearance-none bg-white border border-slate-200/60 text-[11px] font-bold rounded-lg pl-2.5 pr-5 py-2 outline-none text-slate-600 w-20 shrink-0 shadow-sm"
                             >
                                 <option value="">Pieza</option>
                                 {PIEZAS_ADULTO.map(p => <option key={p} value={p}>{p}</option>)}
@@ -413,7 +393,7 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
                             <select
                                 value={cuadrante ?? ''}
                                 onChange={e => setCuadrante(Number(e.target.value) || undefined)}
-                                className="appearance-none bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg pl-2 pr-5 py-1.5 outline-none text-slate-600 w-20 shrink-0"
+                                className="appearance-none bg-white border border-slate-200/60 text-[11px] font-bold rounded-lg pl-2.5 pr-5 py-2 outline-none text-slate-600 w-20 shrink-0 shadow-sm"
                             >
                                 <option value="">Cuad.</option>
                                 <option value="1">Q1 ↗</option>
@@ -426,7 +406,7 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
                             <select
                                 value={arcada ?? ''}
                                 onChange={e => setArcada(e.target.value || undefined)}
-                                className="appearance-none bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg pl-2 pr-5 py-1.5 outline-none text-slate-600 w-24 shrink-0"
+                                className="appearance-none bg-white border border-slate-200/60 text-[11px] font-bold rounded-lg pl-2.5 pr-5 py-2 outline-none text-slate-600 w-24 shrink-0 shadow-sm"
                             >
                                 <option value="">Arcada</option>
                                 <option value="superior">Superior</option>
@@ -437,28 +417,29 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
 
                     {/* Selected treatment chip */}
                     {selectedTto && (
-                        <div className="mt-1.5 flex items-center gap-1.5">
-                            <span className="text-[9px] bg-violet-100 text-violet-800 font-bold px-2 py-0.5 rounded-full">
-                                {selectedTto.nombre}
+                        <div className="mt-2 flex items-center gap-2">
+                            <span className="text-[10px] bg-violet-100 text-violet-800 font-black px-2.5 py-1 rounded-full border border-violet-200/50">
+                                ✓ {selectedTto.nombre}
                             </span>
-                            <span className="text-[9px] text-slate-400">{selectedTto.categoria}</span>
-                            {pieza && <span className="text-[9px] bg-blue-100 text-blue-700 font-bold px-1.5 py-0.5 rounded-full">Pieza {pieza}</span>}
-                            {cuadrante && <span className="text-[9px] bg-blue-100 text-blue-700 font-bold px-1.5 py-0.5 rounded-full">Q{cuadrante}</span>}
-                            {arcada && <span className="text-[9px] bg-blue-100 text-blue-700 font-bold px-1.5 py-0.5 rounded-full capitalize">{arcada}</span>}
+                            <span className="text-[9px] text-slate-400 font-medium">{selectedTto.categoria}</span>
+                            {pieza && <span className="text-[9px] bg-blue-100 text-blue-700 font-black px-2 py-0.5 rounded-full">Pieza {pieza}</span>}
+                            {cuadrante && <span className="text-[9px] bg-blue-100 text-blue-700 font-black px-2 py-0.5 rounded-full">Q{cuadrante}</span>}
+                            {arcada && <span className="text-[9px] bg-blue-100 text-blue-700 font-black px-2 py-0.5 rounded-full capitalize">{arcada}</span>}
                         </div>
                     )}
                 </div>
 
-                {/* Campos SOAP */}
+                {/* ── Campos SOAP — Premium cards con borde de color ── */}
                 <div className="grid grid-cols-2 gap-3 flex-1 min-h-0">
-                    {/* S */}
-                    <div className="flex flex-col min-h-0">
-                        <div className="flex items-center justify-between mb-1">
-                            <label className="text-[10px] font-black text-blue-600 uppercase tracking-wider flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-blue-500" /> S — Subjetivo
+                    {/* S — Subjetivo */}
+                    <div className="flex flex-col min-h-0 bg-blue-50/30 rounded-xl border border-blue-100/50 p-3">
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="text-[10px] font-black text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
+                                <span className="w-5 h-5 rounded-lg bg-blue-500 text-white flex items-center justify-center text-[9px] font-black shadow-sm">S</span>
+                                Subjetivo
                             </label>
-                            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5">
-                                <span className="text-[9px] font-bold text-slate-500">EVA:</span>
+                            <div className="flex items-center gap-1 bg-white border border-blue-200/50 rounded-full px-2.5 py-1 shadow-sm">
+                                <span className="text-[9px] font-black text-blue-600">EVA:</span>
                                 <input
                                     type="number" min={0} max={10}
                                     value={nota.eva}
@@ -473,30 +454,33 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
                             className={`${textAreaCls} flex-1 min-h-[50px] text-xs`} placeholder="Motivo de consulta, palabras del paciente..." />
                     </div>
 
-                    {/* O */}
-                    <div className="flex flex-col min-h-0">
-                        <label className="text-[10px] font-black text-orange-600 uppercase tracking-wider flex items-center gap-1.5 mb-1">
-                            <span className="w-2 h-2 rounded-full bg-orange-500" /> O — Objetivo
+                    {/* O — Objetivo */}
+                    <div className="flex flex-col min-h-0 bg-orange-50/30 rounded-xl border border-orange-100/50 p-3">
+                        <label className="text-[10px] font-black text-orange-700 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                            <span className="w-5 h-5 rounded-lg bg-orange-500 text-white flex items-center justify-center text-[9px] font-black shadow-sm">O</span>
+                            Objetivo
                         </label>
                         <textarea value={nota.objetivo}
                             onChange={e => setNota({ ...nota, objetivo: e.target.value })}
                             className={`${textAreaCls} flex-1 min-h-[50px] text-xs`} placeholder="Hallazgos físicos, pruebas, radiografías..." />
                     </div>
 
-                    {/* A */}
-                    <div className="flex flex-col min-h-0">
-                        <label className="text-[10px] font-black text-emerald-700 uppercase tracking-wider flex items-center gap-1.5 mb-1">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500" /> A — Análisis
+                    {/* A — Análisis */}
+                    <div className="flex flex-col min-h-0 bg-emerald-50/30 rounded-xl border border-emerald-100/50 p-3">
+                        <label className="text-[10px] font-black text-emerald-700 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                            <span className="w-5 h-5 rounded-lg bg-emerald-500 text-white flex items-center justify-center text-[9px] font-black shadow-sm">A</span>
+                            Análisis
                         </label>
                         <textarea value={nota.analisis}
                             onChange={e => setNota({ ...nota, analisis: e.target.value })}
                             className={`${textAreaCls} flex-1 min-h-[50px] text-xs`} placeholder="Juicio clínico y pronóstico..." />
                     </div>
 
-                    {/* P */}
-                    <div className="flex flex-col min-h-0">
-                        <label className="text-[10px] font-black text-[#051650] uppercase tracking-wider flex items-center gap-1.5 mb-1">
-                            <span className="w-2 h-2 rounded-full bg-[#051650]" /> P — Plan
+                    {/* P — Plan */}
+                    <div className="flex flex-col min-h-0 bg-indigo-50/30 rounded-xl border border-indigo-100/50 p-3">
+                        <label className="text-[10px] font-black text-indigo-700 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                            <span className="w-5 h-5 rounded-lg bg-[#051650] text-white flex items-center justify-center text-[9px] font-black shadow-sm">P</span>
+                            Plan
                         </label>
                         <textarea value={nota.plan}
                             onChange={e => setNota({ ...nota, plan: e.target.value })}
@@ -505,24 +489,24 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100 shrink-0 mt-auto">
-                    <p className="text-[9px] text-slate-500 font-medium italic">
-                        El registro se bloquea legalmente 24h tras la firma electrónica.
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100/60 shrink-0 mt-auto">
+                    <p className="text-[9px] text-slate-400 font-medium italic">
+                        ⚖ El registro se bloquea legalmente 24h tras la firma electrónica.
                     </p>
                     <div className="flex items-center gap-2">
                         {onCancel && (
                             <button type="button" onClick={onCancel}
-                                className="px-3 py-1.5 border border-slate-200 rounded-lg text-[9px] font-black uppercase text-slate-500 hover:bg-slate-50 transition-all">
+                                className="px-4 py-2 border border-slate-200 rounded-xl text-[10px] font-black uppercase text-slate-500 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-95">
                                 Cancelar
                             </button>
                         )}
                         <button
                             type="submit" disabled={saving}
-                            className="flex items-center gap-1.5 bg-[#051650] text-white px-4 py-1.5 rounded-lg font-black uppercase text-[10px] tracking-wider shadow-md hover:bg-blue-900 active:scale-95 transition-all disabled:opacity-60"
+                            className="flex items-center gap-2 bg-gradient-to-r from-[#051650] to-blue-800 text-white px-5 py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-blue-900/20 hover:shadow-xl hover:shadow-blue-900/30 hover:-translate-y-0.5 active:scale-95 transition-all disabled:opacity-60"
                         >
                             {saving
-                                ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Firmando...</>
-                                : <><Save className="w-3 h-3" /> {initialData ? 'Guardar' : 'Firmar'}</>
+                                ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Firmando...</>
+                                : <><Save className="w-3.5 h-3.5" /> {initialData ? 'Guardar Cambios' : 'Firmar Evolutivo'}</>
                             }
                         </button>
                     </div>

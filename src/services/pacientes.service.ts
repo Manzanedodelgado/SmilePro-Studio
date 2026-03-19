@@ -4,7 +4,7 @@
 // ─────────────────────────────────────────────────────────────────
 import { type Paciente } from '../types';
 import { logger } from './logger';
-import { authFetch } from './db';
+import { authFetch, isDbConfigured } from './db';
 
 export interface ValidationError { field: string; message: string; }
 
@@ -19,6 +19,9 @@ const mapPrismaToPaciente = (row: any): Paciente => ({
     dni: row.NIF ?? '',
     telefono: row.TelMovil ?? row.Tel1 ?? row.Tel2 ?? '',
     fechaNacimiento: row.FecNacim ? new Date(row.FecNacim).toISOString().split('T')[0] : '',
+    email: row.Email ?? undefined,
+    direccion: row.Direccion ?? undefined,
+    cp: row.CP ?? undefined,
     tutor: undefined,
     alergias: [],
     medicacionActual: undefined,
@@ -82,11 +85,15 @@ export const createPaciente = async (p: Omit<Paciente, 'historial'>): Promise<Pa
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                NumPac: p.numPac,
+                NumPac: p.numPac || undefined,
                 Nombre: p.nombre,
                 Apellidos: p.apellidos,
                 NIF: p.dni,
                 TelMovil: p.telefono,
+                Email: p.email,
+                Direccion: p.direccion,
+                CP: p.cp,
+                FecNacim: p.fechaNacimiento || undefined,
             })
         });
         if (!res.ok) throw new Error('Error al crear paciente');
@@ -131,4 +138,4 @@ export const deletePaciente = async (numPac: string): Promise<boolean> => {
     }
 };
 
-export const isDbConfigured = () => true;
+export { isDbConfigured };

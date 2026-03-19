@@ -1,8 +1,10 @@
+import { authFetch } from './db';
+
 const API_URL = ((import.meta as any).env?.VITE_API_URL ?? (import.meta as any).env?.VITE_SUPABASE_URL ?? 'http://localhost:3000') as string;
 
 export const getSpecialties = async () => {
     try {
-        const res = await fetch(`${API_URL}/api/catalogs/specialties`);
+        const res = await authFetch(`${API_URL}/api/catalogs/specialties`);
         if (!res.ok) throw new Error('Network response was not ok');
         const json = await res.json();
         return json.data;
@@ -18,7 +20,7 @@ export const getSpecialties = async () => {
 
 export const getTaxes = async () => {
     try {
-        const res = await fetch(`${API_URL}/api/catalogs/taxes`);
+        const res = await authFetch(`${API_URL}/api/catalogs/taxes`);
         if (!res.ok) throw new Error('Network response was not ok');
         const json = await res.json();
         return json.data;

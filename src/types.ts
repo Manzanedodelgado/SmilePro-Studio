@@ -58,6 +58,11 @@ export interface Paciente {
     deuda: boolean;
     historial: SOAPNote[];
     consentimientosFirmados: boolean;
+    // Campos de contacto extendido (opcionales — formulario de alta)
+    email?: string;
+    direccion?: string;
+    ciudad?: string;
+    cp?: string;
 }
 
 // --- 1.2 AGENDA SEMÁNTICA ---

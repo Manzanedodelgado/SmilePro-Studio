@@ -6,6 +6,7 @@
 // ─────────────────────────────────────────────────────────────────
 import { type Cita, type EstadoCita, type TratamientoCategoria } from '../types';
 import { logger } from './logger';
+import { authFetch } from './db';
 
 const API_BASE = 'http://localhost:3000/api/appointments';
 
@@ -133,7 +134,7 @@ export const getCitasByFecha = async (fecha: Date): Promise<Cita[]> => {
     const fechaStr = dateToISO(fecha);
     logger.info('[CITAS] Buscando fecha:', fechaStr);
     try {
-        const res = await fetch(`${API_BASE}?date=${fechaStr}&limit=500`);
+        const res = await authFetch(`${API_BASE}?date=${fechaStr}&limit=500`);
         if (!res.ok) { logger.error('[CITAS] Error cargando citas:', res.status); return []; }
         const json = await res.json();
         const rows: any[] = json.data ?? [];
@@ -148,7 +149,7 @@ export const getCitasByFecha = async (fecha: Date): Promise<Cita[]> => {
 /** Citas de un rango de fechas */
 export const getCitasRangoFecha = async (from: Date, to: Date): Promise<Cita[]> => {
     try {
-        const res = await fetch(`${API_BASE}?from=${dateToISO(from)}&to=${dateToISO(to)}&limit=2000`);
+        const res = await authFetch(`${API_BASE}?from=${dateToISO(from)}&to=${dateToISO(to)}&limit=2000`);
         if (!res.ok) return [];
         const json = await res.json();
         return (json.data ?? []).map(mapRowToCita);
@@ -162,7 +163,7 @@ export const getCitasRangoFecha = async (from: Date, to: Date): Promise<Cita[]> 
 export const getCitasByPaciente = async (numPac: string): Promise<Cita[]> => {
     if (!numPac) return [];
     try {
-        const res = await fetch(`${API_BASE}?pacienteNumPac=${encodeURIComponent(numPac)}&limit=200`);
+        const res = await authFetch(`${API_BASE}?pacienteNumPac=${encodeURIComponent(numPac)}&limit=200`);
         if (!res.ok) return [];
         const json = await res.json();
         return (json.data ?? []).map(mapRowToCita);
@@ -179,7 +180,7 @@ export const getCitasByPaciente = async (numPac: string): Promise<Cita[]> => {
 /** Crea una nueva cita en DCitas vía backend */
 export const createCita = async (cita: Omit<Cita, 'id'>, fecha: Date): Promise<Cita | null> => {
     try {
-        const res = await fetch(API_BASE, {
+        const res = await authFetch(API_BASE, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -219,7 +220,7 @@ export const updateCita = async (
         if (updates.tratamiento)        body.tratamiento = updates.tratamiento;
         if (updates.notas !== undefined) body.notas = updates.notas;
 
-        const res = await fetch(`${API_BASE}/${id}`, {
+        const res = await authFetch(`${API_BASE}/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
@@ -237,10 +238,10 @@ export const updateCita = async (
 export const updateEstadoCita = async (id: string, estado: EstadoCita): Promise<boolean> => {
     try {
         if (estado === 'anulada' || estado === 'cancelada') {
-            const res = await fetch(`${API_BASE}/${id}/cancel`, { method: 'PATCH' });
+            const res = await authFetch(`${API_BASE}/${id}/cancel`, { method: 'PATCH' });
             return res.ok;
         }
-        const res = await fetch(`${API_BASE}/${id}`, {
+        const res = await authFetch(`${API_BASE}/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ estado: estadoToBackend(estado) }),
@@ -319,7 +320,7 @@ export const getEntradasMedicas = async (
             pageSize: String(opts.pageSize ?? 100),
             order: opts.order ?? 'desc',
         });
-        const res = await fetch(`${CLINICAL_BASE}/patients/${idPac}/entradas?${params}`);
+        const res = await authFetch(`${CLINICAL_BASE}/patients/${idPac}/entradas?${params}`);
         if (!res.ok) return [];
         const json = await res.json();
         return (json.data ?? []) as EntradaMedica[];

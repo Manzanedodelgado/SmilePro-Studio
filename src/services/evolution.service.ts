@@ -1,6 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  services/evolution.service.ts
 //
+//  Also exports socket.io client helpers for real-time WhatsApp events.
+//
 //  Integración dual:
 //   • Evolution API  → enviar / recibir mensajes WhatsApp directamente
 //   • Chatwoot       → leer conversaciones e historial de mensajes
@@ -15,18 +17,76 @@
 //    VITE_CHATWOOT_INBOX_ID    → ID del inbox de WhatsApp en Chatwoot
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { io as socketIO, type Socket } from 'socket.io-client';
+import { authFetch } from './db';
+
+const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000';
+
+// ── Socket.io ─────────────────────────────────────────────────────────────────
+
+let socket: Socket | null = null;
+
+export const connectWhatsAppSocket = (): Socket => {
+    if (socket?.connected) return socket;
+    socket = socketIO(API_BASE, { transports: ['websocket', 'polling'], autoConnect: true });
+    return socket;
+};
+
+export const disconnectWhatsAppSocket = (): void => {
+    socket?.disconnect();
+    socket = null;
+};
+
+export const onWhatsAppMessage = (
+    cb: (payload: { phone: string; text: string; fromMe: boolean; time: string; id: string }) => void
+): (() => void) => {
+    const s = connectWhatsAppSocket();
+    s.on('whatsapp:message', cb);
+    return () => s.off('whatsapp:message', cb);
+};
+
+export const onConversationUpdated = (cb: (payload: { phone: string }) => void): (() => void) => {
+    const s = connectWhatsAppSocket();
+    s.on('whatsapp:conversation_updated', cb);
+    return () => s.off('whatsapp:conversation_updated', cb);
+};
+
+export const onWhatsAppUrgency = (
+    cb: (payload: { phone: string; text: string; time: string }) => void
+): (() => void) => {
+    const s = connectWhatsAppSocket();
+    s.on('whatsapp:urgency', cb);
+    return () => s.off('whatsapp:urgency', cb);
+};
+
+// ── Agenda real-time sync ─────────────────────────────────────────────────────
+
+export const onAgendaUpdate = (
+    cb: (event: 'created' | 'updated', cita: Record<string, unknown>) => void
+): (() => void) => {
+    const s = connectWhatsAppSocket();
+    const onCreate = (p: { cita: Record<string, unknown> }) => cb('created', p.cita);
+    const onUpdate = (p: { cita: Record<string, unknown> }) => cb('updated', p.cita);
+    s.on('agenda:cita_created', onCreate);
+    s.on('agenda:cita_updated', onUpdate);
+    return () => {
+        s.off('agenda:cita_created', onCreate);
+        s.off('agenda:cita_updated', onUpdate);
+    };
+};
+
 const fetchWithTimeout = (url: string, opts: RequestInit = {}, ms = 30_000): Promise<Response> => {
     const ctrl = new AbortController();
     const id = setTimeout(() => ctrl.abort(), ms);
     return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(id));
 };
 
-const EVO_URL_RAW = (import.meta.env.VITE_EVOLUTION_API_URL as string | undefined) || 'https://comunicaciones-evolution-api.ayjla6.easypanel.host';
-const EVO_KEY = (import.meta.env.VITE_EVOLUTION_API_KEY as string | undefined) || '429683C4C977415CAAFCCE10F7D57E11';
-const EVO_INSTANCE_RAW = (import.meta.env.VITE_EVOLUTION_INSTANCE as string | undefined) || 'chatwoot_link';
+const EVO_URL_RAW = (import.meta.env.VITE_EVOLUTION_API_URL as string | undefined) || '';
+const EVO_KEY = (import.meta.env.VITE_EVOLUTION_API_KEY as string | undefined) || '';
+const EVO_INSTANCE_RAW = (import.meta.env.VITE_EVOLUTION_INSTANCE as string | undefined) || '';
 
-const CW_URL_RAW = (import.meta.env.VITE_CHATWOOT_URL as string | undefined) || 'https://comunicaciones-chatwoot.ayjla6.easypanel.host';
-const CW_TOKEN = (import.meta.env.VITE_CHATWOOT_TOKEN as string | undefined) || 'J9GaJMe4sAXTfGgeBvmmLjsZ';
+const CW_URL_RAW = (import.meta.env.VITE_CHATWOOT_URL as string | undefined) || '';
+const CW_TOKEN = (import.meta.env.VITE_CHATWOOT_TOKEN as string | undefined) || '';
 const CW_ACCOUNT = (import.meta.env.VITE_CHATWOOT_ACCOUNT_ID as string | undefined) || '1';
 const CW_INBOX = (import.meta.env.VITE_CHATWOOT_INBOX_ID as string | undefined) || '1';
 
@@ -196,7 +256,7 @@ export const sendTemplateMessage = async (
 };
 
 /**
- * Enviar imagen o documento por Evolution API
+ * Enviar imagen o documento por Evolution API (URL pública)
  */
 export const sendMediaMessage = async (
     phone: string,
@@ -211,6 +271,38 @@ export const sendMediaMessage = async (
             method: 'POST',
             headers: evoHeaders(),
             body: JSON.stringify({ number: normalizePhone(phone), mediaUrl, caption: caption ?? '' }),
+        });
+        return r.ok;
+    } catch {
+        return false;
+    }
+};
+
+/**
+ * Enviar archivo como base64 por Evolution API (imagen o documento).
+ * base64: string sin el prefijo "data:...;base64,"
+ */
+export const sendMediaBase64 = async (
+    phone: string,
+    base64: string,
+    mimeType: string,
+    fileName: string,
+    caption?: string,
+): Promise<boolean> => {
+    if (!isEvolutionConfigured()) return false;
+    try {
+        const isImage = mimeType.startsWith('image/');
+        const endpoint = isImage ? 'sendImage' : 'sendDocument';
+        const r = await fetchWithTimeout(`${EVO_URL}/message/${endpoint}/${EVO_INSTANCE}`, {
+            method: 'POST',
+            headers: evoHeaders(),
+            body: JSON.stringify({
+                number: normalizePhone(phone),
+                media: base64,
+                mimetype: mimeType,
+                fileName,
+                caption: caption ?? '',
+            }),
         });
         return r.ok;
     } catch {
@@ -300,16 +392,23 @@ export const getChatwootMensajes = async (conversationId: number): Promise<Mensa
 /**
  * Enviar un mensaje desde Chatwoot (aparece como respuesta del agente en Chatwoot
  * y llega al paciente por WhatsApp vía Evolution API).
+ * @param inReplyTo Chatwoot message ID to quote/reply to
  */
-export const sendChatwootMessage = async (conversationId: number, content: string): Promise<boolean> => {
+export const sendChatwootMessage = async (
+    conversationId: number,
+    content: string,
+    inReplyTo?: number,
+): Promise<boolean> => {
     if (!isChatwootConfigured()) return false;
     try {
+        const body: Record<string, unknown> = { content, message_type: 'outgoing', private: false };
+        if (inReplyTo) body.content_attributes = { in_reply_to: inReplyTo };
         const r = await fetchWithTimeout(
             `${CW_URL}/api/v1/accounts/${CW_ACCOUNT}/conversations/${conversationId}/messages`,
             {
                 method: 'POST',
                 headers: cwHeaders(),
-                body: JSON.stringify({ content, message_type: 'outgoing', private: false }),
+                body: JSON.stringify(body),
             }
         );
         return r.ok;
@@ -369,6 +468,35 @@ export const markConversationRead = async (conversationId: number): Promise<bool
         return r.ok;
     } catch {
         return false;
+    }
+};
+
+// ── Patient context via backend ────────────────────────────────────────────────
+
+export interface PatientContext {
+    id: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    email?: string;
+    age?: number;
+    dateOfBirth?: string;
+    medicalNotes?: string;
+    allergies?: string;
+    medications?: string;
+    bloodType?: string;
+}
+
+export const getPatientContext = async (phone: string): Promise<PatientContext | null> => {
+    try {
+        const r = await authFetch(
+            `${API_BASE}/api/communication/patient-context/${encodeURIComponent(phone)}`,
+        );
+        if (!r.ok) return null;
+        const data = await r.json();
+        return data?.data ?? null;
+    } catch {
+        return null;
     }
 };
 

@@ -4,6 +4,7 @@
 //  SIN dependencia de db.ts / backend.
 // ─────────────────────────────────────────────────────────────────
 import { logger } from './logger';
+import { authFetch } from './db';
 import { INITIAL_AUTOMATIONS, type Automation } from '../views/ia/AutomationRules';
 
 const API_BASE = 'http://localhost:3000/api/ai';
@@ -32,7 +33,7 @@ const mapRow = (r: any): Automation => ({
 export const getAutomations = async (): Promise<Automation[]> => {
     if (_cache) return _cache;
     try {
-        const res = await fetch(`${API_BASE}/automations`);
+        const res = await authFetch(`${API_BASE}/automations`);
         if (!res.ok) {
             _cache = [...INITIAL_AUTOMATIONS];
             return _cache;
@@ -53,7 +54,7 @@ export const getAutomations = async (): Promise<Automation[]> => {
 
 export const saveAutomation = async (automation: Automation): Promise<boolean> => {
     try {
-        const res = await fetch(`${API_BASE}/automations`, {
+        const res = await authFetch(`${API_BASE}/automations`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -65,9 +66,12 @@ export const saveAutomation = async (automation: Automation): Promise<boolean> =
             }),
         });
         if (res.ok && _cache) {
+            // Usa el ID devuelto por el servidor si está disponible
+            const json = await res.json().catch(() => null);
+            const saved = { ...automation, id: json?.data?.id ?? json?.id ?? automation.id };
             const idx = _cache.findIndex(a => a.id === automation.id);
-            if (idx >= 0) _cache[idx] = automation;
-            else _cache.push(automation);
+            if (idx >= 0) _cache[idx] = saved;
+            else _cache.push(saved);
         }
         return res.ok;
     } catch (e) {
@@ -78,7 +82,7 @@ export const saveAutomation = async (automation: Automation): Promise<boolean> =
 
 export const toggleAutomation = async (id: string, active: boolean): Promise<boolean> => {
     try {
-        const res = await fetch(`${API_BASE}/automations/${id}/toggle`, {
+        const res = await authFetch(`${API_BASE}/automations/${id}/toggle`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ enabled: active }),

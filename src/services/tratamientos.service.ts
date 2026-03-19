@@ -4,6 +4,7 @@
 //  SIN dependencia de db.ts / backend.
 // ─────────────────────────────────────────────────────────────────
 import { logger } from './logger';
+import { authFetch } from './db';
 
 const API_BASE = 'http://localhost:3000/api';
 
@@ -30,7 +31,7 @@ const mapTratamiento = (r: any): Tratamiento => ({
 export const getCatalogoTratamientos = async (): Promise<Tratamiento[]> => {
     if (_cache) return _cache;
     try {
-        const res = await fetch(`${API_BASE}/treatments`);
+        const res = await authFetch(`${API_BASE}/treatments`);
         if (!res.ok) return [];
         const json = await res.json();
         const rows: any[] = json.data ?? [];
