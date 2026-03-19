@@ -92,7 +92,7 @@ export const EvolutionService = {
         try {
             const res = await evoFetch(`/instance/connectionState/${config.EVOLUTION_INSTANCE}`);
             if (!res.ok) return null;
-            const data = await res.json();
+            const data = await res.json() as any;
             return {
                 instance: config.EVOLUTION_INSTANCE!,
                 state: data?.instance?.state ?? 'close',
@@ -109,7 +109,7 @@ export const EvolutionService = {
         try {
             const res = await evoFetch(`/instance/connect/${config.EVOLUTION_INSTANCE}`);
             if (!res.ok) return null;
-            const data = await res.json();
+            const data = await res.json() as any;
             return data?.qrcode?.base64 ?? null;
         } catch (err) {
             logger.warn('Evolution getQRCode error:', err);
@@ -184,7 +184,7 @@ export const ChatwootService = {
             });
             const res = await cwFetch(`/conversations?${params}`);
             if (!res.ok) return [];
-            const data = await res.json();
+            const data = await res.json() as any;
             return (data?.data?.payload ?? []).map((c: any): ConversationSummary => {
                 const contact = c.meta?.sender;
                 const phone = contact?.phone_number ?? contact?.identifier ?? '';
@@ -213,7 +213,7 @@ export const ChatwootService = {
         try {
             const res = await cwFetch(`/conversations/${conversationId}/messages`);
             if (!res.ok) return [];
-            const data = await res.json();
+            const data = await res.json() as any;
             const msgs: any[] = data?.payload ?? [];
             return msgs
                 .filter(m => m.message_type !== 2) // excluir actividad interna

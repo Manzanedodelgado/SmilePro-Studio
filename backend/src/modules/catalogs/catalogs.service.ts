@@ -16,8 +16,8 @@ export class CatalogsService {
     
     static async getTaxes() {
         try {
-            const raw = await prisma.tTipoIVA.findMany({ select: { IdTipoIVA: true, Descripcio: true, PjeIVA: true, PjeRecargo: true, PjeRetencion: true }});
-            if (raw.length > 0) return raw.map(r => ({ ...r, label: `${r.Descripcio} (${r.PjeIVA}%)` }));
+            const raw = await prisma.tTipoIVA.findMany({ select: { IdTipoIVA: true, Descripcio: true, IVA: true }});
+            if (raw.length > 0) return raw.map(r => ({ IdTipoIVA: r.IdTipoIVA, PjeIVA: r.IVA, label: `${r.Descripcio} (${r.IVA}%)` }));
         } catch (e) { logger.error(e); }
         return [
             { IdTipoIVA: 1, label: 'Exento (0%)', PjeIVA: 0 },

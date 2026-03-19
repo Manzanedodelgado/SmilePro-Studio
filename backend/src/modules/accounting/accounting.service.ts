@@ -258,7 +258,7 @@ export const AccountingService = {
     createEmittedInvoice,
     updateEmittedInvoiceStatus,
     getEmailInvoices: async (_q: any) => ({ data: [], pagination: buildPagination(1, 20, 0) }),
-    updateEmailInvoiceEstado: async (id: string, estado: string) => ({ id, estado }),
+    updateEmailInvoiceEstado: async (id: string, estado: string, _proveedorId?: string) => ({ id, estado }),
     getSuppliers,
     getSupplierById,
     createSupplier,

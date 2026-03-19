@@ -113,6 +113,73 @@ export class AIController {
         } catch (err) { next(err); }
     }
 
+    // ── Streaming SSE ─────────────────────────────────────────────────────────
+
+    /** POST /api/ai/chat/stream */
+    static async chatStream(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { messages } = req.body as { messages: { role: string; content: string }[] };
+            if (!Array.isArray(messages) || messages.length === 0) {
+                res.status(400).json({ success: false, error: { message: 'messages requerido' } });
+                return;
+            }
+
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            res.setHeader('X-Accel-Buffering', 'no');
+            res.flushHeaders();
+
+            const keepAlive = setInterval(() => res.write(': ping\n\n'), 15_000);
+
+            await AIService.chatStream(
+                messages as any,
+                (chunk: string) => res.write(`data: ${JSON.stringify({ chunk })}\n\n`),
+                () => { clearInterval(keepAlive); res.write('data: [DONE]\n\n'); res.end(); },
+                (err: Error) => {
+                    clearInterval(keepAlive);
+                    logger.error('[AI:Stream]', err.message);
+                    res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+                    res.end();
+                },
+            );
+        } catch (err) { next(err); }
+    }
+
+    // ── Historial simulador ────────────────────────────────────────────────────
+
+    /** POST /api/ai/conversations/save */
+    static async saveConversationMessage(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { sessionId, role, content } = req.body as { sessionId: string; role: 'user' | 'assistant'; content: string };
+            if (!sessionId || !role || !content?.trim()) {
+                res.status(400).json({ success: false, error: { message: 'sessionId, role y content requeridos' } });
+                return;
+            }
+            await AIService.saveSimulatorMessage(sessionId, role, content);
+            res.json({ success: true });
+        } catch (err) { next(err); }
+    }
+
+    /** GET /api/ai/conversations/history/:sessionId */
+    static async getSimulatorHistory(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { sessionId } = req.params;
+            const history = await AIService.getSimulatorHistory(sessionId);
+            res.json({ success: true, data: history });
+        } catch (err) { next(err); }
+    }
+
+    // ── Métricas ──────────────────────────────────────────────────────────────
+
+    /** GET /api/ai/metrics */
+    static async getMetrics(_req: Request, res: Response, next: NextFunction) {
+        try {
+            const metrics = await AIService.getAIMetrics();
+            res.json({ success: true, data: metrics });
+        } catch (err) { next(err); }
+    }
+
     // ── Autoevolución ─────────────────────────────────────────────────────────
 
     /** GET /api/ai/evolution/insights */
@@ -120,11 +187,11 @@ export class AIController {
         try {
             const automations = await AIService.getAutomations();
             const total = automations.length;
-            const active = automations.filter(a => a.enabled).length;
+            const active = automations.filter((a: any) => a.enabled).length;
             const avgSuccess = total > 0
-                ? Math.round(automations.reduce((s, a) => s + a.successRate, 0) / total)
+                ? Math.round(automations.reduce((s: number, a: any) => s + a.successRate, 0) / total)
                 : 0;
-            const topPerforming = automations.sort((a, b) => b.successRate - a.successRate).slice(0, 3);
+            const topPerforming = automations.sort((a: any, b: any) => b.successRate - a.successRate).slice(0, 3);
 
             res.json({
                 success: true,

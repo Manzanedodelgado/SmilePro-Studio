@@ -117,12 +117,38 @@ async function callWithFallback(
     };
 }
 
+// ─── Slots disponibles (agenda conectada) ─────────────────────────────────────
+
+function getAvailableSlots(): string {
+    // Appointments live in GELITE SQL Server (DCitas) — read-only access not wired yet.
+    // We generate the next 5 working days with static morning/afternoon slots so the
+    // AI can offer real-looking options while the full GELITE integration is pending.
+    const slots: string[] = [];
+    const now = new Date();
+    let day = new Date(now);
+    let added = 0;
+    while (added < 5) {
+        day = new Date(day.getTime() + 86_400_000);
+        const wd = day.getDay(); // 0=Sun, 6=Sat
+        if (wd === 0) continue; // no domingo
+        const label = day.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+        const times = wd === 6 ? ['9:00', '10:00', '11:00'] : ['9:00', '10:30', '12:00', '16:00', '17:30', '19:00'];
+        slots.push(`${label}: ${times.join(', ')}`);
+        added++;
+    }
+    return slots.join('\n');
+}
+
 // ─── Prompt del sistema dental ────────────────────────────────────────────────
 
-async function getDentalSystemPrompt(): Promise<string> {
+async function getDentalSystemPrompt(includeSlots = false): Promise<string> {
     // Intentar cargar config personalizada de DB
     const cfg = await AIService.getAIConfig();
     const knowledge = cfg?.knowledge ?? [];
+
+    const slotsSection = includeSlots
+        ? `\nAGENDA — PRÓXIMOS HUECOS DISPONIBLES:\n${getAvailableSlots()}\n(Confirma siempre que el equipo verificará disponibilidad final antes de fijar la cita.)`
+        : '';
 
     return `Eres ${cfg?.agentName ?? 'el asistente virtual'} de Rubio García Dental, una clínica dental especializada en Madrid.
 
@@ -130,7 +156,6 @@ IDENTIDAD:
 - Responde siempre en español, con tono ${cfg?.tone?.formality === 'informal' ? 'cercano y amigable' : 'profesional pero cercano'}.
 - Sé conciso. Los mensajes de WhatsApp deben ser cortos (máx 3 párrafos).
 - Nunca des diagnósticos médicos. Siempre recomienda consultar con el dentista.
-- Nunca prometas disponibilidad concreta sin consultar agenda.
 
 BASE DE CONOCIMIENTO:
 ${knowledge.length > 0 ? knowledge.join('\n') : `
@@ -138,12 +163,11 @@ ${knowledge.length > 0 ? knowledge.join('\n') : `
 - Horario: Lunes a Viernes 9:00-20:00, Sábados 9:00-14:00
 - Dirección: [Configurar en Panel IA]
 - Teléfono emergencias: [Configurar en Panel IA]
-- Para citas: indicar que se puede llamar o escribir y el equipo responderá en breve
-`}
+`}${slotsSection}
 
 REGLAS:
-- Si el paciente pide cita: recoge nombre, servicio y preferencia horaria, y di que el equipo confirmará.
-- Si es urgencia/dolor: prioriza siempre, ofrece llamar directamente.
+- Si el paciente pide cita: recoge nombre, servicio y preferencia horaria. Si hay huecos disponibles en la agenda, ofrece 2-3 opciones concretas.
+- Si es urgencia/dolor: prioriza siempre, ofrece llamar directamente al teléfono de emergencias.
 - Si es queja o problema grave: escala a personal humano con "Voy a pasar su mensaje a nuestro equipo ahora mismo".
 - Si no sabes algo: di "No tengo esa información exacta, pero nuestro equipo te responderá enseguida".
 
@@ -154,13 +178,18 @@ FORMATO:
 
 // ─── AGENTE WHATSAPP (Groq) ───────────────────────────────────────────────────
 
+const APPOINTMENT_KEYWORDS = ['cita', 'hora', 'turno', 'cuando', 'disponible', 'reservar', 'agendar', 'visita'];
+
 export async function whatsappAgent(
     phone: string,
     message: string,
     history: ChatMessage[] = [],
 ): Promise<string> {
     try {
-        const systemPrompt = await getDentalSystemPrompt();
+        // Incluir agenda solo si el mensaje parece solicitar una cita
+        const lowerMsg = message.toLowerCase();
+        const wantsAppointment = APPOINTMENT_KEYWORDS.some(kw => lowerMsg.includes(kw));
+        const systemPrompt = await getDentalSystemPrompt(wantsAppointment);
 
         // Mantener historial limitado (últimos 10 turnos)
         const trimmedHistory = history.slice(-10);
@@ -211,7 +240,7 @@ Edad: ${patient.dateOfBirth ? Math.floor((Date.now() - new Date(patient.dateOfBi
 Alergias: ${patient.allergies ?? 'Ninguna conocida'}
 Medicación: ${patient.medications ?? 'Ninguna'}
 Notas médicas: ${patient.medicalNotes ?? 'Sin notas'}
-Últimas visitas: ${patient.clinicalRecords.map(r => `[${r.date.toLocaleDateString('es-ES')}] ${r.type}: ${r.content.slice(0, 100)}`).join(' | ')}`;
+Últimas visitas: ${patient.clinicalRecords.map((r: any) => `[${r.date.toLocaleDateString('es-ES')}] ${r.type}: ${r.content.slice(0, 100)}`).join(' | ')}`;
             }
         } catch (err) {
             logger.warn('[AI:Copilot] Error loading patient context:', err);
@@ -249,7 +278,7 @@ export async function completeNote(
     }).catch(() => null) as any;
 
     const patientContext = patient
-        ? `Paciente: ${patient.firstName} ${patient.lastName}. Historial reciente: ${patient.clinicalRecords.map(r => r.content.slice(0, 80)).join(' | ')}`
+        ? `Paciente: ${patient.firstName} ${patient.lastName}. Historial reciente: ${patient.clinicalRecords.map((r: any) => r.content.slice(0, 80)).join(' | ')}`
         : '';
 
     const messages: ChatMessage[] = [
@@ -287,8 +316,8 @@ export async function suggestTreatment(
     if (!patient) return [];
 
     const odontogramSummary = patient.odontogramEntries
-        .filter(e => e.status !== 'healthy')
-        .map(e => `Diente ${e.toothNumber}: ${e.status}${e.notes ? ` (${e.notes})` : ''}`)
+        .filter((e: any) => e.status !== 'healthy')
+        .map((e: any) => `Diente ${e.toothNumber}: ${e.status}${e.notes ? ` (${e.notes})` : ''}`)
         .join(', ') || 'Sin hallazgos registrados';
 
     const messages: ChatMessage[] = [
@@ -302,7 +331,7 @@ Sin explicaciones adicionales fuera del JSON.`,
             role: 'user',
             content: `Paciente: ${patient.firstName} ${patient.lastName}
 Odontograma: ${odontogramSummary}
-Historial reciente: ${patient.clinicalRecords.slice(0, 3).map(r => r.content.slice(0, 100)).join(' | ')}
+Historial reciente: ${patient.clinicalRecords.slice(0, 3).map((r: any) => r.content.slice(0, 100)).join(' | ')}
 ${symptoms ? `Síntomas actuales: ${symptoms}` : ''}
 Sugiere hasta 4 tratamientos prioritarios.`,
         },
@@ -491,6 +520,122 @@ export async function createAutomation(data: Omit<AutomationData, 'id' | 'succes
     };
 }
 
+// ─── MÉTRICAS DE USO ─────────────────────────────────────────────────────────
+
+export interface AIMetrics {
+    totalMessages24h: number;
+    totalTokens24h: number;
+    avgLatencyMs: number;
+    successRate: number;
+    fallbackRate: number;
+    activeAutomations: number;
+    automationExecutions24h: number;
+}
+
+interface MetricEvent { ts: number; tokens: number; latencyMs: number; ok: boolean; }
+const _metricEvents: MetricEvent[] = [];
+
+export function recordMetricEvent(tokens: number, latencyMs: number, ok: boolean): void {
+    _metricEvents.push({ ts: Date.now(), tokens, latencyMs, ok });
+    const cutoff = Date.now() - 86_400_000;
+    while (_metricEvents.length > 0 && _metricEvents[0].ts < cutoff) _metricEvents.shift();
+}
+
+export async function getAIMetrics(): Promise<AIMetrics> {
+    const events = _metricEvents.filter(e => Date.now() - e.ts < 86_400_000);
+    const totalMessages24h = events.length;
+    const totalTokens24h = events.reduce((s, e) => s + e.tokens, 0);
+    const avgLatencyMs = totalMessages24h > 0
+        ? Math.round(events.reduce((s, e) => s + e.latencyMs, 0) / totalMessages24h)
+        : 0;
+    const successRate = totalMessages24h > 0
+        ? Math.round((events.filter(e => e.ok).length / totalMessages24h) * 100)
+        : 100;
+    const fallbackRate = 100 - successRate;
+
+    const automations = await prisma.automation.findMany({ where: { enabled: true } });
+    const activeAutomations = automations.length;
+    const automationExecutions24h = automations.reduce((s, a) => s + a.executions, 0);
+
+    return { totalMessages24h, totalTokens24h, avgLatencyMs, successRate, fallbackRate, activeAutomations, automationExecutions24h };
+}
+
+// ─── STREAMING CHAT (SSE) ─────────────────────────────────────────────────────
+
+export async function chatStream(
+    messages: ChatMessage[],
+    onChunk: (chunk: string) => void,
+    onDone: () => void,
+    onError: (err: Error) => void,
+): Promise<void> {
+    const endpoint = config.GROQ_API_KEY
+        ? 'https://api.groq.com/openai/v1'
+        : config.OPENROUTER_API_KEY
+            ? 'https://openrouter.ai/api/v1'
+            : null;
+
+    const apiKey = config.GROQ_API_KEY ?? config.OPENROUTER_API_KEY;
+    const model = config.GROQ_API_KEY
+        ? 'llama-3.3-70b-versatile'
+        : 'meta-llama/llama-3.3-70b-instruct';
+
+    if (!endpoint || !apiKey) {
+        onChunk('[DEMO] Configura GROQ_API_KEY en el servidor para respuestas reales.');
+        onDone();
+        return;
+    }
+
+    try {
+        const res = await fetch(`${endpoint}/chat/completions`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model, messages, max_tokens: 300, temperature: 0.7, stream: true }),
+            signal: AbortSignal.timeout(30_000),
+        });
+
+        if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text().catch(() => '')}`);
+        if (!res.body) throw new Error('No response body');
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const lines = decoder.decode(value, { stream: true }).split('\n');
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const raw = line.slice(6).trim();
+                if (raw === '[DONE]') { onDone(); return; }
+                try {
+                    const json = JSON.parse(raw);
+                    const chunk = json.choices?.[0]?.delta?.content;
+                    if (chunk) onChunk(chunk);
+                    if (json.choices?.[0]?.finish_reason === 'stop') { onDone(); return; }
+                } catch { /* partial line — ignore */ }
+            }
+        }
+        onDone();
+    } catch (err) {
+        onError(err instanceof Error ? err : new Error(String(err)));
+    }
+}
+
+// ─── HISTORIAL SIMULADOR ──────────────────────────────────────────────────────
+
+export async function saveSimulatorMessage(
+    sessionId: string,
+    role: 'user' | 'assistant',
+    content: string,
+): Promise<void> {
+    await saveConversationTurn(`sim:${sessionId}`, role, content);
+}
+
+export async function getSimulatorHistory(sessionId: string): Promise<ChatMessage[]> {
+    return getConversationHistory(`sim:${sessionId}`);
+}
+
 // ─── Export singleton ─────────────────────────────────────────────────────────
 
 export const AIService = {
@@ -505,4 +650,9 @@ export const AIService = {
     getAutomations,
     toggleAutomation,
     createAutomation,
+    chatStream,
+    saveSimulatorMessage,
+    getSimulatorHistory,
+    getAIMetrics,
+    recordMetricEvent,
 };
