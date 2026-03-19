@@ -26,6 +26,7 @@ export interface MovimientoBancoUI {
     desc: string;
     date: string;
     amount: string;
+    rawAmount: number;
     type: 'in' | 'out';
     match: boolean;
 }
@@ -68,6 +69,7 @@ const mapBankMovement = (r: any): MovimientoBancoUI => {
         desc: r.conceptoBanco || '—',
         date: formatDate(r.fechaOperacion),
         amount: `${imp >= 0 ? '+' : ''}${formatCurrency(imp)}`,
+        rawAmount: imp,
         type: imp >= 0 ? 'in' : 'out',
         match: r.estadoConcil === 'cruzado',
     };

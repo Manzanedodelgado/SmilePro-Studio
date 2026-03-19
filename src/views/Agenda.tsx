@@ -27,7 +27,7 @@ import { searchPacientes, getPaciente } from '../services/pacientes.service';
 import { crearContacto } from '../services/contactos.service';
 import { generateId } from '../services/db';
 import { logger } from '../services/logger';
-import { sendTextMessage, isEvolutionConfigured } from '../services/evolution.service';
+import { sendTextMessage, isEvolutionConfigured, onAgendaUpdate } from '../services/evolution.service';
 import { type Paciente } from '../types';
 import {
     loadAgendaConfig, type TratamientoAgenda, type EstadoCitaAgenda, type DoctorAgenda
@@ -243,7 +243,7 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
                     setAltaCargaQuirurgica((minCir / 300) > 0.4);
                 }).catch(err => {
                     if (cancelled) return;
-                    console.warn('[Agenda] Error al cargar citas dia:', err?.message ?? err);
+                    setCitasError(`No se pudieron cargar las citas: ${err?.message ?? 'Verifica la conexión con el servidor'}`);
                     setCitas([]);
                 }).finally(() => {
                     clearTimeout(safetyTimer);
@@ -269,7 +269,7 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
                     setAltaCargaQuirurgica(false); // Desactiva la alerta local para simplificar la vista semanal
                 }).catch(err => {
                     if (cancelled) return;
-                    console.warn('[Agenda] Error al cargar citas semana:', err?.message ?? err);
+                    setCitasError(`No se pudieron cargar las citas: ${err?.message ?? 'Verifica la conexión con el servidor'}`);
                     setCitas([]);
                 }).finally(() => {
                     clearTimeout(safetyTimer);
@@ -388,6 +388,22 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
         return () => window.removeEventListener('click', close);
     }, []);
 
+    // ── Sync tiempo real: citas creadas/actualizadas por otro usuario ─────────
+    useEffect(() => {
+        if (vistaTemporal !== 'dia') return;
+        const dateStr = dateToISO(selectedDate);
+        return onAgendaUpdate((_event, raw) => {
+            const c = raw as any;
+            // Solo sincronizar si es del mismo día que estamos viendo
+            if (!c || c.fecha !== dateStr) return;
+            setCitas(prev => {
+                const exists = prev.some(p => p.id === c.id);
+                if (exists) return prev.map(p => p.id === c.id ? { ...p, ...c } : p);
+                return [...prev, c];
+            });
+        });
+    }, [selectedDate, vistaTemporal]);
+
     // ── Filtrado y asignación de columnas (solapamientos) ─────────────────────
     const term = searchTerm.trim().toLowerCase();
     const filteredCitas = citas.filter(c =>
@@ -397,6 +413,14 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
             c.doctor.toLowerCase().includes(term))
         && (selectedDoctors.length === 0 || selectedDoctors.includes(c.doctor) || c.estado === 'bloqueo_bio')
     );
+
+    // ── Ocupación del día ─────────────────────────────────────────────────────
+    const DEAD_STATES = ['anulada', 'cancelada', 'fallada'];
+    const TOTAL_WORK_MIN = workingSegments.reduce((s, [h, e]) => s + (e - h) * 60, 0); // 480 min por gabinete
+    const activeCitas = citas.filter(c => c.estado !== 'bloqueo_bio' && !DEAD_STATES.includes(c.estado));
+    const usedMin = activeCitas.reduce((s, c) => s + Math.min(c.duracionMinutos || 30, 240), 0);
+    const totalCapMin = TOTAL_WORK_MIN * 2; // 2 gabinetes
+    const occupancyPct = totalCapMin > 0 ? Math.round((usedMin / totalCapMin) * 100) : 0;
 
     // ── Doctor/agenda principal del día por gabinete (TUsuAgd via IdUsu) ───────
     const dominantAgendaLabel = (gab: 'G1' | 'G2'): string => {
@@ -1029,6 +1053,18 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
                             <Activity className="w-3.5 h-3.5 animate-pulse shrink-0" />
                             <span className="text-[13px] font-bold uppercase tracking-wider hidden xl:inline">Carga Quirúrgica &gt;40%</span>
                             <button onClick={() => setAltaCargaQuirurgica(false)} className="ml-1 hover:bg-[#FFC0CB]/50 rounded-full p-0.5"><X className="w-3.5 h-3.5" /></button>
+                        </div>
+                    )}
+
+                    {/* Ocupación del día */}
+                    {vistaTemporal === 'dia' && (
+                        <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-bold border ${
+                            occupancyPct >= 80 ? 'bg-rose-50 text-rose-700 border-rose-200'
+                            : occupancyPct >= 50 ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : 'bg-slate-50 text-slate-500 border-slate-200'
+                        }`}>
+                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: occupancyPct >= 80 ? '#E03555' : occupancyPct >= 50 ? '#f59e0b' : '#94a3b8' }} />
+                            {activeCitas.length} citas · {occupancyPct}%
                         </div>
                     )}
 
@@ -1861,9 +1897,28 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
                                             }
                                             return;
                                         }
-                                        // Paciente existente: flujo normal
-                                        setCitas(prev => prev.map(c => c.id === editingCita.id ? editingCita : c));
-                                        updateCita(editingCita.id, editingCita, selectedDate);
+                                        // Validar solapamiento (doble reserva)
+                                        const newRange = { start: parseTime(editingCita.horaInicio), end: parseTime(editingCita.horaInicio) + editingCita.duracionMinutos };
+                                        const conflict = citas.find(c =>
+                                            c.id !== editingCita.id &&
+                                            c.gabinete === editingCita.gabinete &&
+                                            c.estado !== 'bloqueo_bio' &&
+                                            !DEAD_STATES.includes(c.estado) &&
+                                            overlaps(newRange, { start: parseTime(c.horaInicio), end: parseTime(c.horaInicio) + (c.duracionMinutos || 30) })
+                                        );
+                                        if (conflict && !window.confirm(`⚠️ Conflicto de horario con "${conflict.nombrePaciente}" (${conflict.horaInicio}) en ${editingCita.gabinete}.\n¿Guardar de todas formas?`)) return;
+
+                                        // Nuevo vs existente
+                                        const isNew = !citas.some(c => c.id === editingCita.id);
+                                        if (isNew) {
+                                            setCitas(prev => [...prev, editingCita]);
+                                            createCita(editingCita, selectedDate).then(saved => {
+                                                if (saved) setCitas(prev => prev.map(c => c.id === editingCita.id ? saved : c));
+                                            });
+                                        } else {
+                                            setCitas(prev => prev.map(c => c.id === editingCita.id ? editingCita : c));
+                                            updateCita(editingCita.id, editingCita, selectedDate);
+                                        }
                                         setEditingCita(null);
                                     }} className="px-5 py-2 rounded-lg text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md transition-all flex items-center gap-2 disabled:opacity-50" disabled={contactoSaving}>
                                         {contactoSaving ? '⏳ Guardando...' : 'Guardar Cambios'}

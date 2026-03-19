@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Bot, Star, BookOpen, Shield, Send, ArrowRight, Save, Plus, X, Loader2 } from 'lucide-react';
-import { askIA, isAIConfigured, loadAIConfig, saveAIConfig } from '../../services/ia-dental.service';
+import { askIAStream, isAIConfigured, loadAIConfig, loadChatHistory, saveAIConfig } from '../../services/ia-dental.service';
 
 const TONES = ['Cálida y empática', 'Profesional y formal', 'Cercana y amigable', 'Eficiente y directa'];
 const LANG = ['Español neutro', 'Español peninsular', 'Bilingüe ES/EN'];
@@ -23,13 +23,15 @@ export const IAConfig: React.FC = () => {
     const [tone, setTone] = useState(0);
     const [lang, setLang] = useState(0);
     const [name, setName] = useState('IA Dental');
-    const [greeting, setGreeting] = useState('Hola, soy IA Dental, el asistente virtual de Smile Pro 2026. ¿En qué puedo ayudarte?');
+    const [greeting, setGreeting] = useState('Hola, soy IA Dental, el asistente virtual de SmilePro Studio. ¿En qué puedo ayudarte?');
     const [knowledge, setKnowledge] = useState(KNOWLEDGE_DEFAULT);
-    const [rules] = useState(RULES_DEFAULT);
+    const [rules, setRules] = useState(RULES_DEFAULT);
+    const [newRuleTrigger, setNewRuleTrigger] = useState('');
+    const [newRuleAction, setNewRuleAction] = useState('');
     const [newKnowledge, setNewKnowledge] = useState('');
     const [chatMsg, setChatMsg] = useState('');
     const [chatLog, setChatLog] = useState([
-        { role: 'ia', text: 'Hola, soy IA Dental, el asistente de Smile Pro 2026. ¿En qué puedo ayudarte?' }
+        { role: 'ia', text: 'Hola, soy IA Dental, el asistente de SmilePro Studio. ¿En qué puedo ayudarte?' }
     ]);
     const [saved, setSaved] = useState(false);
 
@@ -41,6 +43,11 @@ export const IAConfig: React.FC = () => {
             if (cfg.lang !== undefined) setLang(cfg.lang);
             if (cfg.greeting) setGreeting(cfg.greeting);
             if (cfg.knowledge?.length) setKnowledge(cfg.knowledge);
+            if ((cfg as any).rules?.length) setRules((cfg as any).rules);
+        });
+        // Cargar historial persistente del simulador
+        loadChatHistory('ia-config').then(history => {
+            if (history.length > 0) setChatLog(history as any);
         });
     }, []);
 
@@ -48,6 +55,9 @@ export const IAConfig: React.FC = () => {
         if (newKnowledge.trim()) { setKnowledge(p => [...p, newKnowledge.trim()]); setNewKnowledge(''); }
     };
     const [thinking, setThinking] = useState(false);
+    const [aiActive, setAiActive] = useState<boolean | null>(null);
+
+    useEffect(() => { isAIConfigured().then(setAiActive); }, []);
 
     const handleSend = async () => {
         if (!chatMsg.trim() || thinking) return;
@@ -56,18 +66,34 @@ export const IAConfig: React.FC = () => {
         setChatMsg('');
         setThinking(true);
 
-        try {
-            const reply = await askIA(userMsg, chatLog, knowledge);
-            setChatLog(p => [...p, { role: 'ia', text: reply }]);
-        } catch {
-            setChatLog(p => [...p, { role: 'ia', text: 'Lo siento, ha habido un error. Inténtalo de nuevo.' }]);
-        } finally {
-            setThinking(false);
-        }
+        // Añadir burbuja vacía que se irá rellenando con el stream
+        setChatLog(p => [...p, { role: 'ia', text: '', isFallback: false, streaming: true } as any]);
+
+        await askIAStream(
+            userMsg,
+            chatLog,
+            knowledge,
+            `ia-config-${name}`,
+            (chunk) => {
+                setChatLog(p => {
+                    const last = p[p.length - 1];
+                    if (last?.role === 'ia') return [...p.slice(0, -1), { ...last, text: last.text + chunk }];
+                    return p;
+                });
+            },
+            (isFallback) => {
+                setChatLog(p => {
+                    const last = p[p.length - 1];
+                    if (last?.role === 'ia') return [...p.slice(0, -1), { ...last, streaming: false, isFallback }];
+                    return p;
+                });
+                setThinking(false);
+            },
+        );
     };
 
     const handleSave = async () => {
-        await saveAIConfig({ name, tone, lang, greeting, knowledge });
+        await saveAIConfig({ name, tone, lang, greeting, knowledge, rules } as any);
         setSaved(true);
         setTimeout(() => setSaved(false), 2500);
     };
@@ -159,14 +185,48 @@ export const IAConfig: React.FC = () => {
                         <Shield className="w-4 h-4 text-red-500" />
                         <span className="text-[12px] font-bold text-[#051650] uppercase tracking-widest">Reglas de Escalado</span>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-2 mb-3">
                         {rules.map((r, i) => (
-                            <div key={i} className="flex items-center gap-3 bg-slate-50 rounded-xl px-3 py-2.5">
-                                <span className="text-[12px] font-bold text-[#FF4B68] bg-[#FFF0F3] px-2 py-0.5 rounded-lg shrink-0 border border-rose-100">SI: {r.trigger}</span>
-                                <ArrowRight className="w-3 h-3 text-slate-300 shrink-0" />
-                                <span className="text-[13px] text-slate-600">{r.action}</span>
+                            <div key={i} className="flex items-start gap-2 bg-slate-50 rounded-xl px-3 py-2.5">
+                                <span className="text-[12px] font-bold text-[#FF4B68] bg-[#FFF0F3] px-2 py-0.5 rounded-lg shrink-0 border border-rose-100 mt-0.5">SI: {r.trigger}</span>
+                                <ArrowRight className="w-3 h-3 text-slate-300 shrink-0 mt-1" />
+                                <span className="text-[13px] text-slate-600 flex-1">{r.action}</span>
+                                <button onClick={() => setRules(p => p.filter((_, j) => j !== i))} className="text-slate-300 hover:text-[#FF4B68] transition-colors mt-0.5"><X className="w-3 h-3" /></button>
                             </div>
                         ))}
+                    </div>
+                    <div className="space-y-2">
+                        <input
+                            value={newRuleTrigger}
+                            onChange={e => setNewRuleTrigger(e.target.value)}
+                            placeholder="Condición (ej: dolor severo / urgencia)..."
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                        />
+                        <div className="flex gap-2">
+                            <input
+                                value={newRuleAction}
+                                onChange={e => setNewRuleAction(e.target.value)}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter' && newRuleTrigger.trim() && newRuleAction.trim()) {
+                                        setRules(p => [...p, { trigger: newRuleTrigger.trim(), action: newRuleAction.trim() }]);
+                                        setNewRuleTrigger('');
+                                        setNewRuleAction('');
+                                    }
+                                }}
+                                placeholder="Acción (ej: Escalar a recepción)..."
+                                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                            />
+                            <button
+                                onClick={() => {
+                                    if (newRuleTrigger.trim() && newRuleAction.trim()) {
+                                        setRules(p => [...p, { trigger: newRuleTrigger.trim(), action: newRuleAction.trim() }]);
+                                        setNewRuleTrigger('');
+                                        setNewRuleAction('');
+                                    }
+                                }}
+                                className="px-3 py-2 bg-rose-500 text-white rounded-xl hover:bg-rose-600 transition-all"
+                            ><Plus className="w-4 h-4" /></button>
+                        </div>
                     </div>
                 </div>
 
@@ -183,8 +243,8 @@ export const IAConfig: React.FC = () => {
                     <div>
                         <p className="text-[12px] font-bold text-[#051650] uppercase tracking-widest">{name} — Simulador en vivo</p>
                         <div className="flex items-center gap-1">
-                            <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${isAIConfigured() ? 'bg-[#051650]' : 'bg-[#E8EA50]'}`} />
-                            <span className="text-[12px] text-[#051650]/70">{isAIConfigured() ? 'IA Groq Activa' : 'Modo Fallback'}</span>
+                            <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${aiActive === true ? 'bg-[#051650]' : aiActive === false ? 'bg-[#E8EA50]' : 'bg-white/40'}`} />
+                            <span className="text-[12px] text-[#051650]/70">{aiActive === true ? 'IA Groq Activa' : aiActive === false ? 'Modo Fallback' : 'Verificando...'}</span>
                         </div>
                     </div>
                 </div>
@@ -192,8 +252,16 @@ export const IAConfig: React.FC = () => {
                     {chatLog.map((m, i) => (
                         <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                             <div className={`max-w-[88%] text-[13px] rounded-2xl px-3 py-2 ${m.role === 'user' ? 'bg-[#0056b3] text-white rounded-tr-sm font-medium' : 'bg-white border border-slate-200 text-slate-700 rounded-tl-sm shadow-sm'}`}>
-                                {m.role === 'ia' && <p className="text-[12px] font-bold text-[#0056b3] uppercase mb-0.5">{name} AI</p>}
-                                <span className="leading-snug whitespace-pre-line">{m.text}</span>
+                                {m.role === 'ia' && (
+                                    <div className="flex items-center gap-1.5 mb-0.5">
+                                        <p className="text-[12px] font-bold text-[#0056b3] uppercase">{name} AI</p>
+                                        {(m as any).isFallback && <span className="text-[8px] font-black bg-amber-100 text-amber-700 border border-amber-200 px-1 py-0.5 rounded uppercase tracking-wider">fallback</span>}
+                                    </div>
+                                )}
+                                <span className="leading-snug whitespace-pre-line">
+                                    {m.text}
+                                    {(m as any).streaming && <span className="inline-block w-1.5 h-3.5 bg-[#0056b3] ml-0.5 animate-pulse rounded-sm align-middle" />}
+                                </span>
                             </div>
                         </div>
                     ))}

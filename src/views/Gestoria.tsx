@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     TrendingUp,
     TrendingDown,
@@ -31,12 +31,14 @@ import {
     Sparkles,
     AlertTriangle,
     X,
-    Eye
+    Eye,
+    Send
 } from 'lucide-react';
 import { getFacturas, getMovimientosBanco, getGestoriaStats, type FacturaUI, type MovimientoBancoUI } from '../services/facturacion.service';
 import { isDbConfigured } from '../services/db';
 import { fetchInvoiceEmails, isGmailConfigured, isGmailAuthorized, startGmailAuth, disconnectGmail, handleOAuthRedirect } from '../services/gmail.service';
 import { parseAllInvoiceEmails, loadFacturasFromSupabase, updateFacturaEstado, type FacturaExtraida } from '../services/invoice-parser.service';
+import { EnvioGestoria } from './gestoria/EnvioGestoria';
 
 interface StatCardProps {
     icon: React.ElementType;
@@ -73,7 +75,7 @@ interface GestoriaProps {
 }
 
 const Gestoria: React.FC<GestoriaProps> = ({ activeSubArea }) => {
-    const [activeTab, setActiveTab] = useState<'resumen' | 'facturacion' | 'gmail' | 'banco' | 'impuestos' | 'informes'>('resumen');
+    const [activeTab, setActiveTab] = useState<'resumen' | 'facturacion' | 'gmail' | 'banco' | 'impuestos' | 'informes' | 'envio'>('resumen');
 
     // ── Gmail invoice state ──────────────────────────────────────
     const [gmailFacturas, setGmailFacturas] = useState<FacturaExtraida[]>([]);
@@ -184,11 +186,73 @@ const Gestoria: React.FC<GestoriaProps> = ({ activeSubArea }) => {
             case 'Informes':
                 setActiveTab('informes');
                 break;
+            case 'Envío Gestoría':
+                setActiveTab('envio');
+                break;
         }
     }, [activeSubArea]);
     const [facturas, setFacturas] = useState<FacturaUI[]>([]);
     const [movimientos, setMovimientos] = useState<MovimientoBancoUI[]>([]);
-    const [stats, setStats] = useState({ ingresosBrutos: '€42,850.00', facturasConteo: 142 });
+    const [stats, setStats] = useState({ ingresosBrutos: '—', facturasConteo: 0 });
+    const [now, setNow] = useState(new Date());
+
+    useEffect(() => {
+        const t = setInterval(() => setNow(new Date()), 30_000);
+        return () => clearInterval(t);
+    }, []);
+
+    const computedStats = useMemo(() => {
+        const gastos = movimientos.filter(m => m.type === 'out').reduce((s, m) => s + Math.abs(m.rawAmount), 0);
+        const saldo = movimientos.reduce((s, m) => s + m.rawAmount, 0);
+        const ingresosBrutos = facturas.reduce((s, f) => s + f.rawTotal, 0);
+        const margen = ingresosBrutos > 0 ? ((ingresosBrutos - gastos) / ingresosBrutos * 100) : null;
+        const fmt = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n);
+
+        // Ingresos por mes (últimos 12 meses)
+        const monthTotals = Array(12).fill(0);
+        const currentYear = now.getFullYear();
+        facturas.forEach(f => {
+            if (f.rawDate.getFullYear() === currentYear) {
+                monthTotals[f.rawDate.getMonth()] += f.rawTotal;
+            }
+        });
+        const maxMonth = Math.max(...monthTotals, 1);
+        const chartHeights = monthTotals.map(v => Math.round((v / maxMonth) * 100) || 0);
+
+        // IVA repercutido (aprox 21% sobre base = total / 1.21 * 0.21)
+        const ivaRepercutido = ingresosBrutos * 0.21 / 1.21;
+        const ivaDeducible = gastos * 0.21 / 1.21;
+
+        return {
+            gastosStr: gastos > 0 ? fmt(gastos) : '—',
+            saldoStr: saldo !== 0 ? fmt(saldo) : '—',
+            margenStr: margen !== null ? `${margen.toFixed(1)}%` : '—',
+            margenNum: margen,
+            chartHeights,
+            ingresosBrutos,
+            ivaRepercutidoStr: ivaRepercutido > 0 ? fmt(ivaRepercutido) : '—',
+            ivaDeducibleStr: ivaDeducible > 0 ? fmt(ivaDeducible) : '—',
+            ivaLiquidarStr: (ivaRepercutido - ivaDeducible) > 0 ? fmt(ivaRepercutido - ivaDeducible) : '—',
+            baseFacturasStr: ingresosBrutos > 0 ? fmt(ingresosBrutos / 1.21) : '—',
+            baseGastosStr: gastos > 0 ? fmt(gastos / 1.21) : '—',
+        };
+    }, [facturas, movimientos, now]);
+
+    const handleExportCSV = useCallback(() => {
+        if (facturas.length === 0) return;
+        const header = 'ID,Paciente,Fecha,Base,Total,Estado';
+        const rows = facturas.map(f =>
+            `"${f.id}","${f.name}","${f.date}","${f.base}","${f.total}","${f.status}"`
+        );
+        const csv = [header, ...rows].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `facturas_${now.toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }, [facturas, now]);
 
     useEffect(() => {
         if (isDbConfigured()) {
@@ -210,6 +274,7 @@ const Gestoria: React.FC<GestoriaProps> = ({ activeSubArea }) => {
         { id: 'banco', label: 'Banco y Conciliación', icon: ArrowLeftRight },
         { id: 'impuestos', label: 'Modelos Fiscales', icon: Scale },
         { id: 'informes', label: 'Informes', icon: FileSpreadsheet },
+        { id: 'envio', label: 'Envío Gestoría', icon: Send },
     ] as { id: string; label: string; icon: React.ElementType; badge?: number }[];
 
     return (
@@ -217,9 +282,13 @@ const Gestoria: React.FC<GestoriaProps> = ({ activeSubArea }) => {
             {/* Header Area */}
             <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
                 <div className="flex items-center gap-3 w-full xl:w-auto">
-                    <button className="flex-1 xl:flex-none flex items-center justify-center gap-3 px-6 py-3.5 bg-white dark:bg-slate-800 text-[#051650] dark:text-slate-200 rounded-2xl border border-slate-200 dark:border-slate-700 font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm active:scale-95">
+                    <button
+                        onClick={handleExportCSV}
+                        disabled={facturas.length === 0}
+                        className="flex-1 xl:flex-none flex items-center justify-center gap-3 px-6 py-3.5 bg-white dark:bg-slate-800 text-[#051650] dark:text-slate-200 rounded-2xl border border-slate-200 dark:border-slate-700 font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
                         <Download className="w-4 h-4" />
-                        Exportar Datos
+                        Exportar CSV
                     </button>
                     <button
                         onClick={() => setShowInvoiceModal(true)}
@@ -274,29 +343,29 @@ const Gestoria: React.FC<GestoriaProps> = ({ activeSubArea }) => {
                             <StatCard
                                 icon={TrendingDown}
                                 title="Gastos Totales"
-                                value="€12,240.50"
-                                trend="+2.1%"
+                                value={computedStats.gastosStr}
+                                trend={movimientos.length > 0 ? `${movimientos.filter(m => m.type === 'out').length} salidas` : 'Sin datos'}
                                 isPositive={false}
                                 color="text-rose-500"
-                                description="Principal incremento en suministros"
+                                description={movimientos.length === 0 ? 'Conecta el módulo bancario' : 'Calculado desde movimientos'}
                             />
                             <StatCard
                                 icon={Banknote}
                                 title="Saldo en Bancos"
-                                value="€128,400.00"
-                                trend="Reconciliado"
+                                value={computedStats.saldoStr}
+                                trend={movimientos.length > 0 ? `${movimientos.filter(m => m.match).length} reconciliados` : 'Sin datos'}
                                 isPositive={true}
                                 color="text-emerald-500"
-                                description="Integración directa con 3 entidades"
+                                description={movimientos.length === 0 ? 'Conecta el módulo bancario' : `${movimientos.length} movimientos`}
                             />
                             <StatCard
                                 icon={Activity}
                                 title="Margen Neto"
-                                value="71.4%"
-                                trend="+5.2%"
-                                isPositive={true}
+                                value={computedStats.margenStr}
+                                trend={computedStats.margenNum !== null ? (computedStats.margenNum >= 65 ? 'Sobre objetivo' : 'Bajo objetivo') : 'Sin datos'}
+                                isPositive={computedStats.margenNum === null || computedStats.margenNum >= 65}
                                 color="text-amber-500"
-                                description="Superior al objetivo del 65%"
+                                description={facturas.length > 0 ? 'Calculado desde ingresos y gastos reales' : 'Requiere datos de facturación'}
                             />
                         </div>
 
@@ -307,8 +376,7 @@ const Gestoria: React.FC<GestoriaProps> = ({ activeSubArea }) => {
                                     <div>
                                         <h3 className="text-2xl font-black text-[#051650] dark:text-white tracking-tight flex items-center gap-2">
                                             Evolución de Tesorería
-                                            <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" title="Datos Simulados"></span>
-                                        </h3>
+                                                                                    </h3>
                                         <p className="text-sm font-medium text-slate-500 mt-1">Comparativa Ingresos vs Gastos Mensual</p>
                                     </div>
                                     <div className="flex gap-2">
@@ -318,21 +386,22 @@ const Gestoria: React.FC<GestoriaProps> = ({ activeSubArea }) => {
                                 </div>
 
                                 <div className="h-80 flex items-end gap-4 justify-between relative z-10">
-                                    {[65, 45, 75, 55, 90, 80, 70, 85, 95, 100, 85, 110].map((h, i) => (
-                                        <div key={i} className="flex-1 flex flex-col items-center gap-3 group relative">
-                                            <div className="w-full flex flex-col gap-1 items-center justify-end h-full">
-                                                <div className="w-full bg-gradient-to-t from-blue-700 to-blue-500 rounded-t-xl transition-all group-hover:scale-x-110 duration-500 shadow-lg shadow-blue-500/20" style={{ height: `${h}%` }}></div>
-                                                <div className="w-full bg-rose-500/20 rounded-b-xl" style={{ height: `${h / 2.5}%` }}></div>
+                                    {computedStats.chartHeights.map((h, i) => {
+                                        const mesLabel = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'][i];
+                                        const maxIngresos = Math.max(...computedStats.chartHeights.map((_, j) => facturas.filter(f => f.rawDate.getMonth() === j && f.rawDate.getFullYear() === now.getFullYear()).reduce((s, f) => s + f.rawTotal, 0)), 1);
+                                        const mesIngresos = facturas.filter(f => f.rawDate.getMonth() === i && f.rawDate.getFullYear() === now.getFullYear()).reduce((s, f) => s + f.rawTotal, 0);
+                                        return (
+                                            <div key={i} className="flex-1 flex flex-col items-center gap-3 group relative">
+                                                <div className="w-full flex flex-col gap-1 items-center justify-end h-full">
+                                                    <div className={`w-full rounded-t-xl transition-all group-hover:scale-x-110 duration-500 shadow-lg ${h > 0 ? 'bg-gradient-to-t from-blue-700 to-blue-500 shadow-blue-500/20' : 'bg-slate-100'}`} style={{ height: `${Math.max(h, 2)}%` }}></div>
+                                                </div>
+                                                <span className="text-[10px] font-black text-slate-400 group-hover:text-[#051650] transition-colors">{mesLabel}</span>
+                                                <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-[#051650] text-white text-[9px] font-black px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                                    {mesIngresos > 0 ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(mesIngresos) : 'Sin datos'}
+                                                </div>
                                             </div>
-                                            <span className="text-[10px] font-black text-slate-400 group-hover:text-[#051650] transition-colors">
-                                                {['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'][i]}
-                                            </span>
-                                            {/* Tooltip on hover */}
-                                            <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-[#051650] text-white text-[9px] font-black px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                                                €{h * 450}
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
 
@@ -347,8 +416,7 @@ const Gestoria: React.FC<GestoriaProps> = ({ activeSubArea }) => {
                                             <div>
                                                 <div className="flex items-center gap-2">
                                                     <h3 className="font-black text-xl tracking-tight">Sello Verifactu</h3>
-                                                    <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" title="Datos Simulados"></span>
-                                                </div>
+                                                                                                    </div>
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
                                                     <span className="text-[10px] uppercase font-black text-emerald-400 tracking-widest">Activo y Legal</span>
@@ -359,7 +427,7 @@ const Gestoria: React.FC<GestoriaProps> = ({ activeSubArea }) => {
                                             <div className="p-5 bg-white/5 border border-white/10 rounded-[1.5rem] flex items-center justify-between group-hover:bg-white/10 transition-colors">
                                                 <div>
                                                     <p className="text-[10px] font-black uppercase text-white/40 tracking-widest mb-1">Último Envío AEAT</p>
-                                                    <p className="text-sm font-bold">Hoy, 08:30:12</p>
+                                                    <p className="text-sm font-bold">{now.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}, {now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
                                                 </div>
                                                 <div className="text-right">
                                                     <p className="text-[10px] font-black uppercase text-white/40 mb-1">Resultado</p>
@@ -873,8 +941,7 @@ const Gestoria: React.FC<GestoriaProps> = ({ activeSubArea }) => {
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <h3 className="text-2xl font-black text-[#051650] dark:text-white tracking-tight">Apuntes Bancarios</h3>
-                                            <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" title="Datos Simulados"></span>
-                                        </div>
+                                                                                    </div>
                                         <p className="text-sm font-medium text-slate-500 mt-1">Conexión en streaming con Banco Santander</p>
                                     </div>
                                     <div className="p-4 bg-red-50 rounded-2xl">
@@ -921,8 +988,7 @@ const Gestoria: React.FC<GestoriaProps> = ({ activeSubArea }) => {
                                 </div>
                                 <div className="flex items-center gap-2 mb-8 relative z-10">
                                     <h3 className="text-2xl font-black">Asistente de Conciliación</h3>
-                                    <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" title="Datos Simulados"></span>
-                                </div>
+                                                                    </div>
                                 <div className="p-8 bg-white/5 border border-white/10 rounded-[2rem] backdrop-blur-xl relative z-10">
                                     <p className="text-blue-300 font-bold leading-relaxed mb-6">He encontrado un abono bancario de <span className="text-white font-black underline underline-offset-4">€3,500.00</span> que coincide exactamente con el presupuesto de <span className="text-white font-black">Carlos Rubio Sanz</span>.</p>
                                     <div className="flex items-center gap-4 bg-white/10 p-5 rounded-2xl border border-white/10 mb-8">
@@ -964,8 +1030,7 @@ const Gestoria: React.FC<GestoriaProps> = ({ activeSubArea }) => {
                                 </div>
                                 <div className="flex items-center gap-2 mb-10">
                                     <h3 className="text-2xl font-black text-[#051650] dark:text-white tracking-tight">Liquidación Q1 2024</h3>
-                                    <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" title="Datos Simulados"></span>
-                                </div>
+                                                                    </div>
 
                                 <div className="space-y-8">
                                     <div className="space-y-4">
@@ -976,21 +1041,21 @@ const Gestoria: React.FC<GestoriaProps> = ({ activeSubArea }) => {
                                         <div className="p-5 bg-slate-50 dark:bg-slate-700/50 rounded-3xl border border-transparent hover:border-blue-500/20 transition-all">
                                             <div className="flex justify-between items-center mb-2">
                                                 <span className="text-sm font-bold text-slate-700 dark:text-slate-200">IVA Repercutido (Cobrado)</span>
-                                                <span className="font-black text-emerald-600 text-lg">€8,140.00</span>
+                                                <span className="font-black text-emerald-600 text-lg">{computedStats.ivaRepercutidoStr}</span>
                                             </div>
                                             <div className="flex justify-between items-center opacity-70">
-                                                <span className="text-xs font-medium text-slate-500">Base: €38,761.90</span>
-                                                <span className="text-xs font-black text-slate-500">21%</span>
+                                                <span className="text-xs font-medium text-slate-500">Base: {computedStats.baseFacturasStr}</span>
+                                                <span className="text-xs font-black text-slate-500">21% aprox.</span>
                                             </div>
                                         </div>
                                         <div className="p-5 bg-slate-50 dark:bg-slate-700/50 rounded-3xl border border-transparent hover:border-rose-500/20 transition-all">
                                             <div className="flex justify-between items-center mb-2">
                                                 <span className="text-sm font-bold text-slate-700 dark:text-slate-200">IVA Deducible (Gastos)</span>
-                                                <span className="font-black text-rose-600 text-lg">-€2,450.20</span>
+                                                <span className="font-black text-rose-600 text-lg">{computedStats.ivaDeducibleStr !== '—' ? `-${computedStats.ivaDeducibleStr}` : '—'}</span>
                                             </div>
                                             <div className="flex justify-between items-center opacity-70">
-                                                <span className="text-xs font-medium text-slate-500">Base: €11,667.62</span>
-                                                <span className="text-xs font-black text-slate-500">MIX</span>
+                                                <span className="text-xs font-medium text-slate-500">Base: {computedStats.baseGastosStr}</span>
+                                                <span className="text-xs font-black text-slate-500">21% aprox.</span>
                                             </div>
                                         </div>
                                     </div>
@@ -998,7 +1063,7 @@ const Gestoria: React.FC<GestoriaProps> = ({ activeSubArea }) => {
                                         <div className="flex justify-between items-end">
                                             <div>
                                                 <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">A ingresar (Modelo 303)</p>
-                                                <h4 className="text-4xl font-black text-[#051650] dark:text-blue-200 tracking-tighter">€5,689.80</h4>
+                                                <h4 className="text-4xl font-black text-[#051650] dark:text-blue-200 tracking-tighter">{computedStats.ivaLiquidarStr}</h4>
                                             </div>
                                             <div className="text-right">
                                                 <div className="px-3 py-1 bg-blue-100 text-blue-700 text-[9px] font-black rounded-full mb-2">20 ABRIL</div>
@@ -1018,8 +1083,7 @@ const Gestoria: React.FC<GestoriaProps> = ({ activeSubArea }) => {
                         <div className="xl:col-span-2 bg-white dark:bg-slate-800 p-10 rounded-[2.5rem] border-2 border-[#051650] dark:border-slate-700 shadow-xl overflow-hidden">
                             <h3 className="text-2xl font-black text-[#051650] dark:text-white mb-10 tracking-tight flex items-center gap-4">
                                 Calendario Fiscal Rubio García Dental
-                                <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" title="Datos Simulados"></span>
-                                <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-[10px] rounded-lg">2024 ACTIVADO</span>
+                                                                <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-[10px] rounded-lg">2024 ACTIVADO</span>
                             </h3>
 
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[500px] overflow-y-auto no-scrollbar mask-linear-fade">
@@ -1063,8 +1127,7 @@ const Gestoria: React.FC<GestoriaProps> = ({ activeSubArea }) => {
                                 <div>
                                     <div className="flex items-center gap-2">
                                         <h3 className="text-2xl font-black text-[#051650] dark:text-white tracking-tight">Centro de Informes</h3>
-                                        <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" title="Datos Simulados"></span>
-                                    </div>
+                                                                            </div>
                                     <p className="text-sm font-medium text-slate-500 mt-1">Exportación analítica Rubio García Dental</p>
                                 </div>
                             </div>
@@ -1113,6 +1176,12 @@ const Gestoria: React.FC<GestoriaProps> = ({ activeSubArea }) => {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                )}
+
+                {activeTab === 'envio' && (
+                    <div className="animate-in slide-in-from-bottom-6 duration-500">
+                        <EnvioGestoria />
                     </div>
                 )}
             </div>
