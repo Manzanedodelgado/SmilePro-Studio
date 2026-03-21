@@ -215,7 +215,7 @@ const Card: React.FC<{ a: Automation; expanded: boolean; configOpen: boolean; on
                             <button onClick={e => { e.stopPropagation(); onConfig(); }} className="flex items-center gap-1 px-3 py-1.5 text-[12px] font-bold uppercase bg-[#0056b3] text-white rounded-lg hover:bg-[#004494] transition-all">
                                 <Settings2 className="w-3 h-3" />Configurar
                             </button>
-                            <button onClick={handleTest} disabled={testing} className={`flex items-center gap-1 px-3 py-1.5 text-[12px] font-bold uppercase border rounded-lg transition-all ${testOk === true ? 'border-green-400 text-green-600 bg-green-50' : 'border-[#0056b3]/20 text-[#0056b3] hover:bg-[#0056b3]/5'}`}>
+                            <button onClick={handleTest} disabled={testing} className={`flex items-center gap-1 px-3 py-1.5 text-[12px] font-bold uppercase border rounded-lg transition-all ${testOk === true ? 'border-teal-400 text-teal-600 bg-teal-50' : 'border-[#0056b3]/20 text-[#0056b3] hover:bg-[#0056b3]/5'}`}>
                                 {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : testOk ? <CheckCircle2 className="w-3 h-3" /> : <Play className="w-3 h-3" />}
                                 {testing ? 'Disparando…' : testOk ? '¡Disparada!' : 'Probar'}
                             </button>
@@ -247,12 +247,17 @@ export const AutomationRules: React.FC = () => {
         return () => { cancelled = true; };
     }, []);
 
-    const toggle = (id: string) => {
+    const toggle = async (id: string) => {
         const item = automations.find(a => a.id === id);
         if (!item) return;
         const newActive = !item.active;
+        // Actualiza UI de forma optimista
         setAutomations(p => p.map(a => a.id === id ? { ...a, active: newActive } : a));
-        toggleAutomation(id, newActive); // persiste en BD (fire-and-forget)
+        const ok = await toggleAutomation(id, newActive);
+        if (!ok) {
+            // Revierte si el servidor rechaza
+            setAutomations(p => p.map(a => a.id === id ? { ...a, active: item.active } : a));
+        }
     };
 
     const toggleExpand = (id: string) => { setExpandedId(p => p === id ? null : id); setConfigId(null); };

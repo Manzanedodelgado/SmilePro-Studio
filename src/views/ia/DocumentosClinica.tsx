@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { getPacienteActivo } from '../../services/paciente-activo';
 import { FileText, Printer, Download, Search, ChevronRight, X, Edit3, Clipboard, Shield, Receipt, Heart } from 'lucide-react';
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
@@ -714,12 +715,32 @@ const applyVars = (text: string, overrides: Record<string, string>) => {
 };
 
 // ─── Componente principal ──────────────────────────────────────────────────────
-export const DocumentosClinica: React.FC = () => {
+export interface PacienteBasico {
+    nombre?: string; apellidos?: string; dni?: string;
+    telefono?: string; fechaNacimiento?: string; doctor?: string;
+}
+
+export const DocumentosClinica: React.FC<{ paciente?: PacienteBasico }> = ({ paciente }) => {
     const [search, setSearch] = useState('');
     const [catFilter, setCatFilter] = useState<DocCat | 'all'>('all');
     const [selected, setSelected] = useState<DocTemplate | null>(null);
     const [varOverrides, setVarOverrides] = useState<Record<string, string>>({});
     const printRef = useRef<HTMLPreElement>(null);
+
+    // Auto-rellenar variables: usa prop paciente o, si no hay, el último paciente activo del store
+    useEffect(() => {
+        const source = paciente ?? getPacienteActivo();
+        if (!source) return;
+        const nombreCompleto = [source.nombre, source.apellidos].filter(Boolean).join(' ');
+        const fill: Record<string, string> = {};
+        if (nombreCompleto) fill['{{nombre}}'] = nombreCompleto;
+        if (source.dni) fill['{{dni}}'] = source.dni;
+        if (source.telefono) fill['{{telefono}}'] = source.telefono;
+        if (source.doctor) fill['{{doctor}}'] = source.doctor;
+        if (source.fechaNacimiento) fill['{{fecha_nacimiento}}'] = source.fechaNacimiento;
+        fill['{{fecha}}'] = new Date().toLocaleDateString('es-ES');
+        setVarOverrides(fill);
+    }, [paciente?.nombre, paciente?.apellidos, paciente?.dni]);
 
     const filtered = DOCS.filter(d =>
         (catFilter === 'all' || d.cat === catFilter) &&

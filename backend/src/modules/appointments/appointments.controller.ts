@@ -2,6 +2,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppointmentsService } from './appointments.service';
 import { logger } from '../../config/logger.js';
+import { emitWA } from '../../config/socket.js';
 
 export class AppointmentsController {
     static async latestDate(req: Request, res: Response, next: NextFunction) {
@@ -41,6 +42,7 @@ export class AppointmentsController {
     static async create(req: Request, res: Response, next: NextFunction) {
         try {
             const data = await AppointmentsService.create(req.body);
+            emitWA('agenda:cita_created', { cita: data });
             res.json({ success: true, data });
         } catch (error) {
             next(error);
@@ -55,6 +57,7 @@ export class AppointmentsController {
                 return;
             }
             const data = await AppointmentsService.update(idUsu, idOrden, req.body);
+            emitWA('agenda:cita_updated', { cita: data });
             res.json({ success: true, data });
         } catch (error) {
             next(error);
@@ -69,6 +72,7 @@ export class AppointmentsController {
                 return;
             }
             const data = await AppointmentsService.cancel(idUsu, idOrden);
+            emitWA('agenda:cita_updated', { cita: data });
             res.json({ success: true, data });
         } catch (error) {
             next(error);

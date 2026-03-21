@@ -10,8 +10,8 @@ const ESTADO: Record<number, { label: string; color: string }> = {
     1: { label: 'Presupuestado', color: 'bg-amber-100 text-amber-700 border-amber-200' },
     2: { label: 'Aceptado',      color: 'bg-blue-100 text-blue-700 border-blue-200' },
     3: { label: 'En curso',      color: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
-    4: { label: 'Facturado',     color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-    5: { label: 'Realizado',     color: 'bg-green-100 text-green-700 border-green-200' },
+    4: { label: 'Facturado',     color: 'bg-teal-100 text-teal-700 border-teal-200' },
+    5: { label: 'Realizado',     color: 'bg-teal-100 text-teal-700 border-teal-200' },
     6: { label: 'Anulado',       color: 'bg-red-100 text-red-400 border-red-200' },
 };
 
@@ -42,7 +42,7 @@ function loadOfflineEntradas(idPac: number): EntradaMedica[] {
     return demo;
 }
 
-interface Props { idPac: number; }
+interface Props { idPac: number; hideHeader?: boolean; }
 
 // ─── Modal de detalle / edición ────────────────────────────────────
 const EntradaModal: React.FC<{
@@ -221,7 +221,7 @@ const EntradaModal: React.FC<{
                                     className="text-[12px] border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#051650]/30"
                                 />
                             ) : (
-                                <span className="text-[12px] font-bold text-emerald-700">
+                                <span className="text-[12px] font-bold text-teal-700">
                                     {entrada.importe != null && entrada.importe > 0 ? fmtEuros(entrada.importe) : '—'}
                                 </span>
                             )}
@@ -237,7 +237,7 @@ const EntradaModal: React.FC<{
                                     className="text-[12px] border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#051650]/30"
                                 />
                             ) : (
-                                <span className={`text-[12px] font-bold ${abonado ? 'text-green-600' : 'text-red-500'}`}>
+                                <span className={`text-[12px] font-bold ${abonado ? 'text-teal-600' : 'text-red-500'}`}>
                                     {entrada.importe != null && entrada.importe > 0
                                         ? (abonado ? '✓ Abonado' : entrada.pendiente != null ? fmtEuros(entrada.pendiente) : '—')
                                         : '—'}
@@ -312,7 +312,7 @@ const EntradaModal: React.FC<{
 };
 
 // ─── Componente principal ─────────────────────────────────────────
-const EntradasMedicas: React.FC<Props> = ({ idPac }) => {
+const EntradasMedicas: React.FC<Props> = ({ idPac, hideHeader }) => {
     const [rows, setRows]           = useState<EntradaMedica[]>([]);
     const [loading, setLoading]     = useState(false);
     const [order, setOrder]         = useState<'desc' | 'asc'>('asc');
@@ -410,10 +410,8 @@ const EntradasMedicas: React.FC<Props> = ({ idPac }) => {
             )}
 
             <div className="flex flex-col w-full overflow-x-hidden">
-                {/* Cabecera */}
-                <div className="flex items-center justify-between mb-2 px-1">
+                {!hideHeader && <div className="flex items-center justify-between mb-2 px-1">
                     <div className="flex items-center gap-2.5">
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Historial clínico</span>
                         {total > 0 && <span className="text-[10px] bg-gradient-to-r from-[#051650] to-blue-700 text-white rounded-full px-2.5 py-0.5 font-black shadow-sm">{total}</span>}
                         {isOffline && <span className="text-[9px] text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 font-bold">offline</span>}
                     </div>
@@ -436,7 +434,7 @@ const EntradasMedicas: React.FC<Props> = ({ idPac }) => {
                             {order === 'desc' ? 'Más reciente' : 'Más antigua'}
                         </button>
                     </div>
-                </div>
+                </div>}
 
                 {/* Lista */}
                 {loading ? (
@@ -471,7 +469,7 @@ const EntradasMedicas: React.FC<Props> = ({ idPac }) => {
                             const nota   = dotIdx !== -1 ? e.descripcion.slice(dotIdx + 1).trim() : (e.comentario ?? '');
 
                             // Estado-based left border (4 categories)
-                            const borderColor = e.estado === 5 ? 'border-l-emerald-400'
+                            const borderColor = e.estado === 5 ? 'border-l-teal-400'
                                 : e.estado === 6 ? 'border-l-red-300'
                                 : e.estado >= 3 ? 'border-l-blue-400'
                                 : 'border-l-amber-300';
@@ -484,16 +482,16 @@ const EntradasMedicas: React.FC<Props> = ({ idPac }) => {
                                     style={{ animationDelay: `${idx * 30}ms` }}
                                 >
                                     {/* Fecha — pill */}
-                                    <span className="text-[9px] font-bold text-slate-500 bg-slate-100/80 border border-slate-200/60 rounded-lg px-2 py-1 flex-shrink-0 whitespace-nowrap tabular-nums">
+                                    <span className="text-[11px] font-bold text-slate-500 bg-slate-100/80 border border-slate-200/60 rounded-lg px-2 py-1 flex-shrink-0 whitespace-nowrap tabular-nums">
                                         {e.fecha ? new Date(e.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
                                     </span>
 
                                     {/* Tratamiento */}
-                                    <span className="text-[11px] font-bold text-[#051650] flex-shrink-0 group-hover:text-blue-700 transition-colors">{tto}</span>
+                                    <span className="text-[13px] font-bold text-[#051650] flex-shrink-0 group-hover:text-blue-700 transition-colors">{tto}</span>
 
                                     {/* Notas */}
                                     {nota && (
-                                        <span className="text-[10px] text-slate-400 flex-shrink truncate min-w-0 max-w-[550px] lowercase">{nota}</span>
+                                        <span className="text-[12px] text-slate-400 flex-shrink truncate min-w-0 max-w-[550px] lowercase">{nota}</span>
                                     )}
                                     <span className="flex-1" />
 
@@ -503,11 +501,11 @@ const EntradasMedicas: React.FC<Props> = ({ idPac }) => {
                                     {/* Pieza + Estado */}
                                     <div className="flex items-center gap-1.5 flex-shrink-0">
                                         {piezas.length > 0 && (
-                                            <span className="text-[10px] text-blue-600 font-medium">
+                                            <span className="text-[11px] text-blue-600 font-medium">
                                                 🦷{piezas.slice(0, 2).join(',')}
                                             </span>
                                         )}
-                                        <span className={`text-[9px] border rounded-lg px-2 py-0.5 font-bold ${est.color}`}>
+                                        <span className={`text-[10px] border rounded-lg px-2 py-0.5 font-bold ${est.color}`}>
                                             {est.label}
                                         </span>
                                     </div>

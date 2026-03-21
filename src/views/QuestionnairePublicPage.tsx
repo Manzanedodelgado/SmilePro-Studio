@@ -84,7 +84,7 @@ const ErrorScreen: React.FC<{ title: string; message: string }> = ({ title, mess
 );
 
 const SuccessScreen = () => (
-    <div className="min-h-screen bg-gradient-to-br from-green-600 to-[#051650] flex items-center justify-center p-6">
+    <div className="min-h-screen bg-gradient-to-br from-teal-600 to-[#051650] flex items-center justify-center p-6">
         <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center">
             <div className="text-6xl mb-4 animate-bounce">✅</div>
             <h1 className="text-2xl font-bold text-slate-800 mb-2">¡Muchas gracias!</h1>
@@ -441,7 +441,7 @@ const QuestionnairePublicPage: React.FC<Props> = ({ token }) => {
                         </button>
                     ) : (
                         <button onClick={handleSubmit} disabled={!canSubmit || submitting}
-                            className="flex-1 py-3 bg-[#051650] text-white rounded-xl text-sm font-bold uppercase tracking-wide shadow-lg hover:bg-green-700 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                            className="flex-1 py-3 bg-[#051650] text-white rounded-xl text-sm font-bold uppercase tracking-wide shadow-lg hover:bg-teal-700 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                             {submitting ? (
                                 <><span className="animate-spin">⏳</span> Enviando...</>
                             ) : (

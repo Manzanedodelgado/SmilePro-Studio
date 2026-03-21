@@ -72,6 +72,21 @@
     @keyframes spin {
         to { transform: rotate(360deg); }
     }
+
+    @keyframes tabEnter {
+        from { opacity: 0; transform: translateY(12px); }
+        to   { opacity: 1; transform: translateY(0);    }
+    }
+
+    @keyframes skeletonShimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    @keyframes scaleIn {
+        from { opacity: 0; transform: scale(0.96); }
+        to   { opacity: 1; transform: scale(1);    }
+    }
 }
 
 /* ── Clases de utilidad de animación ─────────── */
@@ -79,6 +94,28 @@
     .animate-fade-in     { animation: fadeIn    0.3s ease-out forwards; }
     .animate-shake       { animation: shake     0.2s ease-in-out 0s 2;  }
     .animate-spin-fast   { animation: spin      0.6s linear infinite;   }
+
+    /* Tab transition — slides up and fades in */
+    .animate-tab-enter {
+        animation: tabEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    /* Skeleton shimmer */
+    .animate-skeleton {
+        background: linear-gradient(
+            90deg,
+            hsl(210 20% 93%) 25%,
+            hsl(210 20% 97%) 50%,
+            hsl(210 20% 93%) 75%
+        );
+        background-size: 200% 100%;
+        animation: skeletonShimmer 1.5s ease-in-out infinite;
+    }
+
+    /* Subtle scale-in for cards */
+    .animate-scale-in {
+        animation: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
 
     .estado-espera {
         animation: pulse-soft 3s infinite ease-in-out;

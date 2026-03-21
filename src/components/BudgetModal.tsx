@@ -151,7 +151,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ phone, patientName, do
                     </div>
 
                     {error && <p className="text-[12px] text-[#E03555] font-bold">{error}</p>}
-                    {sent && <p className="text-[12px] text-green-600 font-bold">✓ Presupuesto enviado por WhatsApp</p>}
+                    {sent && <p className="text-[12px] text-teal-600 font-bold">✓ Presupuesto enviado por WhatsApp</p>}
                 </div>
 
                 {/* Footer actions */}

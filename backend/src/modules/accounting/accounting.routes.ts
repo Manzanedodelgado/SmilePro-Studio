@@ -38,4 +38,10 @@ router.get('/budgets', AccountingController.listBudgets);
 router.post('/budgets', AccountingController.createBudget);
 router.get('/patients/:patientId/balance', AccountingController.patientBalance);
 
+// Gestoría — config & envío automático
+router.get('/gestoria-config', AccountingController.getGestoriaConfig);
+router.put('/gestoria-config', AccountingController.updateGestoriaConfig);
+router.post('/gestoria-send', AccountingController.sendGestoriaReport);
+router.get('/gestoria-history', AccountingController.getGestoriaHistory);
+
 export default router;

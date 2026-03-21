@@ -45,8 +45,43 @@ export class PatientsService {
             const maxNum = parseInt(maxRow._max.NumPac ?? '0', 10);
             numPac = String(maxNum + 1).padStart(8, '0');
         }
-        const data = { ...input, NumPac: numPac };
-        return prisma.pacientes.create({ data: data as any }).catch(() => null);
+        const now = new Date();
+        const data = {
+            NumPac: numPac,
+            Nombre: input.Nombre ?? '',
+            Apellidos: input.Apellidos ?? '',
+            NIF: input.NIF ?? '',
+            TelMovil: input.TelMovil ?? '',
+            Email: (input as any).Email ?? '',
+            Sexo: (input as any).Sexo ?? '',
+            Direccion: (input as any).Direccion ?? '',
+            CP: (input as any).CP ?? '',
+            FecNacim: (input as any).FecNacim ?? null,
+            FecAlta: now,
+            Mailing: true,
+            AceptaInfo: true,
+            AceptaSMS: true,
+            TipoDocIdent: 1,
+            version: 1,
+            fechaModif: now,
+            idUserModif: 1,
+            LecturaDocIdentEstado: 0,
+            LecturaDocIdentFecha: now,
+            LecturaDocIdentIdUser: 0,
+            IdTipoDireccion: 0,
+            NoContactable: false,
+            Derivado: false,
+            ExternalId: '',
+            Guid_Tenant: '',
+            AceptaBots: true,
+            AceptaWhatsApp: true,
+        };
+        try {
+            return await prisma.pacientes.create({ data: data as any });
+        } catch (err) {
+            console.error('[PatientsService.create] Prisma error:', err);
+            return null;
+        }
     }
 
     static async update(id: string, input: UpdatePatientInput) {

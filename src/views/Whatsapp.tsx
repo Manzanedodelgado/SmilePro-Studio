@@ -5,18 +5,22 @@ import {
     QrCode, RefreshCw, Tag, CheckCircle2, Paperclip,
     AlertCircle, UserRound, PlusCircle, X, Pause,
     Copy, CornerUpLeft, Smile, Zap,
-    Info, MessageSquare
+    Info, MessageSquare, ShieldAlert, Heart, Pill,
+    Droplets, FileText, BriefcaseMedical, Receipt,
 } from 'lucide-react';
 import { searchPacientes } from '../services/pacientes.service';
 import {
-    type ConversacionUI, type MensajeUI, type InstanceStatus,
+    type ConversacionUI, type MensajeUI, type InstanceStatus, type PatientContext,
     isEvolutionConfigured, isChatwootConfigured,
     getInstanceStatus, getQRCode,
     getChatwootConversaciones, getChatwootMensajes,
-    sendChatwootMessage, sendTextMessage,
-    labelConversation, resolveConversation, deleteConversation, markConversationRead
+    sendChatwootMessage, sendTextMessage, sendMediaBase64,
+    labelConversation, resolveConversation, deleteConversation, markConversationRead,
+    connectWhatsAppSocket, disconnectWhatsAppSocket, onWhatsAppMessage, onConversationUpdated,
+    onWhatsAppUrgency, getPatientContext,
 } from '../services/evolution.service';
 import { getIAStatus, pauseIA, resumeIA } from '../services/ia-control.service';
+import { BudgetModal } from '../components/BudgetModal';
 
 
 // ── No mock data. When unconfigured, show empty state ─────────────────────────
@@ -35,8 +39,8 @@ const EMOJI_CATS: Record<string, string[]> = {
     '🌿': ['🌸', '🌺', '🌻', '🌼', '🍀', '🌿', '🌱', '🦋', '🐝', '☀️', '🌙', '⭐', '🌈', '❄️', '🌊', '🍎', '🍊', '🍋', '🍇', '🫐', '🥝', '🍓'],
 };
 
-// ── Plantillas rápidas dentales ─────────────────────────────────────────────
-const QUICK_TEMPLATES = [
+// ── Plantillas rápidas dentales (fallback si backend no disponible) ──────────
+const QUICK_TEMPLATES_DEFAULT = [
     { label: 'Cita confirmada', icon: '📅', text: 'Le confirmamos su cita para el {fecha} a las {hora}. Por favor, llegue 5 minutos antes. ¡Le esperamos! 😊' },
     { label: 'Recordatorio cita', icon: '⏰', text: 'Le recordamos que mañana tiene cita en Rubio García Dental a las {hora}. Si necesita cancelar, contáctenos con antelación.' },
     { label: 'Cita cancelada', icon: '❌', text: 'Lamentamos informarle que su cita del {fecha} ha sido cancelada. Contacte con nosotros para reagendar. Disculpe las molestias.' },
@@ -45,6 +49,13 @@ const QUICK_TEMPLATES = [
     { label: 'Resultados OK', icon: '✅', text: 'Sus resultados son perfectos. ¡Siga con la misma rutina de higiene! Le esperamos en su próxima revisión.' },
     { label: 'Instrucciones post', icon: '📋', text: 'Tras su tratamiento de hoy: evite alimentos duros las próximas 24h, no fume y tome el analgésico pautado si siente molestias. Cualquier duda, escríbanos.' },
 ];
+
+const ICON_MAP: Record<string, string> = {
+    'Recordatorios': '⏰', 'Seguimiento': '💙', 'Bienvenida': '🌟', 'Presupuesto': '💊',
+    'Post-quirúrgico': '🦷', 'Citas': '📅', 'Cancelación': '❌', 'Resultados': '✅',
+};
+
+const API_BASE_WA = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000';
 
 // ── Helpers de tiempo ───────────────────────────────────────────────────────
 const relativeTime = (ts: number): string => {
@@ -93,6 +104,18 @@ const Whatsapp: React.FC<WhatsappProps> = ({ initialPhone, initialName, onNaviga
     const [patientResults, setPatientResults] = useState<Awaited<ReturnType<typeof searchPacientes>>>([]);
     const [searchingPac, setSearchingPac] = useState(false);
 
+    // Urgency alert
+    const [urgencyAlert, setUrgencyAlert] = useState<{ phone: string; text: string; time: string } | null>(null);
+    // Patient context for showInfo panel
+    const [patientCtx, setPatientCtx] = useState<PatientContext | null>(null);
+    const [loadingCtx, setLoadingCtx] = useState(false);
+    // Info panel visibility (moved up to allow useEffect dependency)
+    const [showInfo, setShowInfo] = useState(false);
+    // Budget modal
+    const [showBudget, setShowBudget] = useState(false);
+    // Plantillas rápidas — se sincronizan con el módulo Plantillas del backend
+    const [quickTemplates, setQuickTemplates] = useState(QUICK_TEMPLATES_DEFAULT);
+
     const handlePatientSearch = async (q: string) => {
         setPatientQuery(q);
         if (q.trim().length < 2) { setPatientResults([]); return; }
@@ -132,6 +155,22 @@ const Whatsapp: React.FC<WhatsappProps> = ({ initialPhone, initialName, onNaviga
         setPatientQuery('');
         setPatientResults([]);
     };
+
+    // Cargar plantillas WhatsApp desde el módulo Plantillas del backend
+    useEffect(() => {
+        fetch(`${API_BASE_WA}/api/ai/templates?type=whatsapp`)
+            .then(r => r.ok ? r.json() : null)
+            .then(json => {
+                const rows: any[] = json?.data ?? [];
+                if (rows.length === 0) return;
+                setQuickTemplates(rows.map((t: any) => ({
+                    label: t.name ?? t.id,
+                    icon: ICON_MAP[t.category] ?? '💬',
+                    text: t.content ?? '',
+                })));
+            })
+            .catch(() => { /* mantener fallback */ });
+    }, []);
 
     // Cargar estado IA al cambiar de conversación
     useEffect(() => {
@@ -318,6 +357,71 @@ const Whatsapp: React.FC<WhatsappProps> = ({ initialPhone, initialName, onNaviga
         return () => clearInterval(interval);
     }, []);
 
+    // Fetch patient context when info panel opens
+    useEffect(() => {
+        if (!showInfo || !active?.phone) { setPatientCtx(null); return; }
+        setLoadingCtx(true);
+        getPatientContext(active.phone)
+            .then(ctx => setPatientCtx(ctx))
+            .finally(() => setLoadingCtx(false));
+    }, [showInfo, active?.phone]);
+
+    // ── Socket.io — real-time WhatsApp events ─────────────────────────────────
+    useEffect(() => {
+        connectWhatsAppSocket();
+
+        // Incoming / outgoing message from webhook
+        const offMsg = onWhatsAppMessage((payload) => {
+            setActive(prev => {
+                if (!prev) return prev;
+                const phone9 = prev.phone?.replace(/\D/g, '').slice(-9);
+                const incomingPhone9 = payload.phone?.replace(/\D/g, '').slice(-9);
+                if (phone9 !== incomingPhone9) return prev;
+                // Append message to current conversation
+                const msg: MensajeUI = {
+                    id: payload.id,
+                    sender: payload.fromMe ? 'me' : 'them',
+                    text: payload.text,
+                    time: payload.time,
+                    status: 'delivered',
+                };
+                setMsgs(p => {
+                    // Avoid duplicates
+                    if (p.find(m => m.id === payload.id)) return p;
+                    return [...p, msg];
+                });
+                return prev;
+            });
+        });
+
+        // Conversation list refresh
+        const offConv = onConversationUpdated(() => {
+            if (isChatwootConfigured()) {
+                getChatwootConversaciones().then(data => {
+                    setConvs(prev => {
+                        const byId = new Map(prev.map(c => [String(c.chatwootId ?? c.id), c]));
+                        data.forEach(d => byId.set(String(d.chatwootId ?? d.id), d));
+                        return [...byId.values()].sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+                    });
+                });
+            }
+        });
+
+        // Urgency alerts from server
+        const offUrgency = onWhatsAppUrgency((payload) => {
+            setUrgencyAlert(payload);
+            // Auto-dismiss after 30 seconds
+            setTimeout(() => setUrgencyAlert(prev => prev?.phone === payload.phone ? null : prev), 30_000);
+        });
+
+        return () => {
+            offMsg();
+            offConv();
+            offUrgency();
+            disconnectWhatsAppSocket();
+        };
+    }, []);
+
     // Seleccionar conversación: resetea badge unread al instante
     const handleSelectConv = (conv: ConversacionUI) => {
         setActive(conv);
@@ -333,14 +437,24 @@ const Whatsapp: React.FC<WhatsappProps> = ({ initialPhone, initialName, onNaviga
     const handleSend = async () => {
         if (!input.trim() || !active) return;
         const text = input.trim();
-        const optimistic: MensajeUI = { id: Date.now().toString(), sender: 'me', text, time: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }), status: 'sent' };
+        const replyPreview = replyTo?.text ?? undefined;
+        const optimistic: MensajeUI = {
+            id: Date.now().toString(),
+            sender: 'me',
+            text,
+            time: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+            status: 'sent',
+            replyTo: replyPreview,
+        };
         setMsgs(p => [...p, optimistic]);
         setInput('');
+        const replyChatwootId = replyTo?.id ? parseInt(replyTo.id) : undefined;
+        setReplyTo(null);
         setSending(true);
 
         try {
             if (isChatwootConfigured() && active.chatwootId) {
-                const ok = await sendChatwootMessage(active.chatwootId, text);
+                const ok = await sendChatwootMessage(active.chatwootId, text, replyChatwootId);
                 if (!ok) throw new Error();
             } else if (isEvolutionConfigured()) {
                 const ok = await sendTextMessage(active.phone, text);
@@ -380,7 +494,6 @@ const Whatsapp: React.FC<WhatsappProps> = ({ initialPhone, initialName, onNaviga
     const [showTemplates, setShowTemplates] = useState(false);
     const [replyTo, setReplyTo] = useState<MensajeUI | null>(null);
     const [hoveredMsg, setHoveredMsg] = useState<string | null>(null);
-    const [showInfo, setShowInfo] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -424,26 +537,83 @@ const Whatsapp: React.FC<WhatsappProps> = ({ initialPhone, initialName, onNaviga
         else last.messages.push(msg);
     });
 
+    // KPIs para el header
+    const kpiOpen = convs.filter(c => c.status === 'open').length;
+    const kpiPending = convs.filter(c => c.status === 'pending').length;
+    const kpiResolved = convs.filter(c => c.status === 'resolved').length;
+
     return (
+        <>
         <div className="flex flex-col h-full gap-3 min-h-0 overflow-hidden">
 
-            {/* Connection status bar */}
-            <div className="flex items-center justify-between">
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[12px] font-bold uppercase tracking-wider ${badge.color}`}>
-                    <BadgeIcon className="w-3 h-3" />
-                    {badge.text}
-                </div>
-                <div className="flex items-center gap-2">
-                    {isEvolutionConfigured() && instanceStatus?.state !== 'open' && (
-                        <button onClick={handleGetQR} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0056b3] text-white rounded-xl text-[12px] font-bold uppercase hover:bg-[#004494] transition-all">
-                            <QrCode className="w-3.5 h-3.5" />Conectar WhatsApp
+            {/* ── Channel Header ─────────────────────────────────────────────── */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden shrink-0">
+                {/* Top row: identity + connection + actions */}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                        {/* WhatsApp icon */}
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg,#25D366,#128C7E)' }}>
+                            <MessageSquare className="w-4.5 h-4.5 text-white" style={{ width: 18, height: 18 }} />
+                        </div>
+                        <div>
+                            <p className="text-[14px] font-black text-[#051650] leading-tight">WhatsApp Business</p>
+                            <p className="text-[11px] text-slate-400 font-medium">Rubio García Dental</p>
+                        </div>
+                        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold uppercase tracking-wider ml-2 ${badge.color}`}>
+                            <BadgeIcon className="w-3 h-3" />
+                            {badge.text}
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {isEvolutionConfigured() && instanceStatus?.state !== 'open' && (
+                            <button onClick={handleGetQR} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#25D366] text-white rounded-xl text-[12px] font-bold uppercase hover:bg-[#1ebe5a] transition-all shadow-sm">
+                                <QrCode className="w-3.5 h-3.5" />Conectar
+                            </button>
+                        )}
+                        <button onClick={async () => { const d = await getChatwootConversaciones(); if (d.length) setConvs(d); }}
+                            className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all" title="Actualizar">
+                            <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
                         </button>
-                    )}
-                    <button onClick={async () => { const d = await getChatwootConversaciones(); if (d.length) setConvs(d); }} className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all">
-                        <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
-                    </button>
+                    </div>
+                </div>
+                {/* KPI strip */}
+                <div className="grid grid-cols-4 divide-x divide-slate-100">
+                    {[
+                        { label: 'Total', value: convs.length, color: 'text-[#051650]', bg: '', active: filterStatus === 'all', key: 'all' },
+                        { label: 'Abiertos', value: kpiOpen, color: 'text-blue-600', bg: 'group-hover:bg-blue-50', active: filterStatus === 'open', key: 'open' },
+                        { label: 'Pendientes', value: kpiPending, color: 'text-amber-600', bg: 'group-hover:bg-amber-50', active: filterStatus === 'pending', key: 'pending' },
+                        { label: 'Resueltos', value: kpiResolved, color: 'text-slate-400', bg: 'group-hover:bg-slate-50', active: filterStatus === 'resolved', key: 'resolved' },
+                    ].map(k => (
+                        <button key={k.key} onClick={() => setFilterStatus(k.key as FilterStatus)}
+                            className={`group flex flex-col items-center py-2.5 transition-all ${k.active ? 'bg-slate-50' : ''} ${k.bg}`}>
+                            <span className={`text-[20px] font-black leading-none ${k.color}`}>{k.value}</span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{k.label}</span>
+                            {k.active && <div className="w-6 h-0.5 bg-[#0056b3] rounded-full mt-1.5" />}
+                        </button>
+                    ))}
                 </div>
             </div>
+
+            {/* ── Urgency Alert Banner ─────────────────────────────────────────── */}
+            {urgencyAlert && (
+                <div className="flex items-start gap-3 px-4 py-3 bg-[#FFF0F3] border border-[#FFC0CB] rounded-xl shadow-lg animate-in slide-in-from-top-2 duration-300">
+                    <div className="w-8 h-8 rounded-xl bg-[#E03555] flex items-center justify-center shrink-0">
+                        <ShieldAlert className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                            <p className="text-[13px] font-black text-[#C02040] uppercase tracking-wider">¡Urgencia detectada!</p>
+                            <span className="text-[11px] text-[#C02040]/70 font-bold">{urgencyAlert.time}</span>
+                        </div>
+                        <p className="text-[12px] text-[#C02040] mt-0.5">
+                            <span className="font-bold">{urgencyAlert.phone}</span> — {urgencyAlert.text.slice(0, 120)}{urgencyAlert.text.length > 120 ? '…' : ''}
+                        </p>
+                    </div>
+                    <button onClick={() => setUrgencyAlert(null)} className="p-1 hover:bg-[#FFD6DC] rounded-lg transition-all shrink-0">
+                        <X className="w-3.5 h-3.5 text-[#C02040]" />
+                    </button>
+                </div>
+            )}
 
             {/* QR Modal */}
             {qr && (
@@ -527,26 +697,30 @@ const Whatsapp: React.FC<WhatsappProps> = ({ initialPhone, initialName, onNaviga
                         ) : (
                             filteredConvs.map(conv => {
                                 const isAct = active?.id === conv.id;
+                                const statusDot: Record<string,string> = { open:'bg-[#25D366]', pending:'bg-amber-400', resolved:'bg-slate-300' };
                                 return (
                                     <div key={conv.id} onClick={() => handleSelectConv(conv)}
-                                        className={`relative px-4 py-3 flex items-start gap-3 cursor-pointer border-b border-slate-50 transition-all ${isAct ? 'bg-blue-50/60' : 'hover:bg-slate-50'}`}>
-                                        {isAct && <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#1d4ed8]" />}
-                                        <div className="relative shrink-0">
-                                            <div className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-lg shadow-sm ${isAct ? 'bg-gradient-to-br from-[#1d4ed8] to-[#0ea5e9] text-white' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>
+                                        className={`relative px-3 py-2.5 flex items-start gap-2.5 cursor-pointer border-b border-slate-50/80 transition-all ${isAct ? 'bg-blue-50/70' : 'hover:bg-slate-50'}`}>
+                                        {isAct && <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#1d4ed8] rounded-r" />}
+                                        <div className="relative shrink-0 mt-0.5">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-base shadow-sm ${isAct ? 'bg-gradient-to-br from-[#1d4ed8] to-[#0ea5e9] text-white' : 'bg-gradient-to-br from-slate-100 to-slate-200 text-slate-600'}`}>
                                                 {conv.avatar}
                                             </div>
-                                            <span className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-[2.5px] border-white ${STATUS_COLOR[conv.status] ?? 'bg-slate-300'}`} />
+                                            <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${statusDot[conv.status] ?? 'bg-slate-300'}`} />
                                         </div>
-                                        <div className="flex-1 min-w-0 mt-0.5">
-                                            <div className="flex items-center justify-between mb-0.5">
-                                                <p className="text-[14px] font-bold text-[#051650] truncate">{conv.name}</p>
-                                                <div className="flex items-center gap-1 shrink-0">
-                                                    {conv.unread > 0 && <span className="w-4 h-4 bg-[#0056b3] text-white text-[13px] font-bold rounded-full flex items-center justify-center">{conv.unread}</span>}
-                                                </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-baseline justify-between gap-1 mb-0.5">
+                                                <p className={`text-[13px] font-bold truncate ${isAct ? 'text-[#1d4ed8]' : 'text-[#051650]'}`}>{conv.name}</p>
+                                                <span className="text-[10px] text-slate-400 font-medium shrink-0">{relativeTime(conv.lastMessageAt)}</span>
                                             </div>
-                                            <p className="text-[12px] text-slate-400 truncate">{conv.lastMessage}</p>
-                                            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                                                {conv.tags.slice(0, 2).map(t => <span key={t} className="text-[12px] font-bold text-[#0056b3] bg-[#0056b3]/10 px-1.5 py-0.5 rounded-full">{t}</span>)}
+                                            <p className="text-[12px] text-slate-400 truncate leading-tight">{conv.lastMessage}</p>
+                                            <div className="flex items-center justify-between mt-1">
+                                                <div className="flex items-center gap-1">
+                                                    {conv.tags.slice(0, 2).map(t => <span key={t} className="text-[10px] font-bold text-[#0056b3] bg-[#0056b3]/10 px-1.5 py-0.5 rounded-full">{t}</span>)}
+                                                </div>
+                                                {conv.unread > 0 && (
+                                                    <span className="min-w-[18px] h-[18px] bg-[#25D366] text-white text-[10px] font-black rounded-full flex items-center justify-center px-1 shrink-0">{conv.unread}</span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -561,17 +735,26 @@ const Whatsapp: React.FC<WhatsappProps> = ({ initialPhone, initialName, onNaviga
                     <div className="flex-1 flex flex-col min-h-0">
                         {!active ? (
                             <div className="flex-1 flex items-center justify-center bg-slate-50/50">
-                                <div className="text-center space-y-4 max-w-sm">
-                                    <div className="w-24 h-24 rounded-[2rem] bg-gradient-to-br from-[#1d4ed8] to-[#0ea5e9] flex items-center justify-center mx-auto shadow-2xl rotate-3">
-                                        <MessageSquare className="w-10 h-10 text-white fill-white/20" />
+                                <div className="text-center space-y-5 max-w-sm px-6">
+                                    {/* Icon */}
+                                    <div className="relative mx-auto w-fit">
+                                        <div className="w-20 h-20 rounded-[1.5rem] flex items-center justify-center shadow-2xl" style={{ background: 'linear-gradient(135deg,#25D366,#128C7E)' }}>
+                                            <MessageSquare className="w-9 h-9 text-white" />
+                                        </div>
+                                        <div className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-[#051650] flex items-center justify-center">
+                                            <Bot className="w-3 h-3 text-[#FBFFA3]" />
+                                        </div>
                                     </div>
                                     <div>
-                                        <h3 className="text-[20px] font-black text-[#051650] tracking-tight">SmilePro Messenger</h3>
-                                        <p className="text-[14px] text-slate-500 mt-2 leading-relaxed">Selecciona una conversación del panel lateral para empezar a chatear o inicia una nueva.</p>
+                                        <h3 className="text-[18px] font-black text-[#051650] tracking-tight">Canal WhatsApp Business</h3>
+                                        <p className="text-[13px] text-slate-500 mt-1.5 leading-relaxed">Selecciona una conversación para chatear o usa el <strong className="text-[#051650]">+</strong> para iniciar una con un paciente.</p>
                                     </div>
-                                    <span className="text-[11px] font-bold text-slate-400 bg-white border border-slate-200 py-1.5 px-4 rounded-full inline-block shadow-sm">
-                                        Sistema Conectado y Encriptado
-                                    </span>
+                                    {/* Feature pills */}
+                                    <div className="flex flex-wrap justify-center gap-2">
+                                        {['IA dental activa','Recordatorios auto','Presupuestos','Ficha clínica'].map(f => (
+                                            <span key={f} className="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 py-1 px-3 rounded-full shadow-sm">{f}</span>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         ) : (
@@ -751,7 +934,7 @@ const Whatsapp: React.FC<WhatsappProps> = ({ initialPhone, initialName, onNaviga
                                                 <button onClick={() => setShowTemplates(false)}><X className="w-3.5 h-3.5 text-slate-400" /></button>
                                             </div>
                                             <div className="max-h-72 overflow-y-auto divide-y divide-slate-50">
-                                                {QUICK_TEMPLATES.map(t => (
+                                                {quickTemplates.map(t => (
                                                     <button key={t.label} onClick={() => insertTemplate(t.text)}
                                                         className="w-full flex items-start gap-3 px-4 py-2.5 hover:bg-slate-50 transition-all text-left">
                                                         <span className="text-lg flex-shrink-0 mt-0.5">{t.icon}</span>
@@ -769,7 +952,35 @@ const Whatsapp: React.FC<WhatsappProps> = ({ initialPhone, initialName, onNaviga
                                     <div className="flex items-end gap-2 p-2">
                                         <label className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors flex-shrink-0 cursor-pointer" title="Adjunto">
                                             <Paperclip className="w-5 h-5" />
-                                            <input type="file" accept="image/*,application/pdf,.doc,.docx" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setInput(prev => prev + ` [Archivo: ${f.name}]`); e.target.value=''; }} />
+                                            <input type="file" accept="image/*,application/pdf,.doc,.docx" className="hidden" onChange={async e => {
+                                                const file = e.target.files?.[0];
+                                                e.target.value = '';
+                                                if (!file || !active) return;
+                                                if (!isEvolutionConfigured()) {
+                                                    alert('Los adjuntos requieren Evolution API configurada.');
+                                                    return;
+                                                }
+                                                setSending(true);
+                                                const reader = new FileReader();
+                                                reader.onload = async () => {
+                                                    const dataUrl = reader.result as string;
+                                                    // Strip the "data:<mime>;base64," prefix
+                                                    const base64 = dataUrl.split(',')[1] ?? '';
+                                                    const optimistic: MensajeUI = {
+                                                        id: Date.now().toString(),
+                                                        sender: 'me',
+                                                        text: `📎 ${file.name}`,
+                                                        time: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+                                                        status: 'sent',
+                                                        attachments: [{ type: file.type.startsWith('image/') ? 'image' : 'document', url: dataUrl, name: file.name }],
+                                                    };
+                                                    setMsgs(p => [...p, optimistic]);
+                                                    const ok = await sendMediaBase64(active.phone, base64, file.type, file.name);
+                                                    setMsgs(p => p.map(m => m.id === optimistic.id ? { ...m, status: ok ? 'delivered' : 'failed' } : m));
+                                                    setSending(false);
+                                                };
+                                                reader.readAsDataURL(file);
+                                            }} />
                                         </label>
                                         <button onClick={() => { setShowEmoji(v => !v); setShowTemplates(false); }}
                                             className={`p-2 rounded-full transition-colors flex-shrink-0 ${showEmoji ? 'text-blue-600 bg-blue-50' : 'text-slate-400 hover:bg-slate-100'}`} title="Emojis">
@@ -801,51 +1012,139 @@ const Whatsapp: React.FC<WhatsappProps> = ({ initialPhone, initialName, onNaviga
                     </div>
                     {/* ── Info panel ──────────────────────────────────────────── */}
                     {showInfo && active && (
-                        <div className="w-64 border-l border-slate-200 bg-slate-50/80 flex flex-col shrink-0 overflow-y-auto">
-                            <div className="p-4 text-center border-b border-slate-100">
-                                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#1d4ed8] to-[#0056b3] flex items-center justify-center text-white font-bold text-xl mx-auto mb-2 shadow-md">{active.avatar}</div>
-                                <p className="text-[13px] font-bold text-[#051650]">{active.name}</p>
-                                <p className="text-[12px] text-slate-400 mt-0.5">{active.phone}</p>
-                                <div className={`inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full text-[12px] font-bold uppercase ${active.status === 'open' ? 'bg-blue-100 text-[#051650] border border-blue-200' : active.status === 'pending' ? 'bg-[#FEFCC4] text-[#051650] border border-[#FBFFA3]' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${STATUS_COLOR[active.status]}`} />{active.status}
+                        <div className="w-72 border-l border-slate-200 bg-white flex flex-col shrink-0 overflow-y-auto">
+                            {/* Header */}
+                            <div className="p-4 text-center border-b border-slate-100 bg-gradient-to-b from-slate-50 to-white">
+                                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1d4ed8] to-[#0056b3] flex items-center justify-center text-white font-bold text-2xl mx-auto mb-2.5 shadow-lg">{active.avatar}</div>
+                                <p className="text-[15px] font-black text-[#051650] leading-tight">{patientCtx ? `${patientCtx.firstName} ${patientCtx.lastName}` : active.name}</p>
+                                {patientCtx?.age && <p className="text-[12px] text-slate-400 mt-0.5">{patientCtx.age} años</p>}
+                                <p className="text-[11px] text-slate-400 mt-0.5 font-mono">{active.phone}</p>
+                                <div className="flex items-center justify-center gap-2 mt-2.5">
+                                    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase ${active.status === 'open' ? 'bg-teal-50 text-teal-700 border border-teal-200' : active.status === 'pending' ? 'bg-[#FEFCC4] text-[#713f12] border border-[#FBFFA3]' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full ${active.status === 'open' ? 'bg-[#25D366]' : active.status === 'pending' ? 'bg-amber-400' : 'bg-slate-300'}`} />{active.status === 'open' ? 'Abierto' : active.status === 'pending' ? 'Pendiente' : 'Resuelto'}
+                                    </div>
+                                    {active.assignedAgent && (
+                                        <span className="text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full truncate max-w-[100px]">{active.assignedAgent}</span>
+                                    )}
                                 </div>
                             </div>
+
+                            {/* Clinical data */}
                             <div className="p-4 space-y-3">
+                                {loadingCtx && (
+                                    <p className="text-[12px] text-slate-400 text-center animate-pulse">Cargando ficha...</p>
+                                )}
+                                {!loadingCtx && patientCtx && (
+                                    <>
+                                        {patientCtx.allergies && (
+                                            <div className="bg-[#FFF0F3] border border-[#FFC0CB] rounded-xl p-3">
+                                                <div className="flex items-center gap-1.5 mb-1">
+                                                    <Heart className="w-3 h-3 text-[#E03555]" />
+                                                    <p className="text-[11px] font-black text-[#C02040] uppercase tracking-widest">Alergias</p>
+                                                </div>
+                                                <p className="text-[12px] text-[#C02040] leading-snug">{patientCtx.allergies}</p>
+                                            </div>
+                                        )}
+                                        {patientCtx.medications && (
+                                            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+                                                <div className="flex items-center gap-1.5 mb-1">
+                                                    <Pill className="w-3 h-3 text-blue-500" />
+                                                    <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest">Medicación</p>
+                                                </div>
+                                                <p className="text-[12px] text-blue-700 leading-snug">{patientCtx.medications}</p>
+                                            </div>
+                                        )}
+                                        {patientCtx.bloodType && (
+                                            <div className="flex items-center gap-2">
+                                                <Droplets className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                                                <span className="text-[12px] font-bold text-slate-400 uppercase tracking-widest">Grupo sanguíneo</span>
+                                                <span className="ml-auto text-[13px] font-black text-[#051650]">{patientCtx.bloodType}</span>
+                                            </div>
+                                        )}
+                                        {patientCtx.medicalNotes && (
+                                            <div className="bg-white border border-slate-200 rounded-xl p-3">
+                                                <div className="flex items-center gap-1.5 mb-1">
+                                                    <FileText className="w-3 h-3 text-slate-400" />
+                                                    <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Notas médicas</p>
+                                                </div>
+                                                <p className="text-[12px] text-slate-600 leading-snug">{patientCtx.medicalNotes}</p>
+                                            </div>
+                                        )}
+                                        {patientCtx.email && (
+                                            <div className="flex items-center gap-2 text-[12px] text-slate-500">
+                                                <span className="font-bold text-slate-400 uppercase tracking-widest text-[11px]">Email</span>
+                                                <span className="ml-auto truncate max-w-[140px]">{patientCtx.email}</span>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                                {!loadingCtx && !patientCtx && (
+                                    <div className="bg-slate-100 rounded-xl p-3 text-center">
+                                        <BriefcaseMedical className="w-5 h-5 text-slate-300 mx-auto mb-1" />
+                                        <p className="text-[12px] text-slate-400">No encontrado en base de datos de pacientes</p>
+                                    </div>
+                                )}
+
+                                {/* Conversation info */}
                                 {active.tags.length > 0 && (
                                     <div>
-                                        <p className="text-[12px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Etiquetas</p>
+                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Etiquetas</p>
                                         <div className="flex flex-wrap gap-1">{active.tags.map(t => <span key={t} className="text-[12px] font-bold text-[#0056b3] bg-[#0056b3]/10 px-2 py-0.5 rounded-full border border-[#0056b3]/20">{t}</span>)}</div>
                                     </div>
                                 )}
                                 {active.assignedAgent && (
-                                    <div>
-                                        <p className="text-[12px] font-bold text-slate-400 uppercase tracking-widest mb-1">Agente asignado</p>
-                                        <p className="text-[13px] font-bold text-slate-700">{active.assignedAgent}</p>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Agente</span>
+                                        <span className="ml-auto text-[12px] font-bold text-slate-700">{active.assignedAgent}</span>
                                     </div>
                                 )}
-                                <div>
-                                    <p className="text-[12px] font-bold text-slate-400 uppercase tracking-widest mb-1">Último mensaje</p>
-                                    <p className="text-[12px] text-slate-500">{relativeTime(active.lastMessageAt)}</p>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Último msg</span>
+                                    <span className="ml-auto text-[12px] text-slate-500">{relativeTime(active.lastMessageAt)}</span>
                                 </div>
-                                <div>
-                                    <p className="text-[12px] font-bold text-slate-400 uppercase tracking-widest mb-1">Mensajes totales</p>
-                                    <p className="text-[13px] font-bold text-[#051650]">{msgs.length}</p>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Mensajes</span>
+                                    <span className="ml-auto text-[13px] font-black text-[#051650]">{msgs.length}</span>
                                 </div>
                             </div>
-                            <div className="p-4 mt-auto border-t border-slate-100 space-y-2">
-                                <button onClick={handleGoToPatient} className="w-full flex items-center gap-2 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-[12px] font-bold text-slate-600 hover:bg-[#051650] hover:text-white hover:border-[#051650] transition-all">
-                                    <UserRound className="w-3.5 h-3.5" /> Ver ficha paciente
+
+                            <div className="p-4 mt-auto border-t border-slate-100 space-y-2 bg-slate-50/60">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Acciones rápidas</p>
+                                <button onClick={handleGoToPatient}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-[12px] font-bold text-[#051650] hover:bg-[#051650] hover:text-white hover:border-[#051650] transition-all shadow-sm">
+                                    <UserRound className="w-4 h-4 shrink-0" /> Ver ficha paciente
                                 </button>
-                                <button onClick={async () => { if (active.chatwootId) { await labelConversation(active.chatwootId, ['Revisado']); } }}
-                                    className="w-full flex items-center gap-2 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-[12px] font-bold text-slate-600 hover:bg-slate-100 transition-all">
-                                    <Tag className="w-3.5 h-3.5" /> Añadir etiqueta
+                                <button onClick={() => setShowBudget(true)}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[12px] font-bold text-[#051650] transition-all shadow-sm border"
+                                    style={{ background: 'linear-gradient(135deg,#FEFDE8,#FFFBCC)', borderColor: '#FBFFA3' }}>
+                                    <Receipt className="w-4 h-4 shrink-0 text-amber-500" /> Generar presupuesto
                                 </button>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button onClick={async () => { if (active.chatwootId) { await resolveConversation(active.chatwootId); setConvs(p => p.map(c => c.id === active.id ? { ...c, status: 'resolved' } : c)); } }}
+                                        className="flex items-center justify-center gap-1.5 px-2 py-2 bg-white border border-slate-200 rounded-xl text-[11px] font-bold text-slate-600 hover:bg-teal-50 hover:border-teal-200 hover:text-teal-700 transition-all">
+                                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Resolver
+                                    </button>
+                                    <button onClick={async () => { if (active.chatwootId) { await labelConversation(active.chatwootId, ['Revisado']); } }}
+                                        className="flex items-center justify-center gap-1.5 px-2 py-2 bg-white border border-slate-200 rounded-xl text-[11px] font-bold text-slate-600 hover:bg-slate-100 transition-all">
+                                        <Tag className="w-3.5 h-3.5 shrink-0" /> Etiquetar
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
                 </div>
             </div>
         </div>
+
+        {/* ── Budget Modal ─────────────────────────────────────────────────── */}
+        {showBudget && active && (
+            <BudgetModal
+                phone={active.phone}
+                patientName={patientCtx ? `${patientCtx.firstName} ${patientCtx.lastName}` : active.name}
+                onClose={() => setShowBudget(false)}
+            />
+        )}
+        </>
     );
 };
 

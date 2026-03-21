@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { type Paciente } from '../../types';
 import { searchPacientes, createPaciente, isDbConfigured } from '../../services/pacientes.service';
-import { X, Search, ChevronRight, UserPlus, Camera, Upload, Shield, User, Phone, AlertTriangle, Pill, Users } from 'lucide-react';
+import { X, Search, ChevronRight, UserPlus, Camera, Upload, Shield, User, Phone, AlertTriangle, Pill, Users, Loader2 } from 'lucide-react';
 
 interface PatientSearchModalProps {
     isOpen: boolean;
@@ -47,6 +47,8 @@ const PatientSearchModal: React.FC<PatientSearchModalProps> = ({ isOpen, onClose
     const [alergias, setAlergias] = useState('');
     const [medicacion, setMedicacion] = useState('');
     const [observaciones, setObservaciones] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     const resetForm = () => {
         setNombre(''); setApellidos(''); setDni(''); setTelefono(''); setEmail('');
@@ -92,25 +94,34 @@ const PatientSearchModal: React.FC<PatientSearchModalProps> = ({ isOpen, onClose
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const patientData = {
-            numPac: '',
-            nombre, apellidos, dni, telefono, fechaNacimiento,
-            email: email || undefined,
-            direccion: direccion || undefined,
-            ciudad: ciudad || undefined,
-            cp: cp || undefined,
-            tutor: isMinor ? tutor : undefined,
-            alergias: alergias.split(',').map(a => a.trim()).filter(Boolean),
-            medicacionActual: medicacion,
-            deuda: false, consentimientosFirmados: false,
-        };
-        if (isDbConfigured()) {
-            const created = await createPaciente(patientData);
-            if (created) { onSelect({ ...created, historial: [] }); onClose(); return; }
+        if (saving) return;
+        setSaveError(null);
+        setSaving(true);
+        try {
+            const patientData = {
+                numPac: '',
+                nombre, apellidos, dni, telefono, fechaNacimiento,
+                email: email || undefined,
+                direccion: direccion || undefined,
+                ciudad: ciudad || undefined,
+                cp: cp || undefined,
+                tutor: isMinor ? tutor : undefined,
+                alergias: alergias.split(',').map(a => a.trim()).filter(Boolean),
+                medicacionActual: medicacion,
+                deuda: false, consentimientosFirmados: false,
+            };
+            if (isDbConfigured()) {
+                const created = await createPaciente(patientData);
+                if (created) { onSelect({ ...created, historial: [] }); onClose(); return; }
+                setSaveError('No se pudo guardar el paciente. Comprueba la conexión con el servidor.');
+                return;
+            }
+            // Modo sin BD: crear en local
+            onSelect({ ...patientData, historial: [] });
+            onClose();
+        } finally {
+            setSaving(false);
         }
-        const newPatient: Paciente = { ...patientData, historial: [] };
-        onSelect(newPatient);
-        onClose();
     };
 
     // Keyboard navigation for search results
@@ -275,14 +286,18 @@ const PatientSearchModal: React.FC<PatientSearchModalProps> = ({ isOpen, onClose
                                 <p className="text-[11px] text-slate-500 mt-0.5">Completa el formulario para dar de alta.</p>
                             </div>
                             <div className="flex items-center gap-2">
-                                <button type="button" onClick={() => setView('search')} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold rounded-lg transition-colors">
+                                <button type="button" onClick={() => setView('search')} disabled={saving} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold rounded-lg transition-colors disabled:opacity-50">
                                     ← Buscar
                                 </button>
+                                {saveError && (
+                                    <span className="text-[11px] text-red-600 font-semibold max-w-[200px] leading-tight">{saveError}</span>
+                                )}
                                 <button onClick={() => {
                                     const form = document.getElementById('new-patient-form') as HTMLFormElement;
                                     if (form) form.requestSubmit();
-                                }} className="px-5 py-2 bg-blue-600 text-white text-[11px] font-bold rounded-lg hover:bg-blue-700 shadow-sm transition-all">
-                                    Guardar
+                                }} disabled={saving} className="px-5 py-2 bg-blue-600 text-white text-[11px] font-bold rounded-lg hover:bg-blue-700 shadow-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2">
+                                    {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                    {saving ? 'Guardando...' : 'Guardar'}
                                 </button>
                             </div>
                         </div>

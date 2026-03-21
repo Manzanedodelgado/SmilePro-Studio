@@ -185,7 +185,7 @@ const TEMPLATES: Template[] = [
 ];
 
 const TYPE_CONFIG: Record<TemplateType, { label: string; icon: React.ElementType; color: string; bg: string }> = {
-    whatsapp: { label: 'WhatsApp', icon: MessageSquare, color: 'text-[#051650]', bg: 'bg-blue-50 border-green-200' },
+    whatsapp: { label: 'WhatsApp', icon: MessageSquare, color: 'text-[#051650]', bg: 'bg-blue-50 border-teal-200' },
     sms: { label: 'SMS', icon: MessageSquare, color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
     email: { label: 'Email', icon: Mail, color: 'text-indigo-700', bg: 'bg-indigo-50 border-indigo-200' },
     documento: { label: 'Documento', icon: FileText, color: 'text-[#051650]', bg: 'bg-[#FEFDE8] border-[#FBFFA3]' },

@@ -100,8 +100,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
 
             // Sub-items Pacientes
             case 'medical_information': return Activity;
+            case 'assignment': return ClipboardList;
             case 'grid_view': return Grid;
             case 'sick': return AlertCircle;
+            case 'image_search': return Search;
             case 'description': return FileText;
             case 'payments': return CreditCard;
             case 'request_quote': return Receipt;
@@ -149,16 +151,16 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
 
 
     return (
-        <div className={`relative h-full flex-shrink-0 z-40 transition-all duration-300 ${isExpanded ? 'w-80' : 'w-[84px]'}`}>
+        <div className={`relative h-full flex-shrink-0 z-40 transition-[width] duration-200 ease-out ${isExpanded ? 'w-80' : 'w-[84px]'}`}>
             <aside
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
-                className={`absolute inset-y-0 left-0 h-full flex flex-col border-r-0 z-40 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] flex-shrink-0 overflow-hidden shadow-2xl bg-gradient-to-br from-[#0c2a80] to-[#051650] border-[#051650] ${isExpanded ? 'w-80' : 'w-[84px]'}`}
+                className={`absolute inset-y-0 left-0 h-full flex flex-col border-r-0 z-40 transition-[width] duration-200 ease-out flex-shrink-0 overflow-hidden shadow-2xl bg-gradient-to-br from-[#0c2a80] to-[#051650] border-[#051650] ${isExpanded ? 'w-80' : 'w-[84px]'}`}
             >
                 {/* Header del Sidebar (Global Actions) */}
                 <div className="h-16 flex items-center justify-center px-4 border-b border-white/10 flex-shrink-0 relative overflow-hidden w-full">
                     {/* Botones expandidos */}
-                    <div className={`absolute inset-0 flex items-center px-4 gap-2 w-full transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-[-10px] pointer-events-none'}`}>
+                    <div className={`absolute inset-0 flex items-center px-4 gap-2 w-full transition-[opacity,transform] duration-200 ease-out ${isExpanded ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-[-10px] pointer-events-none'}`}>
                         <button
                             onClick={() => onNavigate('Pacientes', 'ACTION_SEARCH')}
                             className="flex-1 flex items-center justify-center gap-2 py-2 bg-white/10 hover:bg-white/20 text-white rounded-md border border-white/20 transition-all active:scale-95 group"
@@ -176,7 +178,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
                     </div>
 
                     {/* Botón contraído */}
-                    <div className={`absolute inset-0 flex items-center justify-center w-full px-4 transition-all duration-300 ease-in-out ${!isExpanded ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-[10px] pointer-events-none'}`}>
+                    <div className={`absolute inset-0 flex items-center justify-center w-full px-4 transition-[opacity,transform] duration-200 ease-out ${!isExpanded ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-[10px] pointer-events-none'}`}>
                         <button
                             onClick={() => onNavigate('Pacientes', 'ACTION_SEARCH')}
                             title="Buscar"
@@ -192,10 +194,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
 
                     {/* Título del Área */}
                     {currentMenuItem.title && (
-                        <div className={`transition-all duration-300 relative h-20 w-full flex-shrink-0 flex items-center justify-center ${isExpanded ? 'px-4' : 'px-1'}`}>
+                        <div className={`transition-[opacity,transform] duration-200 ease-out relative h-20 w-full flex-shrink-0 flex items-center justify-center ${isExpanded ? 'px-4' : 'px-1'}`}>
                             <div className="absolute inset-x-0 top-3 flex flex-col items-center w-full px-inherit">
                                 <div className="relative w-full flex items-center justify-center h-12">
-                                    <div className={`absolute left-0 flex items-center gap-3 whitespace-nowrap transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 pointer-events-none'}`}>
+                                    <div className={`absolute left-0 flex items-center gap-3 whitespace-nowrap transition-[opacity,transform] duration-200 ease-out ${isExpanded ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 pointer-events-none'}`}>
                                         <div className="w-9 h-9 rounded-xl bg-[#0ea5e9]/15 border border-white/30 flex items-center justify-center flex-shrink-0 shadow-inner">
                                             <MainIcon className="w-4.5 h-4.5 text-[#0ea5e9]" />
                                         </div>
@@ -204,19 +206,19 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
                                             <h2 className="text-[15px] font-bold text-white uppercase tracking-tight leading-tight truncate">{currentMenuItem.title}</h2>
                                         </div>
                                     </div>
-                                    <div className={`absolute flex items-center justify-center transition-all duration-300 ease-in-out ${!isExpanded ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 pointer-events-none'}`}>
+                                    <div className={`absolute flex items-center justify-center transition-[opacity,transform] duration-200 ease-out ${!isExpanded ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 pointer-events-none'}`}>
                                         <div className="w-10 h-10 rounded-xl bg-[#0ea5e9]/15 border border-white/30 flex items-center justify-center flex-shrink-0 shadow-inner" title={`${activeArea} - ${currentMenuItem.title}`}>
                                             <MainIcon className="w-5 h-5 text-[#0ea5e9]" />
                                         </div>
                                     </div>
                                 </div>
-                                <div className={`h-px w-full transition-all duration-300 ease-in-out absolute top-14 ${isExpanded ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-0'}`} style={{ background: 'linear-gradient(to right, rgba(14,165,233,0.4), transparent)' }} />
+                                <div className={`h-px w-full transition-[opacity,transform] duration-200 ease-out absolute top-14 ${isExpanded ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-0'}`} style={{ background: 'linear-gradient(to right, rgba(14,165,233,0.4), transparent)' }} />
                             </div>
                         </div>
                     )}
 
                     {/* NAVEGACIÓN ESTÁNDAR */}
-                    <nav className="flex flex-col gap-1 w-full">
+                    <nav className="flex flex-col gap-1.5 w-full relative z-10 px-2 mt-4">
                         {currentMenuItem.children.map((subItem) => {
                             const SubIcon = getIcon(subItem.icon || 'dashboard');
                             const isActive = activeSubArea === subItem.name;
@@ -225,24 +227,31 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
                                     key={subItem.name}
                                     title={!isExpanded ? subItem.name : undefined}
                                     onClick={() => onNavigate(activeArea, subItem.name)}
-                                    className={`relative flex items-center overflow-hidden rounded-lg group transition-all duration-300 ease-in-out h-11 ${isExpanded ? 'w-full px-4 border-l-4' : 'w-11 justify-center mx-auto border-l-[3px]'
-                                        } ${isActive
-                                            ? 'border-[#1d4ed8] text-white shadow-sm'
-                                            : 'bg-transparent border-transparent text-white/80 hover:bg-white/15 hover:text-white/90'
-                                        }`}
-                                    style={isActive ? { background: 'linear-gradient(135deg, rgba(29,78,216,0.25), rgba(37,99,235,0.15))' } : {}}
+                                    className={`relative flex items-center overflow-hidden rounded-xl group transition-[opacity,transform] duration-200 ease-out h-[46px] ${
+                                        isExpanded ? 'w-full px-4 border-l-4' : 'w-11 justify-center mx-auto border-l-[3px]'
+                                    } ${
+                                        isActive
+                                            ? 'border-[#3b82f6] text-white shadow-[0_4px_20px_rgba(59,130,246,0.2)] transform scale-[1.02]'
+                                            : 'bg-transparent border-transparent text-white/70 hover:bg-white/10 hover:text-white hover:scale-[1.01]'
+                                    }`}
                                 >
+                                    {isActive && (
+                                        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/30 to-indigo-600/10 pointer-events-none" />
+                                    )}
+                                    {isActive && (
+                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-400 to-indigo-500 shadow-[0_0_10px_rgba(96,165,250,0.8)]" />
+                                    )}
                                     {/* Icon Container with fixed alignment */}
-                                    <div className="flex items-center justify-center flex-shrink-0 w-5 h-5 relative">
-                                        <SubIcon className={`absolute transition-transform duration-300 ${isExpanded ? 'w-4 h-4' : 'w-[18px] h-[18px]'} ${isActive ? 'text-[#60a5fa]' : 'text-white/80 group-hover:text-white'}`} />
+                                    <div className="flex items-center justify-center flex-shrink-0 w-6 h-6 relative z-10">
+                                        <SubIcon className={`absolute transition-all duration-500 ${isExpanded ? 'w-[18px] h-[18px]' : 'w-5 h-5'} ${isActive ? 'text-blue-300 drop-shadow-[0_0_8px_rgba(147,197,253,0.8)]' : 'text-white/60 group-hover:text-white/90 group-hover:drop-shadow-sm'}`} />
                                     </div>
 
-                                    <div className={`flex flex-1 items-center justify-between whitespace-nowrap transition-all duration-300 ease-in-out ${isExpanded ? 'ml-3 opacity-100 max-w-[200px]' : 'opacity-0 max-w-0 -translate-x-4 pointer-events-none'}`}>
-                                        <span className="text-[13px] font-semibold text-left leading-tight truncate">
+                                    <div className={`flex flex-1 items-center justify-between whitespace-nowrap transition-[opacity,transform] duration-200 ease-out z-10 ${isExpanded ? 'ml-3 opacity-100 max-w-[200px]' : 'opacity-0 max-w-0 -translate-x-4 pointer-events-none'}`}>
+                                        <span className={`text-[13px] tracking-wide text-left truncate transition-colors ${isActive ? 'font-black text-white drop-shadow-sm' : 'font-semibold'}`}>
                                             {subItem.name}
                                         </span>
                                         {isActive && (
-                                            <ChevronRight className="w-3.5 h-3.5 text-[#60a5fa]/60 flex-shrink-0 ml-2" />
+                                            <ChevronRight className="w-4 h-4 text-blue-400 flex-shrink-0 ml-2 animate-pulse" />
                                         )}
                                     </div>
                                 </button>
@@ -252,7 +261,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
                     {isAgenda && (
                         <div className="mt-2 border-t border-white/10 pt-4">
                             {/* Full widgets — visible solo expandido */}
-                            <div className={`transition-all duration-300 ${isExpanded ? 'opacity-100 max-h-[600px]' : 'opacity-0 max-h-0 overflow-hidden pointer-events-none'}`}>
+                            <div className={`transition-[opacity,transform] duration-200 ease-out ${isExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 overflow-hidden h-0 pointer-events-none'}`}>
                                 <div className="space-y-6">
                                     {/* WIDGET: Sala de Espera */}
                                     <div>
@@ -260,7 +269,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
                                             <div className="flex items-center gap-2 text-white/80">
                                                 <div className="relative">
                                                     <Clock className="w-3.5 h-3.5" />
-                                                    <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-[#FBFFA3] animate-pulse" title="Datos Simulados"></span>
+                                                    <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-[#FBFFA3] animate-pulse"></span>
                                                 </div>
                                                 <span className="text-[12px] font-bold uppercase tracking-wider">Sala de Espera</span>
                                             </div>
@@ -269,8 +278,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
                                         <div className="space-y-1.5">
                                             {stats.espera.map((p) => (
                                                 <div key={p.id}
-                                                    onClick={() => p.numPac && !p.numPac.startsWith('CTX-') ? onNavigate('Pacientes', 'Historia Clínica', p.numPac) : undefined}
-                                                    className={`bg-white p-2.5 rounded-lg flex items-center gap-3 transition-all border border-slate-100 ${p.numPac && !p.numPac.startsWith('CTX-') ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-200' : 'cursor-default'}`}
+                                                    onClick={() => { if (p.numPac && !p.numPac.startsWith('CTX-')) onNavigate('Pacientes', 'Historia Clínica', p.numPac); }}
+                                                    className={`bg-white p-2.5 rounded-lg flex items-center gap-3 transition-all border border-slate-100 ${p.numPac && !p.numPac.startsWith('CTX-') ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-200' : 'cursor-default opacity-70'}`}
                                                 >
                                                     <div className={`w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0 ${parseInt(p.tiempo) > 10 ? 'bg-red-500/20 text-red-500 border border-[#FF4B68]/30' : 'bg-blue-500/20 text-[#051650] border border-blue-500/30'}`}>
                                                         <div className="flex flex-col items-center leading-none">
@@ -303,8 +312,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
                                             <p className="text-[12px] text-white/40 px-1 italic">Sin pacientes en gabinete</p>
                                         ) : stats.gabinete.map(g => (
                                             <div key={g.id}
-                                                onClick={() => g.numPac && !g.numPac.startsWith('CTX-') ? onNavigate('Pacientes', 'Historia Clínica', g.numPac) : undefined}
-                                                className={`bg-white border-l-4 border-l-[#051650] border border-slate-200 p-3 rounded-lg flex items-center gap-3 transition-all mb-1.5 ${g.numPac && !g.numPac.startsWith('CTX-') ? 'cursor-pointer hover:bg-blue-50' : 'cursor-default hover:bg-slate-50'}`}
+                                                onClick={() => { if (g.numPac && !g.numPac.startsWith('CTX-')) onNavigate('Pacientes', 'Historia Clínica', g.numPac); }}
+                                                className={`bg-white border-l-4 border-l-[#051650] border border-slate-200 p-3 rounded-lg flex items-center gap-3 transition-all mb-1.5 ${g.numPac && !g.numPac.startsWith('CTX-') ? 'cursor-pointer hover:bg-blue-50' : 'cursor-default opacity-70'}`}
                                             >
                                                 <div className="w-10 h-10 rounded-lg bg-[#051650] text-white flex items-center justify-center flex-shrink-0 font-bold text-sm">{g.gab}</div>
                                                 <div className="flex-1 min-w-0">
@@ -319,7 +328,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
                             </div>
 
                             {/* Badges compactos — visibles solo colapsado */}
-                            <div className={`flex flex-col gap-3 items-center transition-all duration-300 ${!isExpanded ? 'opacity-100 max-h-[200px]' : 'opacity-0 max-h-0 overflow-hidden pointer-events-none'}`}>
+                            <div className={`flex flex-col gap-3 items-center transition-[opacity,transform] duration-200 ease-out ${!isExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 overflow-hidden h-0 pointer-events-none'}`}>
                                 <div className="w-9 h-9 rounded-lg bg-pink-500 flex items-center justify-center shadow-inner" title={`${stats.espera.length} en espera`}>
                                     <span className="text-[14px] font-black text-white">{stats.espera.length}</span>
                                 </div>
@@ -332,7 +341,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
                 </div>
 
                 {/* ACCIONES RÁPIDAS GLOBALES */}
-                <div className={`p-3 border-t border-white/10 transition-all duration-300 mt-auto ${isExpanded ? 'grid grid-cols-2 gap-2' : 'flex flex-col gap-2 items-center'}`}>
+                <div className={`p-3 border-t border-white/10 transition-[opacity,transform] duration-200 ease-out mt-auto ${isExpanded ? 'grid grid-cols-2 gap-2' : 'flex flex-col gap-2 items-center'}`}>
                     {isExpanded ? (
                         <>
                             <button onClick={() => onNavigate('Agenda', 'Nueva Cita')} className="flex items-center justify-center gap-2 py-2 bg-[#0a2150] hover:bg-[#0d2760] text-white rounded-md border border-[#1a3a7a] transition-all active:scale-95 animate-fade-in">

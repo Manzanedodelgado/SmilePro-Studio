@@ -70,6 +70,6 @@ export const revocarDocumento = async (id: string, motivo: string, revocadoPor?:
 export const tipoDocLabel: Record<TipoDoc, { label: string; icon: string; color: string }> = {
     primera_visita: { label: 'Primera Visita', icon: '📋', color: '#0056b3' },
     lopd: { label: 'LOPD / Privacidad', icon: '🔒', color: '#7c3aed' },
-    consentimiento: { label: 'Consentimiento', icon: '✍️', color: '#059669' },
+    consentimiento: { label: 'Consentimiento', icon: '✍️', color: '#00B4AB' },
     revocacion: { label: 'Revocación', icon: '🚫', color: '#dc2626' },
 };

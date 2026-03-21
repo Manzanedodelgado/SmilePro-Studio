@@ -8,10 +8,10 @@ interface Horario { dia: string; mañana: string; tarde: string; activo: boolean
 interface Tratamiento { nombre: string; color: string; }
 interface Excepcion { id: number; mes: string; dia: number; titulo: string; desc: string; color: 'red' | 'blue'; }
 interface Doctor { id: number; nombre: string; especialidad: string; color: string; }
-interface DoctorConfig { horarios: Horario[]; tiempos: Record<string, number>; }
+interface DoctorConfig { horarios: Horario[]; tiempos: Record<string, number>; activeTratamientos: string[]; }
 
 // ── Constantes ────────────────────────────────────────────────────────────────
-const COLORS = ['#003a70','#009fe3','#10b981','#8b5cf6','#f59e0b','#ef4444'];
+const COLORS = ['#003a70','#009fe3','#00B4AB','#8b5cf6','#f59e0b','#ef4444'];
 
 const DEFAULT_HORARIOS: Horario[] = [
     { dia: 'Lunes',     mañana: '09:00 - 14:00', tarde: '16:00 - 20:00', activo: true  },
@@ -73,28 +73,40 @@ const ConfiguracionAgenda: React.FC = () => {
     const showToast = (msg: string) => { setToastMsg(msg); setTimeout(() => setToastMsg(null), 3500); };
 
     // ── Config del doctor activo (o defaults si no tiene) ────────────────────
-    const cfgActivo: DoctorConfig = configPorDoctor[doctorActivo] ?? {
+    const DEFAULT_CFG = (): DoctorConfig => ({
         horarios: DEFAULT_HORARIOS.map(h => ({ ...h })),
         tiempos: { ...DEFAULT_TIEMPOS },
-    };
+        activeTratamientos: Object.keys(DEFAULT_TIEMPOS),
+    });
+
+    const cfgActivo: DoctorConfig = configPorDoctor[doctorActivo] ?? DEFAULT_CFG();
 
     const setHorariosDoctor = useCallback((fn: (h: Horario[]) => Horario[]) => {
         setConfigPorDoctor(prev => {
-            const old = prev[doctorActivo] ?? { horarios: DEFAULT_HORARIOS.map(h => ({ ...h })), tiempos: { ...DEFAULT_TIEMPOS } };
+            const old = prev[doctorActivo] ?? DEFAULT_CFG();
             return { ...prev, [doctorActivo]: { ...old, horarios: fn(old.horarios) } };
         });
     }, [doctorActivo]);
 
     const setTiempoDoctor = useCallback((nombre: string, valor: number) => {
         setConfigPorDoctor(prev => {
-            const old = prev[doctorActivo] ?? { horarios: DEFAULT_HORARIOS.map(h => ({ ...h })), tiempos: { ...DEFAULT_TIEMPOS } };
+            const old = prev[doctorActivo] ?? DEFAULT_CFG();
             return { ...prev, [doctorActivo]: { ...old, tiempos: { ...old.tiempos, [nombre]: valor } } };
+        });
+    }, [doctorActivo]);
+
+    const toggleTratamientoDoctor = useCallback((nombre: string) => {
+        setConfigPorDoctor(prev => {
+            const old = prev[doctorActivo] ?? DEFAULT_CFG();
+            const activos = old.activeTratamientos ?? Object.keys(DEFAULT_TIEMPOS);
+            const next = activos.includes(nombre) ? activos.filter(n => n !== nombre) : [...activos, nombre];
+            return { ...prev, [doctorActivo]: { ...old, activeTratamientos: next } };
         });
     }, [doctorActivo]);
 
     const setHorarioField = useCallback((dia: string, field: 'mañana' | 'tarde', value: string) => {
         setConfigPorDoctor(prev => {
-            const old = prev[doctorActivo] ?? { horarios: DEFAULT_HORARIOS.map(h => ({ ...h })), tiempos: { ...DEFAULT_TIEMPOS } };
+            const old = prev[doctorActivo] ?? DEFAULT_CFG();
             return { ...prev, [doctorActivo]: { ...old, horarios: old.horarios.map(h => h.dia === dia ? { ...h, [field]: value } : h) } };
         });
     }, [doctorActivo]);
@@ -153,6 +165,22 @@ const ConfiguracionAgenda: React.FC = () => {
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
                 <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">Selecciona un doctor para editar su configuración</p>
                 <div className="flex flex-wrap items-center gap-3">
+                    {/* Añadir Doctor */}
+                    <button
+                        onClick={() => {
+                            const newId = Math.max(...doctores.map(d => d.id), 0) + 1;
+                            const newDoc: Doctor = { id: newId, nombre: 'Nuevo Doctor', especialidad: 'Doctor/a', color: COLORS[newId % COLORS.length] };
+                            const newDocs = [...doctores, newDoc];
+                            setDoctores(newDocs);
+                            setDoctorActivo(newDoc.nombre);
+                            setEditarId(newId);
+                            setEditForm({ nombre: 'Nuevo Doctor', especialidad: 'Doctor/a' });
+                        }}
+                        className="px-4 py-3 rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-[#051650]/40 hover:text-[#051650] flex items-center gap-2 text-[13px] font-bold transition-all"
+                    >
+                        <span className="material-icons text-[18px]">person_add</span>
+                        Añadir Doctor
+                    </button>
                     {doctores.map(doc => {
                         const isEditing = editarId === doc.id;
                         const isActive  = doctorActivo === doc.nombre;
@@ -266,7 +294,7 @@ const ConfiguracionAgenda: React.FC = () => {
                                         const newCfg = { ...prev };
                                         doctores.forEach(d => {
                                             if (d.nombre !== doctorActivo) {
-                                                newCfg[d.nombre] = { ...(prev[d.nombre] ?? { tiempos: { ...DEFAULT_TIEMPOS } }), horarios: horariosActuales.map(h => ({ ...h })) };
+                                                newCfg[d.nombre] = { ...(prev[d.nombre] ?? DEFAULT_CFG()), horarios: horariosActuales.map(h => ({ ...h })) };
                                             }
                                         });
                                         return newCfg;
@@ -369,39 +397,52 @@ const ConfiguracionAgenda: React.FC = () => {
                     </section>
                 </div>
 
-                {/* ── TIEMPOS ESTIMADOS (por doctor) ────────────────────── */}
+                {/* ── TRATAMIENTOS Y TIEMPOS (por doctor) ───────────────── */}
                 <div className="lg:col-span-4 space-y-6">
                     <section className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xl">
-                        <div className="flex justify-between items-center mb-2">
+                        <div className="flex justify-between items-center mb-1">
                             <h3 className="text-sm font-bold text-primary uppercase tracking-widest flex items-center gap-2">
-                                <span className="material-icons text-secondary">timer</span>
-                                Tiempos Estimados
+                                <span className="material-icons text-secondary">medical_services</span>
+                                Tratamientos
                             </h3>
+                            <span className="text-[11px] font-bold text-slate-400">
+                                {(cfgActivo.activeTratamientos ?? Object.keys(DEFAULT_TIEMPOS)).length} activos
+                            </span>
                         </div>
-                        <p className="text-[12px] text-slate-400 font-bold uppercase tracking-tighter mb-4">
-                            Minutos por tratamiento para {doctorObj?.nombre ?? 'este doctor'}
+                        <p className="text-[11px] text-slate-400 font-bold uppercase tracking-tighter mb-4">
+                            Activa los que realiza {doctorObj?.nombre ?? 'este doctor'} y asigna su duración
                         </p>
-                        <div className="space-y-1.5 max-h-[480px] overflow-y-auto pr-1">
-                            {tratamientos.map(t => (
-                                <div key={t.nombre} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 hover:border-secondary/30 transition-all">
-                                    <div className="flex flex-col min-w-0 flex-1 mr-3">
-                                        <span className="text-[13px] font-bold text-slate-700 leading-tight truncate">{t.nombre}</span>
-                                        <span className={`text-[10px] font-bold uppercase tracking-tighter mt-0.5 px-1.5 py-0.5 rounded-full ${t.color} inline-block self-start`}>
-                                            {t.color.includes('blue') ? 'Control' : t.color.includes('red') ? 'Urgencia' : t.color.includes('purple') ? 'Endodoncia' : t.color.includes('emerald') ? 'Higiene' : t.color.includes('cyan') ? 'Implante' : t.color.includes('violet') ? 'Ortodoncia' : 'General'}
-                                        </span>
+                        <div className="space-y-1.5 max-h-[520px] overflow-y-auto pr-1">
+                            {tratamientos.map(t => {
+                                const activos = cfgActivo.activeTratamientos ?? Object.keys(DEFAULT_TIEMPOS);
+                                const isActive = activos.includes(t.nombre);
+                                return (
+                                    <div key={t.nombre} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${isActive ? 'bg-slate-50 border-slate-200' : 'bg-white border-slate-100 opacity-50'}`}>
+                                        {/* Checkbox */}
+                                        <button
+                                            onClick={() => toggleTratamientoDoctor(t.nombre)}
+                                            className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center border-2 transition-all ${isActive ? 'bg-[#051650] border-[#051650]' : 'bg-white border-slate-300'}`}
+                                        >
+                                            {isActive && <span className="material-icons text-white text-[13px]">check</span>}
+                                        </button>
+                                        {/* Nombre */}
+                                        <span className={`text-[13px] font-bold flex-1 truncate ${isActive ? 'text-slate-700' : 'text-slate-400'}`}>{t.nombre}</span>
+                                        {/* Minutos (solo si activo) */}
+                                        {isActive && (
+                                            <div className="flex items-center gap-1 flex-shrink-0">
+                                                <input
+                                                    type="number"
+                                                    min={5} max={300} step={5}
+                                                    value={cfgActivo.tiempos[t.nombre] ?? DEFAULT_TIEMPOS[t.nombre] ?? 30}
+                                                    onChange={e => setTiempoDoctor(t.nombre, parseInt(e.target.value) || 30)}
+                                                    className="w-12 bg-white border border-slate-200 rounded-lg text-center font-bold text-[12px] py-1 focus:outline-none focus:ring-1 focus:ring-secondary"
+                                                />
+                                                <span className="text-[10px] font-bold text-slate-400">min</span>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                                        <input
-                                            type="number"
-                                            min={5} max={300} step={5}
-                                            value={cfgActivo.tiempos[t.nombre] ?? DEFAULT_TIEMPOS[t.nombre] ?? 30}
-                                            onChange={e => setTiempoDoctor(t.nombre, parseInt(e.target.value) || 30)}
-                                            className="w-14 bg-white border border-slate-200 rounded-lg text-center font-bold text-[13px] py-1 focus:outline-none focus:ring-1 focus:ring-secondary"
-                                        />
-                                        <span className="text-[11px] font-bold text-slate-400">min</span>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </section>
                 </div>

@@ -203,7 +203,7 @@ export const EnvioGestoria: React.FC = () => {
                 </div>
             )}
             {successMsg && (
-                <div className="flex items-center gap-2 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-[13px] text-green-700">
+                <div className="flex items-center gap-2 px-4 py-3 bg-teal-50 border border-teal-200 rounded-xl text-[13px] text-teal-700">
                     <CheckCircle2 className="w-4 h-4 shrink-0" />{successMsg}
                 </div>
             )}

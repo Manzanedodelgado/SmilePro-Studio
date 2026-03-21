@@ -8,7 +8,7 @@
 // ─────────────────────────────────────────────────────────────────────
 import { Router, Request, Response, NextFunction } from 'express';
 import { optionalAuth } from '../../middleware/auth';
-import { createPatientFolder, getPatientPhotos } from './gdrive.service';
+import { createPatientFolder, getPatientPhotos, getSAAccessToken } from './gdrive.service';
 import { logger } from '../../config/logger.js';
 import prisma from '../../config/database.js';
 
@@ -119,6 +119,43 @@ router.get('/photos/:numPac', async (req: Request, res: Response, next: NextFunc
     try {
         const photos = await getPatientPhotos(numPac, apellidos, nombre, userToken);
         res.json({ success: true, data: photos });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// ── GET /api/gdrive/image/:fileId ─────────────────────────────────────
+// Proxy de imagen: descarga la imagen de Drive con el token de la SA
+// y la sirve directamente al frontend (evita CORS de Drive)
+router.get('/image/:fileId', async (req: Request, res: Response, next: NextFunction) => {
+    const { fileId } = req.params;
+    const userToken = req.headers['x-gdrive-token'] as string | undefined;
+
+    try {
+        const token = userToken ?? await getSAAccessToken();
+        if (!token) { res.status(500).send('No Drive token'); return; }
+
+        const driveRes = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        if (!driveRes.ok) {
+            logger.error(`[GDrive Proxy] ${driveRes.status} for ${fileId}`);
+            res.status(driveRes.status).send('Drive error');
+            return;
+        }
+
+        const contentType = driveRes.headers.get('content-type') ?? 'image/jpeg';
+        const contentLength = driveRes.headers.get('content-length');
+
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'public, max-age=604800, immutable'); // 7 días
+        if (contentLength) res.setHeader('Content-Length', contentLength);
+
+        // Streaming directo — no carga en memoria
+        const { Readable } = await import('node:stream');
+        Readable.fromWeb(driveRes.body as any).pipe(res);
     } catch (err) {
         next(err);
     }

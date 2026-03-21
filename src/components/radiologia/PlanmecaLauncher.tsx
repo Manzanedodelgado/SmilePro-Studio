@@ -146,7 +146,7 @@ const PlanmecaLauncher: React.FC<Props> = ({ estudio, file, patientName }) => {
         || estudio.originalUrl?.startsWith('data:');
 
     const statusColor = state === 'launched' || state === 'downloaded' || state === 'copied'
-        ? '#10b981' : state === 'error' ? '#ef4444' : '#3b82f6';
+        ? '#00B4AB' : state === 'error' ? '#ef4444' : '#3b82f6';
 
     const statusIcon = state === 'launched' || state === 'downloaded' || state === 'copied'
         ? <CheckCircle style={{ width: 16, height: 16 }} />

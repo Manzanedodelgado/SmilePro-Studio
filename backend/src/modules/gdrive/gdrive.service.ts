@@ -20,6 +20,9 @@ const ROOT_FOLDER = process.env.GDRIVE_FOLDER_ID ?? '1R0xewRUWYnLfakIMwhsdhl1R76
 
 let _saTokenCache: { token: string; exp: number } | null = null;
 
+// Caché de folder IDs por paciente — evita buscar la carpeta en cada carga
+const _folderIdCache = new Map<string, string>();
+
 export const getSAAccessToken = async (): Promise<string | null> => {
     const saKeyJson = process.env.GDRIVE_SA_KEY_JSON;
     if (!saKeyJson) return null;
@@ -153,20 +156,24 @@ export const getPatientPhotos = async (
     try {
         const name = folderName(numPac, apellidos, nombre);
 
-        // Buscar carpeta del paciente
-        const folderRes = await fetch(
-            `https://www.googleapis.com/drive/v3/files?` + new URLSearchParams({
-                q: `'${ROOT_FOLDER}' in parents and name='${name.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder'`,
-                fields: 'files(id)',
-                pageSize: '1',
-            }),
-            { headers: await driveHeaders(userToken) }
-        );
+        // Buscar carpeta del paciente (con caché para evitar llamada extra)
+        let folderId = _folderIdCache.get(numPac);
+        if (!folderId) {
+            const folderRes = await fetch(
+                `https://www.googleapis.com/drive/v3/files?` + new URLSearchParams({
+                    q: `'${ROOT_FOLDER}' in parents and name='${name.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder'`,
+                    fields: 'files(id)',
+                    pageSize: '1',
+                }),
+                { headers: await driveHeaders(userToken) }
+            );
 
-        if (!folderRes.ok) return [];
-        const folderJson = await folderRes.json() as { files: { id: string }[] };
-        const folderId = folderJson.files?.[0]?.id;
-        if (!folderId) return [];
+            if (!folderRes.ok) return [];
+            const folderJson = await folderRes.json() as { files: { id: string }[] };
+            folderId = folderJson.files?.[0]?.id;
+            if (!folderId) return [];
+            _folderIdCache.set(numPac, folderId);
+        }
 
         // Listar imágenes
         const filesRes = await fetch(
@@ -187,8 +194,8 @@ export const getPatientPhotos = async (
             name: f.name,
             label: labelFromName(f.name),
             date: new Date(f.createdTime).toLocaleDateString('es-ES', { month: 'short', year: 'numeric' }),
-            url: `https://drive.google.com/uc?id=${f.id}&export=view`,
-            thumbnail: `https://drive.google.com/thumbnail?id=${f.id}&sz=w400`,
+            url: `/api/gdrive/image/${f.id}`,
+            thumbnail: `/api/gdrive/image/${f.id}?sz=w400`,
             mimeType: f.mimeType,
         }));
     } catch (e) {

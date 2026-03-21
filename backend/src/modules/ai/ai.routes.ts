@@ -40,6 +40,16 @@ router.get('/automations',              requirePermission('ai:use'),    AIContro
 router.post('/automations',             requirePermission('admin:read'), AIController.createAutomation);
 router.patch('/automations/:id/toggle', requirePermission('admin:read'), AIController.toggleAutomation);
 
+// Streaming SSE
+router.post('/chat/stream', requirePermission('ai:use'), AIController.chatStream);
+
+// Historial simulador
+router.post('/conversations/save',              requirePermission('ai:use'), AIController.saveConversationMessage);
+router.get('/conversations/history/:sessionId', requirePermission('ai:use'), AIController.getSimulatorHistory);
+
+// Métricas de uso
+router.get('/metrics', requirePermission('ai:use'), AIController.getMetrics);
+
 // Insights y conversaciones
 router.get('/evolution/insights', requirePermission('admin:read'), AIController.evolutionInsights);
 router.get('/conversations',      requirePermission('ai:use'),    AIController.listConversations);

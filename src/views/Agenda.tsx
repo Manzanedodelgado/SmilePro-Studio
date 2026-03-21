@@ -1,6 +1,8 @@
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import ConfiguracionAgenda from './ConfiguracionAgenda';
+import SOAPEditor from '../components/pacientes/SOAPEditor';
+import { createSoapNote } from '../services/soap.service';
 import { type Cita, type EstadoCita, type TratamientoCategoria } from '../types';
 import {
     Activity,
@@ -157,6 +159,16 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
             ...initialCita,
         } : null
     );
+
+    // ── Panel paciente en cita ────────────────────────────────────────────────
+    const [citaPacienteData, setCitaPacienteData] = useState<Paciente | null>(null);
+    const [showSoapFromCita, setShowSoapFromCita] = useState(false);
+
+    useEffect(() => {
+        const numPac = editingCita?.pacienteNumPac;
+        if (!numPac || numPac.startsWith('CTX-')) { setCitaPacienteData(null); return; }
+        getPaciente(numPac).then(p => setCitaPacienteData(p ?? null));
+    }, [editingCita?.pacienteNumPac]);
 
     const [vistaGabinete, setVistaGabinete] = useState<'ALL' | 'G1' | 'G2'>('ALL');
     const [showBlockModal, setShowBlockModal] = useState(false);
@@ -1731,32 +1743,68 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
                                         )}
                                     {/* ── Accesos rápidos al paciente ── */}
                                     {editingCita.pacienteNumPac && !editingCita.pacienteNumPac.startsWith('CTX-') && (
-                                        <div className="flex gap-2 mt-3">
-                                            <button
-                                                type="button"
-                                                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#051650]/8 hover:bg-[#051650]/15 text-[#051650] text-[12px] font-bold transition-colors border border-[#051650]/20"
-                                                onClick={() => onNavigate?.('Pacientes', 'Historia Clínica', editingCita.pacienteNumPac)}
-                                            >
-                                                <User size={13} />
-                                                Ver ficha
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#128C7E] text-[12px] font-bold transition-colors border border-[#25D366]/30"
-                                                onClick={async () => {
-                                                    const pac = await getPaciente(editingCita.pacienteNumPac);
-                                                    const phone = pac?.telefono?.replace(/\D/g, '') ?? '';
-                                                    const name = editingCita.nombrePaciente;
-                                                    if (phone) {
-                                                        onNavigate?.('Whatsapp', undefined, undefined, { phone, name });
-                                                    } else {
-                                                        window.open(`https://wa.me/?text=${encodeURIComponent(`Hola ${name}`)}`, '_blank');
-                                                    }
-                                                }}
-                                            >
-                                                <MessageCircle size={13} />
-                                                WhatsApp
-                                            </button>
+                                        <div className="mt-3 space-y-2">
+                                            {/* Mini patient card */}
+                                            {citaPacienteData && (
+                                                <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                                                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#051650] to-blue-800 text-white flex items-center justify-center text-[10px] font-black flex-shrink-0">
+                                                        {citaPacienteData.numPac}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-[13px] font-black text-slate-800 truncate leading-tight">{citaPacienteData.apellidos}, {citaPacienteData.nombre}</p>
+                                                        <div className="flex items-center gap-2 mt-0.5">
+                                                            {citaPacienteData.fechaNacimiento && (
+                                                                <span className="text-[11px] text-slate-400 font-medium">
+                                                                    {new Date().getFullYear() - new Date(citaPacienteData.fechaNacimiento).getFullYear()} años
+                                                                </span>
+                                                            )}
+                                                            {citaPacienteData.telefono && (
+                                                                <span className="text-[11px] text-slate-400 font-medium">📞 {citaPacienteData.telefono}</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {/* Alertas médicas */}
+                                                    {citaPacienteData.alergias && citaPacienteData.alergias.length > 0 && (
+                                                        <span className="flex-shrink-0 text-[10px] font-black text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-lg uppercase tracking-tight">
+                                                            ⚠ Alergias
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {/* Botones de acción */}
+                                            <div className="flex gap-2">
+                                                <button
+                                                    type="button"
+                                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#051650]/8 hover:bg-[#051650]/15 text-[#051650] text-[12px] font-bold transition-colors border border-[#051650]/20"
+                                                    onClick={() => onNavigate?.('Pacientes', 'Historia Clínica', editingCita.pacienteNumPac)}
+                                                >
+                                                    <User size={13} />
+                                                    Ver ficha
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#00B4AB]/10 hover:bg-[#00B4AB]/20 text-[#00B4AB] text-[12px] font-bold transition-colors border border-[#00B4AB]/30"
+                                                    onClick={() => setShowSoapFromCita(true)}
+                                                >
+                                                    <Plus size={13} />
+                                                    Nuevo Evolutivo
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#128C7E] text-[12px] font-bold transition-colors border border-[#25D366]/30"
+                                                    onClick={() => {
+                                                        const phone = citaPacienteData?.telefono?.replace(/\D/g, '') ?? '';
+                                                        const name = editingCita.nombrePaciente;
+                                                        if (phone) {
+                                                            onNavigate?.('Whatsapp', undefined, undefined, { phone, name });
+                                                        } else {
+                                                            window.open(`https://wa.me/?text=${encodeURIComponent(`Hola ${name}`)}`, '_blank');
+                                                        }
+                                                    }}
+                                                >
+                                                    <MessageCircle size={13} />
+                                                </button>
+                                            </div>
                                         </div>
                                     )}
                                     </div>
@@ -1768,9 +1816,21 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
                                         <select
                                             className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[13px] font-bold text-[#051650] focus:ring-2 focus:ring-blue-500 focus:outline-none"
                                             value={editingCita.tratamiento}
-                                            onChange={e => setEditingCita({ ...editingCita, tratamiento: e.target.value })}
+                                            onChange={e => {
+                                                const tto = e.target.value;
+                                                const doctorCfg = agendaConfigStore?.configPorDoctor?.[editingCita.doctor];
+                                                const duracion = doctorCfg?.tiempos?.[tto] ?? editingCita.duracionMinutos;
+                                                setEditingCita({ ...editingCita, tratamiento: tto, duracionMinutos: duracion });
+                                            }}
                                         >
-                                            {agendaTratamientos.map(t => <option key={t.idIcono} value={t.descripcion}>{t.descripcion}</option>)}
+                                            {(() => {
+                                                const doctorCfg = agendaConfigStore?.configPorDoctor?.[editingCita.doctor];
+                                                const activos: string[] | undefined = doctorCfg?.activeTratamientos;
+                                                const filtered = activos?.length
+                                                    ? agendaTratamientos.filter(t => activos.includes(t.descripcion))
+                                                    : agendaTratamientos;
+                                                return filtered.map(t => <option key={t.idIcono} value={t.descripcion}>{t.descripcion}</option>);
+                                            })()}
                                         </select>
                                     </div>
                                     <div>
@@ -1778,7 +1838,20 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
                                         <select
                                             className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[13px] font-bold text-[#051650] focus:ring-2 focus:ring-blue-500 focus:outline-none"
                                             value={editingCita.doctor}
-                                            onChange={e => setEditingCita({ ...editingCita, doctor: e.target.value })}
+                                            onChange={e => {
+                                                const doc = e.target.value;
+                                                const doctorCfg = agendaConfigStore?.configPorDoctor?.[doc];
+                                                const activos: string[] | undefined = doctorCfg?.activeTratamientos;
+                                                // Si el tratamiento actual no lo hace este doctor, cambia al primero disponible
+                                                const filtered = activos?.length
+                                                    ? agendaTratamientos.filter(t => activos.includes(t.descripcion))
+                                                    : agendaTratamientos;
+                                                const tto = filtered.find(t => t.descripcion === editingCita.tratamiento)
+                                                    ? editingCita.tratamiento
+                                                    : (filtered[0]?.descripcion ?? editingCita.tratamiento);
+                                                const duracion = doctorCfg?.tiempos?.[tto] ?? editingCita.duracionMinutos;
+                                                setEditingCita({ ...editingCita, doctor: doc, tratamiento: tto, duracionMinutos: duracion });
+                                            }}
                                         >
                                             {agendaDoctores.map(d => <option key={d.idUsu} value={d.nombre}>{d.nombre}</option>)}
                                         </select>
@@ -1929,6 +2002,54 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
                     </div>
                 )
             }
+
+            {/* ── SOAP EVOLUTIVO desde cita ───────────────────────────────── */}
+            {showSoapFromCita && editingCita?.pacienteNumPac && (
+                <div className="fixed inset-0 z-[9500] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200"
+                    onClick={e => { if (e.target === e.currentTarget) setShowSoapFromCita(false); }}>
+                    <div className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl overflow-hidden shadow-2xl">
+                        {/* Mini header con contexto de cita */}
+                        <div className="flex items-center gap-3 px-4 py-2.5 bg-[#051650] text-white text-[11px] font-bold flex-shrink-0">
+                            <span className="bg-white/20 px-2 py-0.5 rounded font-black">{editingCita.pacienteNumPac}</span>
+                            <span className="truncate">{editingCita.nombrePaciente}</span>
+                            <span className="ml-auto text-white/60">Cita: {editingCita.horaInicio} · {editingCita.tratamiento}</span>
+                        </div>
+                        <SOAPEditor
+                            numPac={editingCita.pacienteNumPac}
+                            alergiasPaciente={citaPacienteData?.alergias ?? []}
+                            onSave={async (noteData) => {
+                                await createSoapNote(editingCita.pacienteNumPac, {
+                                    ...noteData,
+                                    tratamiento_nombre: editingCita.tratamiento,
+                                    doctor: editingCita.doctor,
+                                });
+                                setShowSoapFromCita(false);
+                            }}
+                            onCancel={() => setShowSoapFromCita(false)}
+                            onCitar={(citaData) => {
+                                setShowSoapFromCita(false);
+                                setEditingCita(null);
+                                // Pre-fill a new cita with the treatment from the evolutivo
+                                setTimeout(() => {
+                                    setEditingCita({
+                                        id: generateId(),
+                                        gabinete: editingCita.gabinete ?? 'G1',
+                                        pacienteNumPac: citaData.pacienteNumPac,
+                                        nombrePaciente: editingCita.nombrePaciente,
+                                        horaInicio: '09:00',
+                                        duracionMinutos: citaData.duracionMinutos ?? 30,
+                                        tratamiento: citaData.tratamiento,
+                                        categoria: 'Diagnostico' as any,
+                                        estado: 'planificada' as any,
+                                        doctor: editingCita.doctor,
+                                        alertasMedicas: [], alertasLegales: [], alertasFinancieras: false, notas: '',
+                                    });
+                                }, 100);
+                            }}
+                        />
+                    </div>
+                </div>
+            )}
         </div >
     );
 };

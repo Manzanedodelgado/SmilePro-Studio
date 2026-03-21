@@ -161,7 +161,7 @@ const WaModal: React.FC<WaModalProps> = ({ contacto, onClose }) => {
                                 {mensaje}
                             </div>
                             <div className="flex gap-2">
-                                <button onClick={copy} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${copied ? 'bg-blue-100 text-[#051650] border border-green-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                                <button onClick={copy} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${copied ? 'bg-blue-100 text-[#051650] border border-teal-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                                     {copied ? '✅ Copiado' : '📋 Copiar mensaje'}
                                 </button>
                                 <button onClick={openWa} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-[#25D366] hover:bg-[#1da851] shadow-lg shadow-green-500/20 transition-all flex items-center justify-center gap-2">

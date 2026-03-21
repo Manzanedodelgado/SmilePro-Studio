@@ -1,6 +1,7 @@
 // ─── Accounting / Gestoría Controller ────────────────────────────────────────
 import { Request, Response, NextFunction } from 'express';
 import { AccountingService } from './accounting.service';
+import { loadConfig, saveConfig, sendToGestoria, getHistory } from './gestoria-mailer.js';
 
 export class AccountingController {
     // ── Summary ───────────────────────────────────────────────────────────────
@@ -121,5 +122,37 @@ export class AccountingController {
 
     static async patientBalance(req: Request, res: Response, next: NextFunction) {
         try { res.json({ success: true, data: await AccountingService.getPatientBalance(req.params.patientId) }); } catch (e) { next(e); }
+    }
+
+    // ── Gestoría config & envío ────────────────────────────────────────────────
+    static async getGestoriaConfig(req: Request, res: Response, next: NextFunction) {
+        try {
+            const cfg = await loadConfig();
+            // Never send SMTP password in GET response
+            const safe = { ...cfg, smtp: { ...cfg.smtp, pass: cfg.smtp.pass ? '••••••••' : '' } };
+            res.json({ success: true, data: safe });
+        } catch (e) { next(e); }
+    }
+
+    static async updateGestoriaConfig(req: Request, res: Response, next: NextFunction) {
+        try {
+            const cfg = await saveConfig(req.body);
+            const safe = { ...cfg, smtp: { ...cfg.smtp, pass: cfg.smtp.pass ? '••••••••' : '' } };
+            res.json({ success: true, data: safe });
+        } catch (e) { next(e); }
+    }
+
+    static async sendGestoriaReport(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { periodo } = req.body as { periodo?: string };
+            const record = await sendToGestoria(periodo);
+            res.json({ success: true, data: record });
+        } catch (e) { next(e); }
+    }
+
+    static async getGestoriaHistory(req: Request, res: Response, next: NextFunction) {
+        try {
+            res.json({ success: true, data: await getHistory() });
+        } catch (e) { next(e); }
     }
 }

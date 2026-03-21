@@ -24,6 +24,19 @@ router.post('/whatsapp/send-media',   requirePermission('communication:write'), 
 // Recordatorios de cita
 router.post('/reminders/send',        requirePermission('communication:write'), CommunicationController.sendReminder);
 
+// Ficha paciente por teléfono
+router.get('/patient-context/:phone',   requirePermission('communication:read'),  CommunicationController.getPatientContext);
+
+// Presupuesto por WhatsApp
+router.post('/whatsapp/send-budget',    requirePermission('communication:write'), CommunicationController.sendBudget);
+
+// Métricas clínicas
+router.get('/metrics',                  requirePermission('communication:read'),  CommunicationController.getClinicMetrics);
+
+// Patrones de recordatorio (recordatorios inteligentes)
+router.get('/patient-pattern/:phone',          requirePermission('communication:read'),  CommunicationController.getPatientPattern);
+router.post('/patient-pattern/:phone/event',   requirePermission('communication:write'), CommunicationController.recordPatientEvent);
+
 // Chatwoot — conversaciones
 router.get('/conversations',                    requirePermission('communication:read'),  CommunicationController.getConversations);
 router.get('/conversations/:id/messages',       requirePermission('communication:read'),  CommunicationController.getMessages);

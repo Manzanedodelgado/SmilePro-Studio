@@ -41,7 +41,7 @@ export interface ViewMeta {
 
 export const VIEWS: ViewMeta[] = [
     { id: 'axial', label: 'Axial', abr: 'AX', color: '#009fe3', async: false, description: 'Cortes horizontales (Z)' },
-    { id: 'coronal', label: 'Coronal', abr: 'COR', color: '#10b981', async: false, description: 'Vista frontal (Y)' },
+    { id: 'coronal', label: 'Coronal', abr: 'COR', color: '#00B4AB', async: false, description: 'Vista frontal (Y)' },
     { id: 'sagital', label: 'Sagital', abr: 'SAG', color: '#f59e0b', async: false, description: 'Vista lateral (X)' },
     { id: 'panoramica', label: 'Panorámica', abr: 'PAN', color: '#8b5cf6', async: true, description: 'OPG reconstruida' },
     { id: 'mip', label: 'MIP 3D', abr: 'MIP', color: '#ec4899', async: true, description: 'Proyección máx. intensidad' },

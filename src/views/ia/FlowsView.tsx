@@ -37,7 +37,7 @@ const FLOWS: Flow[] = [
         ]
     },
     {
-        id: 'payment', name: 'Flujo: Cobro Realizado', trigger: 'Pago registrado en sistema', color: '#059669', steps: [
+        id: 'payment', name: 'Flujo: Cobro Realizado', trigger: 'Pago registrado en sistema', color: '#00B4AB', steps: [
             { icon: CreditCard, label: 'Pago registrado', sub: 'Efectivo / TPV / Transferencia / Bizum' },
             { icon: Receipt, label: 'Recibo WhatsApp', sub: 'Recibo inmediato al paciente' },
             { icon: FileText, label: 'Factura PDF al doctor', sub: 'Email automático a la dirección configurada' },

@@ -1,11 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import {
     Bot, Zap, GitBranch, FileText, MessageSquare, Sparkles,
-    CheckCircle2, AlertCircle, Activity, TrendingUp, Clock, Shield
+    CheckCircle2, AlertCircle, Activity, TrendingUp, Clock, Shield,
+    BarChart2, Gauge
 } from 'lucide-react';
 import { isAIConfigured } from '../../services/ia-dental.service';
 import { getAutomations } from '../../services/automations.service';
 import type { Automation } from './AutomationRules';
+
+const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000';
+
+interface AIMetrics {
+    totalMessages24h: number;
+    totalTokens24h: number;
+    avgLatencyMs: number;
+    successRate: number;
+    fallbackRate: number;
+    activeAutomations: number;
+    automationExecutions24h: number;
+}
 
 interface QuickCard {
     label: string;
@@ -17,10 +30,10 @@ interface QuickCard {
 }
 
 const QUICK: QuickCard[] = [
-    { label: 'IA Dental ✦', sub: 'Configurar agente y simulador', icon: Bot, color: 'text-[#0056b3]', bg: 'bg-blue-50 border-blue-200', area: 'IA Dental ✦' },
+    { label: 'IA Dental ✶', sub: 'Configurar agente y simulador', icon: Bot, color: 'text-[#0056b3]', bg: 'bg-blue-50 border-blue-200', area: 'IA Dental ✶' },
     { label: 'Automatizaciones', sub: 'Gestionar reglas activas', icon: Zap, color: 'text-[#051650]', bg: 'bg-[#FEFDE8] border-[#FBFFA3]', area: 'Automatizaciones' },
     { label: 'Flujos', sub: 'Secuencias conversacionales', icon: GitBranch, color: 'text-purple-600', bg: 'bg-purple-50 border-purple-200', area: 'Flujos Conversacionales' },
-    { label: 'Plantillas', sub: 'WhatsApp, Email, SMS', icon: MessageSquare, color: 'text-[#051650]', bg: 'bg-blue-50 border-green-200', area: 'Plantillas' },
+    { label: 'Plantillas', sub: 'WhatsApp, Email, SMS', icon: MessageSquare, color: 'text-[#051650]', bg: 'bg-blue-50 border-teal-200', area: 'Plantillas' },
     { label: 'Documentos', sub: 'Consentimientos, cuestionarios', icon: FileText, color: 'text-[#E03555]', bg: 'bg-[#FFF0F3] border-[#FFC0CB]', area: 'Documentos Clínicos' },
 ];
 
@@ -31,9 +44,19 @@ interface IADashboardProps {
 export const IADashboard: React.FC<IADashboardProps> = ({ onNavigate }) => {
     const [automations, setAutomations] = useState<Automation[]>([]);
     const [loading, setLoading] = useState(true);
-    const aiActive = isAIConfigured();
+    const [aiActive, setAiActive] = useState<boolean | null>(null);
+    const [metrics, setMetrics] = useState<AIMetrics | null>(null);
 
     useEffect(() => {
+        isAIConfigured().then(ok => {
+            setAiActive(ok);
+            if (ok) {
+                fetch(`${API_BASE}/api/ai/metrics`)
+                    .then(r => r.ok ? r.json() : null)
+                    .then(json => json?.data && setMetrics(json.data))
+                    .catch(() => { });
+            }
+        });
         getAutomations().then(data => {
             setAutomations(data);
             setLoading(false);
@@ -49,12 +72,12 @@ export const IADashboard: React.FC<IADashboardProps> = ({ onNavigate }) => {
     const kpis = [
         {
             label: 'Motor IA',
-            value: aiActive ? 'Groq LLaMA 3.3' : 'Fallback',
-            sub: aiActive ? 'Conectado · <500ms' : 'Sin API key',
+            value: aiActive === null ? 'Verificando...' : aiActive ? 'Groq LLaMA 3.3' : 'Fallback',
+            sub: aiActive === null ? '—' : aiActive ? 'Conectado · streaming SSE' : 'Sin conexión al backend',
             icon: Bot,
-            ok: aiActive,
-            color: aiActive ? 'text-[#051650]' : 'text-amber-600',
-            bg: aiActive ? 'bg-blue-50 border-blue-200' : 'bg-[#FEFDE8] border-[#FBFFA3]',
+            ok: aiActive === true,
+            color: aiActive === true ? 'text-[#051650]' : 'text-amber-600',
+            bg: aiActive === true ? 'bg-blue-50 border-blue-200' : 'bg-[#FEFDE8] border-[#FBFFA3]',
         },
         {
             label: 'Automatizaciones',
@@ -67,8 +90,8 @@ export const IADashboard: React.FC<IADashboardProps> = ({ onNavigate }) => {
         },
         {
             label: 'Tasa de éxito',
-            value: loading || !topAutomation ? '—' : `${topAutomation.successRate}%`,
-            sub: topAutomation ? `Mejor: ${topAutomation.name.slice(0, 22)}…` : 'Sin datos aún',
+            value: metrics ? `${metrics.successRate}%` : loading || !topAutomation ? '—' : `${topAutomation.successRate}%`,
+            sub: metrics ? `Fallback: ${metrics.fallbackRate}% · 24h` : topAutomation ? `Mejor: ${topAutomation.name.slice(0, 20)}…` : 'Sin datos aún',
             icon: TrendingUp,
             ok: true,
             color: 'text-[#051650]',
@@ -100,13 +123,13 @@ export const IADashboard: React.FC<IADashboardProps> = ({ onNavigate }) => {
                     <div>
                         <h2 className="text-[16px] font-bold uppercase tracking-wide">Cerebro Digital · IA Dental</h2>
                         <p className="text-[13px] text-white/80 mt-0.5">
-                            Motor de automatización clínica · LLaMA 3.3 70B vía Groq · Backend Node.js
+                            Motor de automatización clínica · LLaMA 3.3 70B vía Groq · Streaming SSE
                         </p>
                     </div>
                     <div className="ml-auto flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${aiActive ? 'bg-[#118DF0] animate-pulse' : 'bg-[#FBFFA3]'}`} />
+                        <span className={`w-2 h-2 rounded-full ${aiActive === true ? 'bg-[#118DF0] animate-pulse' : aiActive === false ? 'bg-[#FBFFA3]' : 'bg-white/30'}`} />
                         <span className="text-[12px] font-bold text-white/70 uppercase tracking-wider">
-                            {aiActive ? 'IA Activa' : 'Fallback'}
+                            {aiActive === true ? 'IA Activa' : aiActive === false ? 'Fallback' : '...'}
                         </span>
                     </div>
                 </div>
@@ -130,6 +153,61 @@ export const IADashboard: React.FC<IADashboardProps> = ({ onNavigate }) => {
                     );
                 })}
             </div>
+
+            {/* Métricas de uso en tiempo real */}
+            {(metrics || aiActive === true) && (
+                <div className="bg-white rounded-2xl border border-slate-200 p-5">
+                    <p className="text-[12px] font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <BarChart2 className="w-3.5 h-3.5" />Métricas · Últimas 24h
+                    </p>
+                    {metrics ? (
+                        <>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                {[
+                                    { label: 'Mensajes', value: metrics.totalMessages24h.toString(), icon: MessageSquare, color: 'text-[#0056b3]' },
+                                    { label: 'Tokens', value: metrics.totalTokens24h > 999 ? `${(metrics.totalTokens24h / 1000).toFixed(1)}k` : metrics.totalTokens24h.toString(), icon: Zap, color: 'text-purple-600' },
+                                    { label: 'Latencia media', value: metrics.avgLatencyMs > 0 ? `${metrics.avgLatencyMs}ms` : '—', icon: Gauge, color: metrics.avgLatencyMs < 800 ? 'text-emerald-600' : 'text-amber-600' },
+                                    { label: 'Ejecuciones auto.', value: metrics.automationExecutions24h.toString(), icon: Activity, color: 'text-[#051650]' },
+                                ].map(m => {
+                                    const Icon = m.icon;
+                                    return (
+                                        <div key={m.label} className="text-center">
+                                            <div className="flex justify-center mb-1">
+                                                <Icon className={`w-4 h-4 ${m.color}`} />
+                                            </div>
+                                            <p className={`text-[22px] font-bold leading-none ${m.color}`}>{m.value}</p>
+                                            <p className="text-[11px] text-slate-400 mt-1 uppercase tracking-wide">{m.label}</p>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            {/* Barra de éxito/fallback */}
+                            <div className="mt-4">
+                                <div className="flex justify-between text-[11px] font-bold text-slate-400 uppercase mb-1">
+                                    <span>Groq directo {metrics.successRate}%</span>
+                                    <span>Fallback {metrics.fallbackRate}%</span>
+                                </div>
+                                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-[#0056b3] rounded-full transition-all duration-700"
+                                        style={{ width: `${metrics.successRate}%` }}
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            {['Mensajes', 'Tokens', 'Latencia media', 'Ejecuciones auto.'].map(label => (
+                                <div key={label} className="text-center space-y-2">
+                                    <div className="h-4 w-4 bg-slate-100 rounded-full mx-auto animate-pulse" />
+                                    <div className="h-6 w-12 bg-slate-100 rounded mx-auto animate-pulse" />
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-wide">{label}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Accesos rápidos */}
             <div>
@@ -163,10 +241,11 @@ export const IADashboard: React.FC<IADashboardProps> = ({ onNavigate }) => {
                 </p>
                 <div className="space-y-2">
                     {[
-                        { label: 'API Groq (LLaMA 3.3)', status: aiActive, detail: 'api.groq.com → localhost:3000/api/ai' },
-                        { label: 'Modelo LLaMA 3.3 70B (Groq)', status: aiActive, detail: 'llama-3.3-70b-versatile · max 1000 tokens' },
-                        { label: 'Motor de automatizaciones', status: !loading && activeCount > 0, detail: `${activeCount} reglas activas procesando eventos` },
-                        { label: 'Persistencia chat_history', status: true, detail: 'Backend local · 20 mensajes por sesión' },
+                        { label: 'API Groq (LLaMA 3.3)', status: aiActive === true, detail: 'api.groq.com → /api/ai/chat/stream · SSE' },
+                        { label: 'Modelo LLaMA 3.3 70B', status: aiActive === true, detail: 'llama-3.3-70b-versatile · max 300 tokens · streaming' },
+                        { label: 'Motor de automatizaciones', status: !loading && activeCount > 0, detail: `${activeCount} reglas activas · cron L-S 08-21h Europe/Madrid` },
+                        { label: 'Historial de chat', status: true, detail: 'PostgreSQL · ConversationHistory · TTL 24h' },
+                        { label: 'Rate limiting', status: true, detail: 'Cliente: 20 msgs/min · Servidor: 100 req/15min' },
                     ].map(item => (
                         <div key={item.label} className="flex items-center gap-3 py-2 border-b border-slate-50 last:border-0">
                             {item.status
@@ -185,7 +264,7 @@ export const IADashboard: React.FC<IADashboardProps> = ({ onNavigate }) => {
                 </div>
             </div>
 
-            {/* Automatizaciones recientes */}
+            {/* Top automatizaciones */}
             {!loading && automations.length > 0 && (
                 <div className="bg-white rounded-2xl border border-slate-200 p-5">
                     <div className="flex items-center justify-between mb-3">

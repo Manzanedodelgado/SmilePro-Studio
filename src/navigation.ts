@@ -52,6 +52,7 @@ export const navigationItems: MenuItem[] = [
             { name: 'Editor', icon: 'edit_note' },
             { name: 'Plantillas', icon: 'fact_check' },
             { name: 'Documentos Clínicos', icon: 'description' },
+            { name: 'Métricas WA', icon: 'bar_chart' },
         ]
     },
     {
@@ -74,6 +75,7 @@ export const navigationItems: MenuItem[] = [
             { name: 'Banco y Conciliación', icon: 'account_balance' },
             { name: 'Declaraciones Fiscales', icon: 'request_page' },
             { name: 'Informes de Gestión', icon: 'bar_chart' },
+            { name: 'Envío Gestoría', icon: 'send' },
         ]
     },
 ];

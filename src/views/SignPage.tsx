@@ -166,7 +166,7 @@ const SignPage: React.FC<SignPageProps> = ({ token }) => {
             </div>
 
             <p className="mt-6 text-[12px] text-slate-400 text-center">
-                SmilePro 2026 · Rubio García Dental<br />
+                SmilePro Studio · Rubio García Dental<br />
                 Firmado de forma segura · RGPD Art. 9
             </p>
         </div>

@@ -175,7 +175,7 @@ export const MetricasComunicacion: React.FC = () => {
                     label="Confirmaciones"
                     value={`${confirmPct}%`}
                     sub={`${reminders.confirmed} pac. confirmaron`}
-                    color={confirmPct >= 70 ? 'text-green-600' : confirmPct >= 40 ? 'text-amber-600' : 'text-[#E03555]'}
+                    color={confirmPct >= 70 ? 'text-teal-600' : confirmPct >= 40 ? 'text-amber-600' : 'text-[#E03555]'}
                 />
             </div>
 
@@ -194,9 +194,9 @@ export const MetricasComunicacion: React.FC = () => {
                             <span className="font-bold text-[#051650]">{confirmPct}%</span>
                         </div>
                         <Bar pct={confirmPct}
-                            color={confirmPct >= 70 ? 'bg-green-400' : confirmPct >= 40 ? 'bg-amber-400' : 'bg-[#E03555]'} />
+                            color={confirmPct >= 70 ? 'bg-teal-400' : confirmPct >= 40 ? 'bg-amber-400' : 'bg-[#E03555]'} />
                         <div className="flex justify-between text-[11px] text-slate-400 pt-1">
-                            <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" /> {reminders.confirmed} confirmados</span>
+                            <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-teal-500" /> {reminders.confirmed} confirmados</span>
                             <span className="flex items-center gap-1"><XCircle className="w-3 h-3 text-slate-300" /> {reminders.sent - reminders.confirmed} sin respuesta</span>
                         </div>
                     </div>
@@ -234,8 +234,8 @@ export const MetricasComunicacion: React.FC = () => {
                         <p className="text-[22px] font-black text-[#051650]">{conversations.total}</p>
                         <p className="text-[11px] text-slate-400 font-bold uppercase">Total</p>
                     </div>
-                    <div className="bg-green-50 rounded-xl py-3">
-                        <p className="text-[22px] font-black text-green-600">{conversations.resolved}</p>
+                    <div className="bg-teal-50 rounded-xl py-3">
+                        <p className="text-[22px] font-black text-teal-600">{conversations.resolved}</p>
                         <p className="text-[11px] text-slate-400 font-bold uppercase">Resueltas</p>
                     </div>
                     <div className="bg-amber-50 rounded-xl py-3">
@@ -255,7 +255,7 @@ export const MetricasComunicacion: React.FC = () => {
                     <span className="text-[11px] text-slate-400">{patientReliability.total} perfiles</span>
                 </div>
                 <div className="space-y-3">
-                    <ReliabilityRow label="Excelente" count={patientReliability.excellent} total={patientReliability.total} color="text-green-600" bar="bg-green-400" />
+                    <ReliabilityRow label="Excelente" count={patientReliability.excellent} total={patientReliability.total} color="text-teal-600" bar="bg-teal-400" />
                     <ReliabilityRow label="Buena" count={patientReliability.good} total={patientReliability.total} color="text-blue-600" bar="bg-blue-400" />
                     <ReliabilityRow label="Media" count={patientReliability.average} total={patientReliability.total} color="text-amber-600" bar="bg-amber-400" />
                     <ReliabilityRow label="Baja" count={patientReliability.low} total={patientReliability.total} color="text-[#E03555]" bar="bg-[#E03555]" />

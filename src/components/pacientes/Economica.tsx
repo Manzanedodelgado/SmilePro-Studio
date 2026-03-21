@@ -9,9 +9,10 @@ import {
 import { sendTextMessage, isEvolutionConfigured } from '../../services/evolution.service';
 import {
     getPresupuestosByPaciente, getResumenEconomico,
-    aceptarPresupuesto, rechazarPresupuesto,
+    aceptarPresupuesto, rechazarPresupuesto, registrarCobro,
     type Presupuesto, type LineaPresupuesto,
 } from '../../services/presupuestos.service';
+import PresupuestoModal from './PresupuestoModal';
 import { getFacturasByPaciente } from '../../services/facturacion.service';
 import type { FacturaUI } from '../../services/facturacion.service';
 import { useAuth } from '../../context/AuthContext';
@@ -67,6 +68,13 @@ const Economica: React.FC<EconomicaProps> = ({
     const [resumen, setResumen] = useState({ deudaPendiente: 0, totalPresupuestado: 0, totalCobrado: 0, presupuestosCount: 0, totalFacturado: 0, totalPagado: 0, totalPendiente: 0 });
     const [loading, setLoading] = useState(false);
     const [confirming, setConfirming] = useState<{ id: number; action: 'aceptar' | 'rechazar' } | null>(null);
+    const [showModal, setShowModal] = useState(false);
+    const [editingPres, setEditingPres] = useState<Presupuesto | null>(null);
+    const [registrandoCobro, setRegistrandoCobro] = useState<{ id: number; importe: string } | null>(null);
+    const [showFinancing, setShowFinancing] = useState(false);
+    const [finCapital, setFinCapital] = useState('');
+    const [finPlazo, setFinPlazo] = useState('12');
+    const [finTin, setFinTin] = useState('6');
 
     // ── Carga de datos ────────────────────────────────────────────
 
@@ -150,10 +158,85 @@ const Economica: React.FC<EconomicaProps> = ({
         }
     };
 
+    const handleCobroConfirm = async () => {
+        if (!registrandoCobro) return;
+        const importe = parseFloat(registrandoCobro.importe.replace(',', '.'));
+        if (isNaN(importe) || importe <= 0) { toast('Importe inválido'); return; }
+        const updated = await registrarCobro(registrandoCobro.id, importe);
+        if (updated) {
+            setPresupuestos(prev => prev.map(x => x.id === registrandoCobro.id ? updated : x));
+            toast(`✅ Cobro de ${importe.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })} registrado`);
+        }
+        setRegistrandoCobro(null);
+        loadData();
+    };
+
     // ── Render ────────────────────────────────────────────────────
 
     return (
         <div className="space-y-5 pb-10 animate-in fade-in duration-500">
+
+            {/* ── Presupuesto modal ── */}
+            {showModal && (
+                <PresupuestoModal
+                    numPac={numPac}
+                    pacienteNombre={pacienteNombre}
+                    pacienteTelefono={pacienteTelefono}
+                    presupuesto={editingPres}
+                    onClose={() => { setShowModal(false); setEditingPres(null); }}
+                    onSaved={saved => {
+                        setShowModal(false);
+                        setEditingPres(null);
+                        setPresupuestos(prev => {
+                            const idx = prev.findIndex(x => x.id === saved.id);
+                            if (idx >= 0) { const next = [...prev]; next[idx] = saved; return next; }
+                            return [saved, ...prev];
+                        });
+                        setExpanded(saved.id);
+                        loadData();
+                    }}
+                    showToast={showToast}
+                />
+            )}
+
+            {/* ── Registrar cobro inline ── */}
+            {registrandoCobro && (
+                <div style={{
+                    position: 'fixed', inset: 0, zIndex: 8000,
+                    background: 'rgba(5,22,80,0.45)', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center',
+                }}>
+                    <div style={{
+                        background: '#fff', borderRadius: 16, padding: 28,
+                        width: 380, boxShadow: '0 20px 60px rgba(5,22,80,0.2)',
+                    }}>
+                        <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 800, color: '#051650' }}>Registrar cobro</h3>
+                        <p style={{ margin: '0 0 16px', fontSize: 13, color: '#94a3b8' }}>
+                            Presupuesto #{registrandoCobro.id}
+                        </p>
+                        <label style={{ display: 'block', marginBottom: 14 }}>
+                            <span style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 }}>
+                                Importe cobrado (€)
+                            </span>
+                            <input
+                                type="number" min={0} step={0.01}
+                                value={registrandoCobro.importe}
+                                onChange={e => setRegistrandoCobro(v => v ? { ...v, importe: e.target.value } : v)}
+                                autoFocus
+                                style={{ width: '100%', padding: '10px 14px', fontSize: 15, fontWeight: 700, border: '2px solid #051650', borderRadius: 8, boxSizing: 'border-box', fontFamily: 'monospace' }}
+                            />
+                        </label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <button onClick={() => setRegistrandoCobro(null)} style={{ flex: 1, padding: '10px', fontSize: 13, fontWeight: 700, border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff', color: '#64748b', cursor: 'pointer' }}>
+                                Cancelar
+                            </button>
+                            <button onClick={handleCobroConfirm} style={{ flex: 1, padding: '10px', fontSize: 13, fontWeight: 800, border: 'none', borderRadius: 8, background: '#051650', color: '#fff', cursor: 'pointer' }}>
+                                Registrar cobro
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Banner sin BD */}
             {!dbOk && (
@@ -217,10 +300,47 @@ const Economica: React.FC<EconomicaProps> = ({
                         <p className="text-[12px] text-white/70 font-medium mt-1">Consulta financiación a medida con tu gestor bancario.</p>
                     </div>
                     <button
-                        onClick={() => toast('Funcionalidad de financiación — contacta con tu gestor bancario')}
+                        onClick={() => setShowFinancing(v => !v)}
                         className="mt-4 bg-white text-[#051650] py-2 px-4 rounded-lg text-[12px] font-bold uppercase tracking-widest self-start hover:bg-blue-50 transition-all active:scale-95">
-                        Consultar
+                        Calcular cuota
                     </button>
+                    {showFinancing && (
+                        <div className="mt-3 bg-white/15 rounded-xl p-3 space-y-2 text-white">
+                            <div className="flex gap-2">
+                                <div className="flex-1">
+                                    <p className="text-[10px] font-bold uppercase opacity-70 mb-1">Capital (€)</p>
+                                    <input type="number" value={finCapital} onChange={e => setFinCapital(e.target.value)} placeholder={resumen.totalPendiente > 0 ? String(Math.round(resumen.totalPendiente)) : '1000'} className="w-full bg-white/20 rounded-lg px-2 py-1.5 text-[13px] font-bold text-white placeholder-white/50 outline-none focus:ring-1 focus:ring-white/60" />
+                                </div>
+                                <div className="w-16">
+                                    <p className="text-[10px] font-bold uppercase opacity-70 mb-1">Meses</p>
+                                    <input type="number" value={finPlazo} onChange={e => setFinPlazo(e.target.value)} min="1" max="84" className="w-full bg-white/20 rounded-lg px-2 py-1.5 text-[13px] font-bold text-white outline-none focus:ring-1 focus:ring-white/60" />
+                                </div>
+                                <div className="w-16">
+                                    <p className="text-[10px] font-bold uppercase opacity-70 mb-1">TIN %</p>
+                                    <input type="number" value={finTin} onChange={e => setFinTin(e.target.value)} min="0" step="0.1" className="w-full bg-white/20 rounded-lg px-2 py-1.5 text-[13px] font-bold text-white outline-none focus:ring-1 focus:ring-white/60" />
+                                </div>
+                            </div>
+                            {(() => {
+                                const C = parseFloat(finCapital || (resumen.totalPendiente > 0 ? String(resumen.totalPendiente) : '1000'));
+                                const n = Math.max(1, parseInt(finPlazo) || 12);
+                                const r = (parseFloat(finTin) || 0) / 100 / 12;
+                                const cuota = r === 0 ? C / n : C * r * Math.pow(1 + r, n) / (Math.pow(1 + r, n) - 1);
+                                const total = cuota * n;
+                                return (
+                                    <div className="flex justify-between items-end pt-1">
+                                        <div>
+                                            <p className="text-[10px] opacity-70 uppercase font-bold">Cuota mensual</p>
+                                            <p className="text-[22px] font-bold leading-none">{isFinite(cuota) ? cuota.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : '—'}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-[10px] opacity-70 uppercase font-bold">Total a pagar</p>
+                                            <p className="text-[14px] font-bold opacity-90">{isFinite(total) ? total.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : '—'}</p>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    )}
                     <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform" />
                 </div>
             </div>
@@ -251,7 +371,7 @@ const Economica: React.FC<EconomicaProps> = ({
                 <div className="space-y-3 animate-in fade-in duration-300">
                     <div className="flex justify-end">
                         <button
-                            onClick={() => toast('Creación de presupuestos — se realiza en GELITE y se sincroniza aquí automáticamente')}
+                            onClick={() => { setEditingPres(null); setShowModal(true); }}
                             className="flex items-center gap-1.5 bg-[#051650] text-white px-4 py-2.5 rounded-lg text-[12px] font-bold uppercase tracking-widest shadow-md hover:bg-blue-900 transition-all active:scale-95">
                             <Plus className="w-4 h-4" /> Nuevo Presupuesto
                         </button>
@@ -396,31 +516,47 @@ const Economica: React.FC<EconomicaProps> = ({
                                     )}
 
                                     {/* Acciones */}
-                                    <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-slate-200">
-                                        <button
-                                            onClick={() => handleImprimir(p)}
-                                            className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[12px] font-bold uppercase text-slate-500 hover:bg-slate-50 hover:text-[#051650] transition-colors">
-                                            <Printer className="w-3.5 h-3.5" /> Imprimir
-                                        </button>
-                                        <button
-                                            onClick={() => handleWhatsApp(p)}
-                                            className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[12px] font-bold uppercase text-slate-500 hover:bg-slate-50 hover:text-[#051650] transition-colors">
-                                            <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
-                                        </button>
-                                        {p.estado === 'Pendiente' && (
-                                            <>
+                                    <div className="flex flex-wrap justify-between gap-2 pt-2 border-t border-slate-200">
+                                        <div className="flex flex-wrap gap-2">
+                                            <button
+                                                onClick={() => handleImprimir(p)}
+                                                className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[12px] font-bold uppercase text-slate-500 hover:bg-slate-50 hover:text-[#051650] transition-colors">
+                                                <Printer className="w-3.5 h-3.5" /> Imprimir
+                                            </button>
+                                            <button
+                                                onClick={() => handleWhatsApp(p)}
+                                                className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[12px] font-bold uppercase text-slate-500 hover:bg-slate-50 hover:text-[#051650] transition-colors">
+                                                <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
+                                            </button>
+                                            <button
+                                                onClick={() => { setEditingPres(p); setShowModal(true); }}
+                                                className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[12px] font-bold uppercase text-slate-500 hover:bg-slate-50 hover:text-[#051650] transition-colors">
+                                                <Receipt className="w-3.5 h-3.5" /> Editar
+                                            </button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {p.importePendiente > 0 && p.estado !== 'Rechazado' && p.estado !== 'Borrador' && (
                                                 <button
-                                                    onClick={() => setConfirming({ id: p.id, action: 'aceptar' })}
-                                                    className="flex items-center gap-1.5 px-3 py-2 bg-blue-500 text-white rounded-lg text-[12px] font-bold uppercase hover:bg-[#051650] transition-colors shadow-sm active:scale-95">
-                                                    <Check className="w-3.5 h-3.5" /> Aceptar
+                                                    onClick={() => setRegistrandoCobro({ id: p.id, importe: String(p.importePendiente) })}
+                                                    className="flex items-center gap-1.5 px-3 py-2 bg-[#FEFDE8] border border-[#FBFFA3] text-[#051650] rounded-lg text-[12px] font-bold uppercase hover:bg-amber-100 transition-colors">
+                                                    <Banknote className="w-3.5 h-3.5" /> Registrar cobro
                                                 </button>
-                                                <button
-                                                    onClick={() => setConfirming({ id: p.id, action: 'rechazar' })}
-                                                    className="flex items-center gap-1.5 px-3 py-2 bg-white border border-[#FFC0CB] text-red-500 rounded-lg text-[12px] font-bold uppercase hover:bg-[#FFF0F3] transition-colors">
-                                                    <X className="w-3.5 h-3.5" /> Rechazar
-                                                </button>
-                                            </>
-                                        )}
+                                            )}
+                                            {p.estado === 'Pendiente' && (
+                                                <>
+                                                    <button
+                                                        onClick={() => setConfirming({ id: p.id, action: 'aceptar' })}
+                                                        className="flex items-center gap-1.5 px-3 py-2 bg-blue-500 text-white rounded-lg text-[12px] font-bold uppercase hover:bg-[#051650] transition-colors shadow-sm active:scale-95">
+                                                        <Check className="w-3.5 h-3.5" /> Aceptar
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setConfirming({ id: p.id, action: 'rechazar' })}
+                                                        className="flex items-center gap-1.5 px-3 py-2 bg-white border border-[#FFC0CB] text-red-500 rounded-lg text-[12px] font-bold uppercase hover:bg-[#FFF0F3] transition-colors">
+                                                        <X className="w-3.5 h-3.5" /> Rechazar
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -493,7 +629,12 @@ const Economica: React.FC<EconomicaProps> = ({
                                         </td>
                                         <td className="p-4 text-center">
                                             <button
-                                                onClick={() => toast('Descarga de PDF — pendiente de integración con Verifactu')}
+                                                onClick={() => {
+                                                    const w = window.open('', '_blank', 'width=800,height=600');
+                                                    if (!w) return;
+                                                    w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Factura ${m.id}</title><style>body{font-family:sans-serif;padding:40px;color:#1e293b}h1{font-size:20px;border-bottom:2px solid #051650;padding-bottom:8px}table{width:100%;border-collapse:collapse;margin-top:24px}th{text-align:left;padding:8px;background:#f8fafc;font-size:12px;text-transform:uppercase;color:#64748b}td{padding:10px 8px;border-top:1px solid #f1f5f9;font-size:14px}.badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700;background:${m.status === 'Liquidado' ? '#eff6ff' : m.status === 'Impagado' ? '#fff0f3' : '#fefde8'};color:${m.status === 'Liquidado' ? '#051650' : m.status === 'Impagado' ? '#e03555' : '#051650'}}.footer{margin-top:40px;font-size:11px;color:#94a3b8;border-top:1px solid #f1f5f9;padding-top:12px}@media print{button{display:none}}</style></head><body><h1>Factura · ${m.id}</h1><p style="color:#64748b;font-size:13px">Rubio García Dental &nbsp;·&nbsp; ${new Date().toLocaleDateString('es-ES')}</p><table><thead><tr><th>Paciente</th><th>Fecha</th><th>Base imponible</th><th>Total</th><th>Estado</th></tr></thead><tbody><tr><td><strong>${pacienteNombre || m.name}</strong></td><td>${m.date}</td><td>${m.base}</td><td><strong>${m.total}</strong></td><td><span class="badge">${m.status}</span></td></tr></tbody></table><div class="footer">Documento generado por SmilePro Studio · Verifactu: ${m.tbai}</div><br><button onclick="window.print()" style="padding:8px 20px;background:#051650;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨 Imprimir / Guardar PDF</button></body></html>`);
+                                                    w.document.close();
+                                                }}
                                                 className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center hover:bg-slate-100 hover:text-[#051650] transition-all mx-auto">
                                                 <Receipt className="w-3.5 h-3.5" />
                                             </button>

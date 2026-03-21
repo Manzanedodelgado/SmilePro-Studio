@@ -1,4 +1,5 @@
 // ─── Smile Pro 2026 Backend Server ──────────────────────────
+import { createServer } from 'http';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -7,6 +8,8 @@ import rateLimit from 'express-rate-limit';
 import { config } from './config/index.js';
 import { logger } from './config/logger.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { initSocket } from './config/socket.js';
+import { startAutomationEngine } from './modules/ai/automation.engine.js';
 
 // ─── Module Routes ──────────────────────────────────────
 import authRoutes from './modules/auth/auth.routes';
@@ -28,11 +31,16 @@ import gdriveRoutes from './modules/gdrive/gdrive.routes'; // Fotos pacientes
 
 // ─── App Setup ──────────────────────────────────────────
 const app = express();
+const httpServer = createServer(app);
+initSocket(httpServer);
 
 // ─── Global Middleware ──────────────────────────────────
 app.use(helmet());
 app.use(cors({ origin: config.CORS_ORIGIN, credentials: true }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+    limit: '10mb',
+    verify: (_req: any, _res, buf) => { (_req as any).rawBody = buf.toString(); },
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // HTTP request logging
@@ -43,7 +51,7 @@ app.use(morgan('short', {
 // Rate limiting
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
+    max: 1000, // desarrollo: 1000 per window (producción: bajar a 100)
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, error: { message: 'Demasiadas peticiones, inténtalo más tarde', code: 'RATE_LIMIT' } },
@@ -86,14 +94,15 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // ─── Start Server ───────────────────────────────────────
-const server = app.listen(config.PORT, () => {
+httpServer.listen(config.PORT, () => {
     logger.info(`🦷 Smile Pro 2026 API running on port ${config.PORT} [${config.NODE_ENV}]`);
+    startAutomationEngine();
 });
 
 // ─── Graceful Shutdown ──────────────────────────────────
 const shutdown = (signal: string) => {
     logger.info(`${signal} received — shutting down gracefully...`);
-    server.close(() => {
+    httpServer.close(() => {
         logger.info('Server closed');
         process.exit(0);
     });

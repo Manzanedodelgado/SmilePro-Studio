@@ -9,6 +9,7 @@ import { AutomationEditor } from './ia/AutomationEditor';
 import { Plantillas } from './ia/Plantillas';
 import { IADashboard } from './ia/IADashboard';
 import { DocumentosClinica } from './ia/DocumentosClinica';
+import { MetricasComunicacion } from './ia/MetricasComunicacion';
 
 interface IAAutomatizacionProps { activeSubArea?: string; onSubNavigate?: (area: string) => void; }
 
@@ -26,12 +27,13 @@ const IAAutomatizacion: React.FC<IAAutomatizacionProps> = ({ activeSubArea, onSu
     const renderContent = () => {
         switch (activeSubArea) {
             case 'Panel IA': return <IADashboard onNavigate={onSubNavigate ?? (() => { })} />;
-            case 'IA Dental ✦': return <IAConfig />;
+            case 'IA Dental ✶': return <IAConfig />;
             case 'Automatizaciones': return <AutomationRules />;
             case 'Flujos Conversacionales': return <FlowsView />;
             case 'Editor': return <AutomationEditor />;
             case 'Plantillas': return <Plantillas />;
             case 'Documentos Clínicos': return <DocumentosClinica />;
+            case 'Métricas WA': return <MetricasComunicacion />;
             default: return <IADashboard onNavigate={onSubNavigate ?? (() => { })} />;
         }
     };

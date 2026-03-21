@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { type Cita } from './types';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -17,6 +17,7 @@ import QuestionnairePublicPage from './views/QuestionnairePublicPage';
 import SignPage from './views/SignPage';
 import { useAuth } from './context/AuthContext';
 import { setupGlobalErrorHandler } from './components/ErrorBoundary';
+import CommandPalette from './components/CommandPalette';
 
 // Instalar el manejador global de errores una sola vez al cargar la app
 setupGlobalErrorHandler();
@@ -39,6 +40,19 @@ const App: React.FC = () => {
     const [toastMessage, setToastMessage] = useState<string | null>(null);
     const [pendingCita, setPendingCita] = useState<Partial<Cita> | null>(null);
     const pendingWhatsappRef = React.useRef<{ phone: string; name: string } | null>(null);
+    const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
+    // ⌘K / Ctrl+K — Global keyboard shortcut for Command Palette
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                setIsCommandPaletteOpen(prev => !prev);
+            }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, []);
 
     // Paciente persistido para restauración al volver + señal de selección externa (ej: desde Dashboard)
     const [requestedNumPac, setRequestedNumPac] = useState<string | null>(null);
@@ -152,7 +166,7 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            <Header activeArea={activeArea} onNavigate={handleNavigation} />
+            <Header activeArea={activeArea} onNavigate={handleNavigation} onCommandPalette={() => setIsCommandPaletteOpen(true)} />
 
             <div className="flex flex-1 overflow-hidden">
                 {showSidebar && (
@@ -167,8 +181,8 @@ const App: React.FC = () => {
                 <main className="flex-1 flex flex-col overflow-hidden relative">
                     {/* PACIENTES: siempre montado, oculto con CSS cuando no es activo — preserva estado del paciente */}
                     <div style={{ display: activeArea === 'Pacientes' ? 'contents' : 'none' }}>
-                        <div className={`flex-1 custom-scrollbar ${activeSubArea === 'Radiología' ? 'overflow-hidden' : 'overflow-y-auto p-4 md:p-6 lg:p-8 bg-clinical-soft/30'}`}>
-                            <div className={activeSubArea === 'Radiología' ? 'h-full' : 'max-w-[1600px] mx-auto animate-fade-in'}>
+                        <div className={`flex-1 ${activeSubArea === 'Radiología' ? 'overflow-hidden' : 'overflow-hidden flex flex-col p-[20px] bg-clinical-soft/30'}`}>
+                            <div className={activeSubArea === 'Radiología' ? 'h-full' : 'h-full flex flex-col animate-fade-in'}>
                                 <Pacientes
                                     activeSubArea={activeArea === 'Pacientes' ? activeSubArea : persistedSubAreaRef.current}
                                     requestedNumPac={requestedNumPac}
@@ -206,6 +220,16 @@ const App: React.FC = () => {
                     )}
                 </main>
             </div>
+
+            {/* ⌘K Command Palette */}
+            <CommandPalette
+                isOpen={isCommandPaletteOpen}
+                onClose={() => setIsCommandPaletteOpen(false)}
+                onNavigate={(area, subArea, numPac) => {
+                    handleNavigation(area, subArea, numPac);
+                    setIsCommandPaletteOpen(false);
+                }}
+            />
         </div>
     );
 };

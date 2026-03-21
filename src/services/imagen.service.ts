@@ -322,7 +322,9 @@ export async function applyColorMap(imageUrl: string, colorMap: ColorMap): Promi
     return canvas.toDataURL('image/webp', 0.92);
 }
 
-// ── GESTIÓN IN-MEMORY ─────────────────────────────────────────────────────────
+// ── GESTIÓN IN-MEMORY + BACKEND ───────────────────────────────────────────────
+
+import { authFetch } from './db';
 
 let estudios: EstudioRadiologico[] = [];
 let nextId = 1;
@@ -330,6 +332,46 @@ let nextId = 1;
 export function getEstudios(numPac?: string): EstudioRadiologico[] {
     if (!numPac) return [...estudios];
     return estudios.filter(e => e.pacienteNumPac === numPac);
+}
+
+/**
+ * Carga los estudios de un paciente desde el backend.
+ * Fusiona con los estudios in-memory (los blob: no se pueden persistir en servidor).
+ */
+export async function loadEstudiosFromBackend(numPac: string): Promise<EstudioRadiologico[]> {
+    try {
+        const res = await authFetch(`/api/imaging/patients/${numPac}`);
+        if (!res.ok) return getEstudios(numPac);
+        const json = await res.json();
+        const serverStudies: EstudioRadiologico[] = (json.data ?? []).map((s: any) => ({
+            id: s.id,
+            pacienteNumPac: s.num_pac,
+            tipo: s.tipo as ImageType,
+            nombre: s.nombre,
+            fecha: s.fecha,
+            doctor: s.doctor ?? '',
+            descripcion: s.descripcion ?? '',
+            originalUrl: s.ruta_origen ?? '',
+            isProcessing: false,
+            colorMap: 'grayscale' as ColorMap,
+            brightness: 0, contrast: 0, sharpness: 0,
+            anotaciones: [],
+            tags: [],
+            fileSize: undefined,
+            rutaOrigen: s.ruta_origen,
+        }));
+        // Merge: backend studies + in-memory (blob) studies for this patient
+        const localBlobs = estudios.filter(e =>
+            e.pacienteNumPac === numPac && e.originalUrl.startsWith('blob:')
+        );
+        const serverIds = new Set(serverStudies.map(s => s.id));
+        const merged = [...localBlobs.filter(e => !serverIds.has(e.id)), ...serverStudies];
+        // Update local cache
+        estudios = [...estudios.filter(e => e.pacienteNumPac !== numPac), ...merged];
+        return merged;
+    } catch {
+        return getEstudios(numPac);
+    }
 }
 
 export async function addEstudio(
@@ -351,9 +393,10 @@ export async function addEstudio(
     // desde el File object con su propio parser. Evitamos parsear dos veces.
     // Imágenes estándar: blob URL directo
     const originalUrl = URL.createObjectURL(file);
+    const id = `img-${Date.now()}-${nextId++}`;
 
     const estudio: EstudioRadiologico = {
-        id: `img-${Date.now()}-${nextId++}`,
+        id,
         pacienteNumPac: meta.pacienteNumPac,
         tipo,
         nombre: file.name,
@@ -378,7 +421,45 @@ export async function addEstudio(
     };
 
     estudios = [estudio, ...estudios];
+
+    // Persist metadata to backend (no file content — blob stays local)
+    try {
+        await authFetch('/api/imaging/studies', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id,
+                num_pac: meta.pacienteNumPac,
+                tipo,
+                nombre: file.name,
+                fecha: estudio.fecha,
+                doctor: estudio.doctor,
+                descripcion: estudio.descripcion,
+            }),
+        });
+    } catch {
+        // Non-fatal: study still works in-memory
+    }
+
     return estudio;
+}
+
+/**
+ * Guarda las mediciones (implantes, nervios, reglas) de un estudio en el backend.
+ */
+export async function saveMeasurements(
+    studyId: string,
+    measurements: Array<{ id: string; tool: string; points: Array<{ x: number; y: number }>; label?: string; color: string; completed: boolean }>
+): Promise<void> {
+    try {
+        await authFetch(`/api/imaging/studies/${studyId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ measurements }),
+        });
+    } catch {
+        // Non-fatal
+    }
 }
 
 export async function processEstudio(
@@ -453,6 +534,8 @@ export function deleteEstudio(id: string): void {
     const estudio = estudios.find(e => e.id === id);
     if (estudio?.originalUrl.startsWith('blob:')) URL.revokeObjectURL(estudio.originalUrl);
     estudios = estudios.filter(e => e.id !== id);
+    // Backend delete (fire-and-forget)
+    authFetch(`/api/imaging/studies/${id}`, { method: 'DELETE' }).catch(() => {});
 }
 
 export function getEstudioById(id: string): EstudioRadiologico | undefined {

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { searchTratamientos, getCategorias, type Tratamiento } from '../../services/tratamientos.service';
 import { analyzeTranscriptWithAI, isAIConfiguredSync } from '../../services/ia-dental.service';
+import { getPresupuestosByPaciente, type Presupuesto, type LineaPresupuesto } from '../../services/presupuestos.service';
 
 interface SOAPEditorProps {
     onSave: (noteData: {
@@ -22,6 +23,8 @@ interface SOAPEditorProps {
         pieza?: number; cuadrante?: number; arcada?: string;
     };
     onCancel?: () => void;
+    numPac?: string;
+    onCitar?: (citaData: { tratamiento: string; pacienteNumPac: string; duracionMinutos?: number }) => void;
 }
 
 type ListenState = 'idle' | 'listening' | 'analyzing' | 'done';
@@ -66,7 +69,7 @@ function analyzeTranscriptFallback(transcript: string): {
 }
 
 const SOAPEditor: React.FC<SOAPEditorProps> = ({
-    onSave, alergiasPaciente: _alergiasPaciente, initialData, onCancel,
+    onSave, alergiasPaciente: _alergiasPaciente, initialData, onCancel, numPac, onCitar,
 }) => {
     const todayISO = new Date().toISOString().split('T')[0];
     const [nota, setNota] = useState({
@@ -90,6 +93,10 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
     const [cuadrante, setCuadrante] = useState<number | undefined>(initialData?.cuadrante);
     const [arcada, setArcada] = useState<string | undefined>(initialData?.arcada);
     const ttoRef = useRef<HTMLDivElement>(null);
+
+    const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
+    const [ttoTab, setTtoTab] = useState<'catalogo' | 'presupuesto'>('catalogo');
+    const [proximoTto, setProximoTto] = useState<LineaPresupuesto | null>(null);
 
     const [saving, setSaving] = useState(false);
     const [listenState, setListenState] = useState<ListenState>('idle');
@@ -130,6 +137,14 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
         document.addEventListener('mousedown', handler);
         return () => document.removeEventListener('mousedown', handler);
     }, []);
+
+    // Load presupuestos for the patient
+    useEffect(() => {
+        if (!numPac) return;
+        getPresupuestosByPaciente(numPac).then(all => {
+            setPresupuestos(all.filter(p => p.estado === 'Aceptado' || p.estado === 'En curso'));
+        }).catch(() => {});
+    }, [numPac]);
 
     // ── Limpieza ────────────────────────────────────────
     useEffect(() => () => {
@@ -201,7 +216,7 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
                 applyFilled(analyzeTranscriptFallback(text));
             });
         } else {
-            setTimeout(() => applyFilled(analyzeTranscriptFallback(text)), 800);
+            applyFilled(analyzeTranscriptFallback(text));
         }
     };
 
@@ -255,6 +270,12 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
             : <Mic className="w-5 h-5 text-white" />;
 
     const tipoApp = selectedTto?.tipo_aplicacion ?? 'boca';
+
+    const lineasPendientes: (LineaPresupuesto & { presNombre: string; presId: number })[] = presupuestos.flatMap(p =>
+        p.lineas
+            .filter(l => l.estado === 'Pendiente' || l.estado === 'En tratamiento')
+            .map(l => ({ ...l, presNombre: `Pres. #${p.id}`, presId: p.id }))
+    );
 
     return (
         <form onSubmit={handleSave} className="flex flex-col h-full bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
@@ -317,108 +338,133 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
                         ? 'border-amber-300 bg-amber-50/30 shadow-sm shadow-amber-100'
                         : 'border-slate-200/60 bg-slate-50/30'
                     }`}>
-                    <label className="text-[10px] font-black text-[#051650] uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                        <span className="w-2 h-2 rounded-full bg-violet-500" /> Tratamiento
-                        <span className="text-amber-500 text-[8px] font-semibold normal-case ml-1">(obligatorio)</span>
-                    </label>
-
-                    <div className="flex gap-2 items-start">
-                        {/* Search + Dropdown */}
-                        <div className="flex-1 relative">
-                            <div className="flex gap-1.5">
-                                {/* Category filter */}
-                                <select
-                                    value={categoriaFilter}
-                                    onChange={e => setCategoriaFilter(e.target.value)}
-                                    className="appearance-none bg-white border border-slate-200/60 text-[10px] font-bold rounded-lg pl-2.5 pr-5 py-2 outline-none text-slate-600 cursor-pointer hover:border-blue-300 focus:ring-2 focus:ring-blue-500/10 transition-all w-28 shrink-0 shadow-sm"
-                                >
-                                    <option value="">Todas</option>
-                                    {categorias.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
-
-                                {/* Search input */}
-                                <div className="relative flex-1">
-                                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
-                                    <input
-                                        type="text"
-                                        value={ttoSearch}
-                                        onChange={e => { setTtoSearch(e.target.value); setSelectedTto(null); }}
-                                        onFocus={() => ttoSearch && setShowTtoDropdown(true)}
-                                        placeholder="Buscar tratamiento..."
-                                        className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200/60 rounded-lg text-[12px] font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 transition-all placeholder:text-slate-300 shadow-sm"
-                                    />
-                                    {selectedTto && (
-                                        <button type="button" onClick={() => { setSelectedTto(null); setTtoSearch(''); }}
-                                            className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 transition-colors">
-                                            <X className="w-3.5 h-3.5" />
-                                        </button>
-                                    )}
-                                </div>
+                    <div className="flex items-center justify-between mb-2">
+                        <label className="text-[10px] font-black text-[#051650] uppercase tracking-wider flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-[#051650]" /> Tratamiento
+                            <span className="text-amber-500 text-[8px] font-semibold normal-case ml-1">(obligatorio)</span>
+                        </label>
+                        {/* Tabs catálogo / presupuesto */}
+                        {lineasPendientes.length > 0 && (
+                            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[9px] font-black uppercase tracking-wider">
+                                <button type="button" onClick={() => setTtoTab('catalogo')}
+                                    className={`px-2 py-1 transition-colors ${ttoTab === 'catalogo' ? 'bg-[#051650] text-white' : 'text-slate-400 hover:text-slate-600'}`}>
+                                    Catálogo
+                                </button>
+                                <button type="button" onClick={() => setTtoTab('presupuesto')}
+                                    className={`px-2 py-1 transition-colors ${ttoTab === 'presupuesto' ? 'bg-[#051650] text-white' : 'text-slate-400 hover:text-slate-600'}`}>
+                                    Presupuesto ({lineasPendientes.length})
+                                </button>
                             </div>
-
-                            {/* Results dropdown */}
-                            {showTtoDropdown && ttoResults.length > 0 && (
-                                <div className="absolute z-50 top-full mt-1.5 w-full bg-white border border-slate-200/60 rounded-xl shadow-xl max-h-48 overflow-y-auto animate-scale-in">
-                                    {ttoResults.map(tto => (
-                                        <button
-                                            key={tto.id} type="button"
-                                            onClick={() => selectTratamiento(tto)}
-                                            className="w-full text-left px-3.5 py-2 hover:bg-blue-50/50 border-b border-slate-50 last:border-0 transition-colors"
-                                        >
-                                            <span className="text-[12px] font-bold text-slate-700">{tto.nombre}</span>
-                                            <span className="ml-2 text-[9px] font-medium text-slate-400">
-                                                {tto.categoria} · {tto.tipo_aplicacion === 'pieza' ? '🦷' : tto.tipo_aplicacion === 'cuadrante' ? '◔' : tto.tipo_aplicacion === 'arcada' ? '◡' : '○'}
-                                            </span>
-                                            {tto.precio > 0 && (
-                                                <span className="ml-2 text-[10px] font-black text-emerald-600">{tto.precio.toFixed(2)}€</span>
-                                            )}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Pieza / Cuadrante / Arcada selector */}
-                        {selectedTto && tipoApp === 'pieza' && (
-                            <select
-                                value={pieza ?? ''}
-                                onChange={e => setPieza(Number(e.target.value) || undefined)}
-                                className="appearance-none bg-white border border-slate-200/60 text-[11px] font-bold rounded-lg pl-2.5 pr-5 py-2 outline-none text-slate-600 w-20 shrink-0 shadow-sm"
-                            >
-                                <option value="">Pieza</option>
-                                {PIEZAS_ADULTO.map(p => <option key={p} value={p}>{p}</option>)}
-                            </select>
-                        )}
-                        {selectedTto && tipoApp === 'cuadrante' && (
-                            <select
-                                value={cuadrante ?? ''}
-                                onChange={e => setCuadrante(Number(e.target.value) || undefined)}
-                                className="appearance-none bg-white border border-slate-200/60 text-[11px] font-bold rounded-lg pl-2.5 pr-5 py-2 outline-none text-slate-600 w-20 shrink-0 shadow-sm"
-                            >
-                                <option value="">Cuad.</option>
-                                <option value="1">Q1 ↗</option>
-                                <option value="2">Q2 ↖</option>
-                                <option value="3">Q3 ↙</option>
-                                <option value="4">Q4 ↘</option>
-                            </select>
-                        )}
-                        {selectedTto && tipoApp === 'arcada' && (
-                            <select
-                                value={arcada ?? ''}
-                                onChange={e => setArcada(e.target.value || undefined)}
-                                className="appearance-none bg-white border border-slate-200/60 text-[11px] font-bold rounded-lg pl-2.5 pr-5 py-2 outline-none text-slate-600 w-24 shrink-0 shadow-sm"
-                            >
-                                <option value="">Arcada</option>
-                                <option value="superior">Superior</option>
-                                <option value="inferior">Inferior</option>
-                            </select>
                         )}
                     </div>
 
-                    {/* Selected treatment chip */}
+                    {ttoTab === 'catalogo' ? (
+                        <div className="flex gap-2 items-start">
+                            <div className="flex-1 relative">
+                                <div className="flex gap-1.5">
+                                    <select
+                                        value={categoriaFilter}
+                                        onChange={e => setCategoriaFilter(e.target.value)}
+                                        className="appearance-none bg-white border border-slate-200/60 text-[10px] font-bold rounded-lg pl-2.5 pr-5 py-2 outline-none text-slate-600 cursor-pointer hover:border-blue-300 focus:ring-2 focus:ring-blue-500/10 transition-all w-28 shrink-0 shadow-sm"
+                                    >
+                                        <option value="">Todas</option>
+                                        {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                    <div className="relative flex-1">
+                                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+                                        <input
+                                            type="text"
+                                            value={ttoSearch}
+                                            onChange={e => { setTtoSearch(e.target.value); setSelectedTto(null); }}
+                                            onFocus={() => ttoSearch && setShowTtoDropdown(true)}
+                                            placeholder="Buscar tratamiento..."
+                                            className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200/60 rounded-lg text-[12px] font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 transition-all placeholder:text-slate-300 shadow-sm"
+                                        />
+                                        {selectedTto && (
+                                            <button type="button" onClick={() => { setSelectedTto(null); setTtoSearch(''); }}
+                                                className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 transition-colors">
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                                {showTtoDropdown && ttoResults.length > 0 && (
+                                    <div className="absolute z-50 top-full mt-1.5 w-full bg-white border border-slate-200/60 rounded-xl shadow-xl max-h-48 overflow-y-auto animate-scale-in">
+                                        {ttoResults.map(tto => (
+                                            <button
+                                                key={tto.id} type="button"
+                                                onClick={() => selectTratamiento(tto)}
+                                                className="w-full text-left px-3.5 py-2 hover:bg-blue-50/50 border-b border-slate-50 last:border-0 transition-colors"
+                                            >
+                                                <span className="text-[12px] font-bold text-slate-700">{tto.nombre}</span>
+                                                <span className="ml-2 text-[9px] font-medium text-slate-400">
+                                                    {tto.categoria} · {tto.tipo_aplicacion === 'pieza' ? '🦷' : tto.tipo_aplicacion === 'cuadrante' ? '◔' : tto.tipo_aplicacion === 'arcada' ? '◡' : '○'}
+                                                </span>
+                                                {tto.precio > 0 && (
+                                                    <span className="ml-2 text-[10px] font-black text-emerald-600">{tto.precio.toFixed(2)}€</span>
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            {selectedTto && tipoApp === 'pieza' && (
+                                <select value={pieza ?? ''} onChange={e => setPieza(Number(e.target.value) || undefined)}
+                                    className="appearance-none bg-white border border-slate-200/60 text-[11px] font-bold rounded-lg pl-2.5 pr-5 py-2 outline-none text-slate-600 w-20 shrink-0 shadow-sm">
+                                    <option value="">Pieza</option>
+                                    {PIEZAS_ADULTO.map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                            )}
+                            {selectedTto && tipoApp === 'cuadrante' && (
+                                <select value={cuadrante ?? ''} onChange={e => setCuadrante(Number(e.target.value) || undefined)}
+                                    className="appearance-none bg-white border border-slate-200/60 text-[11px] font-bold rounded-lg pl-2.5 pr-5 py-2 outline-none text-slate-600 w-20 shrink-0 shadow-sm">
+                                    <option value="">Cuad.</option>
+                                    <option value="1">Q1 ↗</option>
+                                    <option value="2">Q2 ↖</option>
+                                    <option value="3">Q3 ↙</option>
+                                    <option value="4">Q4 ↘</option>
+                                </select>
+                            )}
+                            {selectedTto && tipoApp === 'arcada' && (
+                                <select value={arcada ?? ''} onChange={e => setArcada(e.target.value || undefined)}
+                                    className="appearance-none bg-white border border-slate-200/60 text-[11px] font-bold rounded-lg pl-2.5 pr-5 py-2 outline-none text-slate-600 w-24 shrink-0 shadow-sm">
+                                    <option value="">Arcada</option>
+                                    <option value="superior">Superior</option>
+                                    <option value="inferior">Inferior</option>
+                                </select>
+                            )}
+                        </div>
+                    ) : (
+                        /* ── TAB PRESUPUESTO ── */
+                        <div className="space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
+                            {lineasPendientes.map(l => (
+                                <button
+                                    key={l.id} type="button"
+                                    onClick={() => {
+                                        setSelectedTto({ id: l.id, nombre: l.descripcion, categoria: '', precio: l.precioUnitario ?? 0, tipo_aplicacion: l.pieza ? 'pieza' : l.arcada ? 'arcada' : 'boca' } as any);
+                                        setTtoSearch(l.descripcion);
+                                        if (l.pieza) setPieza(Number(l.pieza));
+                                        if (l.arcada) setArcada(l.arcada);
+                                        setTtoTab('catalogo');
+                                    }}
+                                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#051650]/5 border border-slate-100 bg-white transition-colors group"
+                                >
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[11px] font-bold text-slate-800 truncate">{l.descripcion}</p>
+                                        <p className="text-[9px] text-slate-400">{l.presNombre}{l.pieza ? ` · Pieza ${l.pieza}` : l.arcada ? ` · ${l.arcada}` : ''}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${l.estado === 'En tratamiento' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>{l.estado}</span>
+                                        {l.precioUnitario ? <span className="text-[10px] font-black text-emerald-600">{l.precioUnitario.toFixed(2)}€</span> : null}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                     {selectedTto && (
                         <div className="mt-2 flex items-center gap-2">
-                            <span className="text-[10px] bg-violet-100 text-violet-800 font-black px-2.5 py-1 rounded-full border border-violet-200/50">
+                            <span className="text-[10px] bg-[#051650]/10 text-[#051650] font-black px-2.5 py-1 rounded-full border border-[#051650]/20">
                                 ✓ {selectedTto.nombre}
                             </span>
                             <span className="text-[9px] text-slate-400 font-medium">{selectedTto.categoria}</span>
@@ -429,17 +475,17 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
                     )}
                 </div>
 
-                {/* ── Campos SOAP — Premium cards con borde de color ── */}
+                {/* ── Campos SOAP ── */}
                 <div className="grid grid-cols-2 gap-3 flex-1 min-h-0">
                     {/* S — Subjetivo */}
-                    <div className="flex flex-col min-h-0 bg-blue-50/30 rounded-xl border border-blue-100/50 p-3">
+                    <div className="flex flex-col min-h-0 bg-slate-50/50 rounded-xl border border-slate-200/60 p-3">
                         <div className="flex items-center justify-between mb-2">
-                            <label className="text-[10px] font-black text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
-                                <span className="w-5 h-5 rounded-lg bg-blue-500 text-white flex items-center justify-center text-[9px] font-black shadow-sm">S</span>
+                            <label className="text-[10px] font-black text-[#051650] uppercase tracking-wider flex items-center gap-1.5">
+                                <span className="w-5 h-5 rounded-lg bg-[#051650] text-white flex items-center justify-center text-[9px] font-black">S</span>
                                 Subjetivo
                             </label>
-                            <div className="flex items-center gap-1 bg-white border border-blue-200/50 rounded-full px-2.5 py-1 shadow-sm">
-                                <span className="text-[9px] font-black text-blue-600">EVA:</span>
+                            <div className="flex items-center gap-1 bg-white border border-slate-200/60 rounded-full px-2.5 py-1">
+                                <span className="text-[9px] font-black text-[#051650]">EVA:</span>
                                 <input
                                     type="number" min={0} max={10}
                                     value={nota.eva}
@@ -455,9 +501,9 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
                     </div>
 
                     {/* O — Objetivo */}
-                    <div className="flex flex-col min-h-0 bg-orange-50/30 rounded-xl border border-orange-100/50 p-3">
-                        <label className="text-[10px] font-black text-orange-700 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                            <span className="w-5 h-5 rounded-lg bg-orange-500 text-white flex items-center justify-center text-[9px] font-black shadow-sm">O</span>
+                    <div className="flex flex-col min-h-0 bg-slate-50/50 rounded-xl border border-slate-200/60 p-3">
+                        <label className="text-[10px] font-black text-[#051650] uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                            <span className="w-5 h-5 rounded-lg bg-[#051650] text-white flex items-center justify-center text-[9px] font-black">O</span>
                             Objetivo
                         </label>
                         <textarea value={nota.objetivo}
@@ -466,9 +512,9 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
                     </div>
 
                     {/* A — Análisis */}
-                    <div className="flex flex-col min-h-0 bg-emerald-50/30 rounded-xl border border-emerald-100/50 p-3">
-                        <label className="text-[10px] font-black text-emerald-700 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                            <span className="w-5 h-5 rounded-lg bg-emerald-500 text-white flex items-center justify-center text-[9px] font-black shadow-sm">A</span>
+                    <div className="flex flex-col min-h-0 bg-slate-50/50 rounded-xl border border-slate-200/60 p-3">
+                        <label className="text-[10px] font-black text-[#051650] uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                            <span className="w-5 h-5 rounded-lg bg-[#051650] text-white flex items-center justify-center text-[9px] font-black">A</span>
                             Análisis
                         </label>
                         <textarea value={nota.analisis}
@@ -477,9 +523,9 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
                     </div>
 
                     {/* P — Plan */}
-                    <div className="flex flex-col min-h-0 bg-indigo-50/30 rounded-xl border border-indigo-100/50 p-3">
-                        <label className="text-[10px] font-black text-indigo-700 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                            <span className="w-5 h-5 rounded-lg bg-[#051650] text-white flex items-center justify-center text-[9px] font-black shadow-sm">P</span>
+                    <div className="flex flex-col min-h-0 bg-slate-50/50 rounded-xl border border-slate-200/60 p-3">
+                        <label className="text-[10px] font-black text-[#051650] uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                            <span className="w-5 h-5 rounded-lg bg-[#051650] text-white flex items-center justify-center text-[9px] font-black">P</span>
                             Plan
                         </label>
                         <textarea value={nota.plan}
@@ -487,6 +533,43 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
                             className={`${textAreaCls} flex-1 min-h-[50px] text-xs`} placeholder="Tratamiento ejecutado, medicación, instrucciones..." />
                     </div>
                 </div>
+
+                {/* ── PRÓXIMA VISITA ── */}
+                {(lineasPendientes.length > 0 || proximoTto) && (
+                    <div className="border border-slate-200/60 rounded-xl p-3 bg-slate-50/50 shrink-0">
+                        <div className="flex items-center justify-between gap-3">
+                            <label className="text-[10px] font-black text-[#051650] uppercase tracking-wider flex items-center gap-1.5 shrink-0">
+                                <span className="w-2 h-2 rounded-full bg-[#051650]" /> Próxima Visita
+                            </label>
+                            <select
+                                value={proximoTto?.id ?? ''}
+                                onChange={e => {
+                                    const found = lineasPendientes.find(l => l.id === e.target.value) ?? null;
+                                    setProximoTto(found);
+                                }}
+                                className="flex-1 appearance-none bg-white border border-slate-200/60 text-[10px] font-bold rounded-lg px-2.5 py-1.5 outline-none text-slate-600 cursor-pointer min-w-0"
+                            >
+                                <option value="">— Seleccionar tratamiento pendiente —</option>
+                                {lineasPendientes.map(l => (
+                                    <option key={l.id} value={l.id}>{l.descripcion}{l.pieza ? ` (Pieza ${l.pieza})` : l.arcada ? ` (${l.arcada})` : ''}</option>
+                                ))}
+                            </select>
+                            {onCitar && (
+                                <button
+                                    type="button"
+                                    disabled={!proximoTto || !numPac}
+                                    onClick={() => {
+                                        if (!proximoTto || !numPac) return;
+                                        onCitar({ tratamiento: proximoTto.descripcion, pacienteNumPac: numPac, duracionMinutos: 30 });
+                                    }}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#051650] text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-blue-900 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                                >
+                                    <Calendar className="w-3.5 h-3.5" /> Citar
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* Footer */}
                 <div className="flex items-center justify-between pt-3 border-t border-slate-100/60 shrink-0 mt-auto">

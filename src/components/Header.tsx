@@ -9,6 +9,7 @@ interface HeaderProps {
     activeArea: Area;
     onNavigate: (area: Area, subArea: string) => void;
     onSearch?: (term: string) => void;
+    onCommandPalette?: () => void;
 }
 
 
@@ -41,12 +42,13 @@ const useNotifications = () => {
     return { notifs, reload: load };
 };
 
-const Header: React.FC<HeaderProps> = ({ activeArea, onNavigate, onSearch }) => {
+const Header: React.FC<HeaderProps> = ({ activeArea, onNavigate, onCommandPalette }) => {
     const { logout, user } = useAuth();
-    const [searchValue, setSearchValue] = useState('');
     const [showNotifications, setShowNotifications] = useState(false);
     const [showHelp, setShowHelp] = useState(false);
-    const [readNotifications, setReadNotifications] = useState<number[]>([]);
+    const [readNotifications, setReadNotifications] = useState<number[]>(() => {
+        try { return JSON.parse(localStorage.getItem('smilepro_read_notifs') ?? '[]'); } catch { return []; }
+    });
     const notifRef = useRef<HTMLDivElement>(null);
     const helpRef = useRef<HTMLDivElement>(null);
     const { notifs: notifications, reload: reloadNotifs } = useNotifications();
@@ -62,20 +64,23 @@ const Header: React.FC<HeaderProps> = ({ activeArea, onNavigate, onSearch }) => 
         return () => document.removeEventListener('mousedown', handler);
     }, []);
 
-    const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter' && searchValue.trim()) {
-            // Search global — navega a Pacientes con el término para filtrar
-            onSearch?.(searchValue.trim());
-            onNavigate('Pacientes', 'Historia Clínica');
-            setSearchValue('');
-        }
-    };
-
     const handleSettings = () => {
         onNavigate('IA & Automatización', 'IA Dental ✦');
     };
 
-    const markAllRead = () => setReadNotifications(notifications.map(n => n.id));
+    const markAllRead = () => {
+        const ids = notifications.map(n => n.id);
+        setReadNotifications(ids);
+        try { localStorage.setItem('smilepro_read_notifs', JSON.stringify(ids)); } catch { /* no-op */ }
+    };
+
+    const markOneRead = (id: number) => {
+        setReadNotifications(prev => {
+            const next = prev.includes(id) ? prev : [...prev, id];
+            try { localStorage.setItem('smilepro_read_notifs', JSON.stringify(next)); } catch { /* no-op */ }
+            return next;
+        });
+    };
 
     const notifColors = {
         warning: 'text-amber-600 bg-[#FEFDE8]',
@@ -161,19 +166,15 @@ const Header: React.FC<HeaderProps> = ({ activeArea, onNavigate, onSearch }) => 
             <div className="flex items-center gap-1.5 pr-5 flex-shrink-0" style={{ width: '260px', justifyContent: 'flex-end' }}>
 
                 {/* Search — M-01 FIX: Ahora funcional. Enter → navega a Pacientes con el término */}
-                <div className="flex items-center bg-black/20 rounded-lg px-3 py-1.5 border border-white/15 focus-within:ring-1 focus-within:ring-[#0ea5e9]/50 transition-all">
-                    <input
-                        id="header-search"
-                        type="text"
-                        value={searchValue}
-                        onChange={e => setSearchValue(e.target.value)}
-                        onKeyDown={handleSearch}
-                        placeholder="Buscar..."
-                        title="Buscar paciente (Enter para ir a Pacientes)"
-                        className="bg-transparent border-none outline-none text-[13px] text-white placeholder-white/50 w-16"
-                    />
-                    <Search className="w-3.5 h-3.5 text-white/70 ml-1" />
-                </div>
+                <button
+                    onClick={onCommandPalette}
+                    className="flex items-center gap-2 bg-black/20 rounded-lg px-3 py-1.5 border border-white/15 hover:bg-white/10 hover:border-white/25 transition-all cursor-pointer group"
+                    title="Buscar en toda la aplicación (⌘K)"
+                >
+                    <Search className="w-3.5 h-3.5 text-white/50 group-hover:text-white/80 transition-colors" />
+                    <span className="text-[12px] text-white/40 font-medium group-hover:text-white/60 transition-colors hidden sm:inline">Buscar...</span>
+                    <kbd className="hidden sm:flex items-center gap-0.5 text-[10px] font-bold text-white/30 bg-white/10 px-1.5 py-0.5 rounded border border-white/10 ml-2">⌘K</kbd>
+                </button>
 
                 {/* Bell — M-01 FIX: Panel de notificaciones real */}
                 <div className="relative" ref={notifRef}>
@@ -205,7 +206,7 @@ const Header: React.FC<HeaderProps> = ({ activeArea, onNavigate, onSearch }) => 
                             <div className="max-h-72 overflow-y-auto divide-y divide-slate-50">
                                 {notifications.length === 0 ? (
                                     <div className="px-4 py-8 text-center">
-                                        <CheckCircle2 className="w-8 h-8 text-green-400 mx-auto mb-2" />
+                                        <CheckCircle2 className="w-8 h-8 text-teal-400 mx-auto mb-2" />
                                         <p className="text-[13px] font-bold text-slate-500">Todo en orden</p>
                                         <p className="text-[12px] text-slate-400 mt-0.5">Sin alertas activas</p>
                                     </div>
@@ -217,7 +218,7 @@ const Header: React.FC<HeaderProps> = ({ activeArea, onNavigate, onSearch }) => 
                                             key={n.id}
                                             className={`flex items-start gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors ${isRead ? 'opacity-40' : ''}`}
                                             onClick={() => {
-                                                setReadNotifications(prev => [...prev, n.id]);
+                                                markOneRead(n.id);
                                                 if (n.area) onNavigate(n.area as any, n.subArea ?? '');
                                                 setShowNotifications(false);
                                             }}
@@ -267,11 +268,10 @@ const Header: React.FC<HeaderProps> = ({ activeArea, onNavigate, onSearch }) => 
                             </div>
                             <div className="p-4 space-y-3">
                                 {[
-                                    { key: 'Enter en búsqueda', desc: 'Busca paciente en historia clínica' },
+                                    { key: '⌘K / Ctrl+K', desc: 'Abrir el buscador universal (pacientes, acciones, navegación)' },
                                     { key: 'Click en Agenda', desc: 'Gestionar citas del día' },
                                     { key: 'Drag & Drop cita', desc: 'Arrastra para reprogramar hora/gabinete' },
                                     { key: 'Click derecho en cita', desc: 'Menú contextual (editar, cancelar, justificante)' },
-                                    { key: 'Ctrl+Z', desc: 'Deshacer última acción (pendiente)' },
                                 ].map(({ key, desc }) => (
                                     <div key={key} className="flex items-start gap-2 whitespace-nowrap">
                                         <kbd className="text-[12px] font-bold bg-slate-800 text-white px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">{key}</kbd>
@@ -279,7 +279,7 @@ const Header: React.FC<HeaderProps> = ({ activeArea, onNavigate, onSearch }) => 
                                     </div>
                                 ))}
                                 <div className="pt-2 border-t border-slate-100">
-                                    <p className="text-[12px] text-slate-400 font-medium">SmilePro v2026 · Rubio García Dental</p>
+                                    <p className="text-[12px] text-slate-400 font-medium">SmilePro Studio · Rubio García Dental</p>
                                 </div>
                             </div>
                         </div>

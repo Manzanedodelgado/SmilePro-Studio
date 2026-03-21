@@ -30,9 +30,10 @@ const envSchema = z.object({
     UPLOAD_DIR: z.string().default('./uploads'),
 
     // Evolution API (WhatsApp)
-    EVOLUTION_API_URL:   z.string().url().optional(),
-    EVOLUTION_API_KEY:   z.string().optional(),
-    EVOLUTION_INSTANCE:  z.string().optional(),
+    EVOLUTION_API_URL:        z.string().url().optional(),
+    EVOLUTION_API_KEY:        z.string().optional(),
+    EVOLUTION_INSTANCE:       z.string().optional(),
+    EVOLUTION_WEBHOOK_SECRET: z.string().optional(),
 
     // Chatwoot
     CHATWOOT_URL:        z.string().url().optional(),

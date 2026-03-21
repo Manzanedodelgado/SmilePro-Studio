@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Save, Plus, Trash2, ArrowDown, CheckCircle2, AlertCircle } from 'lucide-react';
-import { saveAutomation } from '../../services/automations.service';
+import { saveAutomation, invalidateAutomationsCache } from '../../services/automations.service';
 import type { Automation } from './AutomationRules';
 
 type StepType = { type: 'wait' | 'send' | 'condition' | 'internal'; label: string; value: string };
@@ -43,8 +43,13 @@ export const AutomationEditor: React.FC = () => {
             'WhatsApp': 'whatsapp', 'SMS': 'sms', 'Email': 'email', 'Interno': 'interno'
         };
 
+        // El ID lo asigna el servidor; si falla (fallback local) generamos uno único con crypto
+        const tempId = typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `custom-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
         const newAutomation: Automation = {
-            id: `custom-${Date.now()}`,
+            id: tempId,
             name: name.trim(),
             description: steps.map(s => `${s.label}: ${s.value}`).join(' → '),
             trigger,
@@ -64,6 +69,7 @@ export const AutomationEditor: React.FC = () => {
         };
 
         const ok = await saveAutomation(newAutomation);
+        if (ok) invalidateAutomationsCache();
         setSaving(false);
         if (ok) {
             setSaved(true);
