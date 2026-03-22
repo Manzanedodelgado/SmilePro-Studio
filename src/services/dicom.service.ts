@@ -315,8 +315,17 @@ export async function renderArchPanoramicaAsync(
     if (controls.length < 2) return renderPanoramicaAsync(vol, wc, ww, canvas, onProgress);
 
     const { cols, rows, numFrames, frameViews } = vol;
-    const archPts = sampleArchSpline(controls, Math.max(128, controls.length * 32));
-    const nCols   = archPts.length;
+
+    // Longitud real del arco → resolución nativa (1 muestra / px a lo largo del arco)
+    const densePts = sampleArchSpline(controls, controls.length * 100);
+    let arcLen = 0;
+    for (let i = 1; i < densePts.length; i++) {
+        const ddx = densePts[i][0] - densePts[i - 1][0];
+        const ddy = densePts[i][1] - densePts[i - 1][1];
+        arcLen += Math.sqrt(ddx * ddx + ddy * ddy);
+    }
+    const nCols   = Math.max(256, Math.round(arcLen));
+    const archPts = sampleArchSpline(controls, nCols);
     const half    = Math.max(1, Math.floor(slabThickness / 2));
 
     canvas.width  = nCols;

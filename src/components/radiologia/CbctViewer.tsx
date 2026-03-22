@@ -3,15 +3,17 @@
  *
  * Patrón dos canvas:
  *  - offscreen: renderiza datos DICOM en resolución nativa
- *  - display:   tamaño = contenedor (ResizeObserver), copia desde offscreen con drawImage
+ *  - display:   tamaño = contenedor (ResizeObserver), blit con letterbox (aspect ratio correcto)
+ *
+ * Todos los overlays (arco, regla, scale bar) se posicionan sobre el rect real de la imagen,
+ * no sobre el contenedor completo.
  *
  * Panorámica con arco personalizado:
- *  - El usuario activa "Arco" y hace click en la vista Axial para colocar puntos de control
- *  - El spline Catmull-Rom se muestra como overlay sobre el axial
- *  - La vista Panorámica usa renderArchPanoramicaAsync con el arco definido
+ *  - Activa "Arco", haz click en Axial para colocar puntos de control (spline Catmull-Rom)
+ *  - La vista Panorámica re-renderiza siguiendo el arco con MIP perpendicular
  */
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { LayoutGrid, Ruler, X, ChevronLeft, ChevronRight, Activity, Trash2 } from 'lucide-react';
 import {
     type DicomVolume,
@@ -32,10 +34,12 @@ type ViewType = 'axial' | 'coronal' | 'sagital' | 'panoramica' | 'mip' | 'cefa';
 type Layout   = '4x' | ViewType;
 
 interface RulerLine {
-    x1: number; y1: number;   // fracción [0,1] del canvas display
+    x1: number; y1: number;   // fracción [0,1] relativa al área de imagen
     x2: number; y2: number;
     mm: number;
 }
+
+interface ImgRect { x: number; y: number; w: number; h: number; }
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -60,8 +64,8 @@ interface ViewPanelProps {
     wc:           number;
     ww:           number;
     rulerActive:  boolean;
-    archControls: Array<[number, number]>;   // [col, row] en px del volumen
-    archMode:     boolean;                   // solo activo en el panel axial
+    archControls: Array<[number, number]>;
+    archMode:     boolean;
     slabPx:       number;
     onArchAdd:    (pt: [number, number]) => void;
 }
@@ -79,24 +83,48 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
                    : type === 'sagital' ? volume.cols - 1
                    : 0;
 
-    const [slice,    setSlice]    = useState(Math.floor(maxSlice / 2));
-    const [progress, setProgress] = useState<number | null>(null);
-    const [rulers,   setRulers]   = useState<RulerLine[]>([]);
-    const [drawing,  setDrawing]  = useState<{ x: number; y: number } | null>(null);
-    const [cursor,   setCursor]   = useState<{ x: number; y: number } | null>(null);
-    const [nativeW,  setNativeW]  = useState(0);
+    const [slice,       setSlice]       = useState(Math.floor(maxSlice / 2));
+    const [progress,    setProgress]    = useState<number | null>(null);
+    const [rulers,      setRulers]      = useState<RulerLine[]>([]);
+    const [drawing,     setDrawing]     = useState<{ x: number; y: number } | null>(null);
+    const [cursor,      setCursor]      = useState<{ x: number; y: number } | null>(null);
+    const [nativeW,     setNativeW]     = useState(0);
+    const [nativeH,     setNativeH]     = useState(0);
+    const [displaySize, setDisplaySize] = useState({ w: 0, h: 0 });
 
-    // Copia offscreen → display
+    // Rect donde la imagen se muestra dentro del display canvas (letterbox)
+    const imgRect: ImgRect = useMemo(() => {
+        if (!displaySize.w || !displaySize.h || !nativeW || !nativeH)
+            return { x: 0, y: 0, w: displaySize.w || 0, h: displaySize.h || 0 };
+        const scale = Math.min(displaySize.w / nativeW, displaySize.h / nativeH);
+        const dw = Math.round(nativeW * scale);
+        const dh = Math.round(nativeH * scale);
+        return {
+            x: Math.round((displaySize.w - dw) / 2),
+            y: Math.round((displaySize.h - dh) / 2),
+            w: dw, h: dh,
+        };
+    }, [displaySize, nativeW, nativeH]);
+
+    // Copia offscreen → display con letterbox (mantiene aspect ratio)
     const blit = useCallback(() => {
         const display = displayRef.current;
         if (!display || display.width === 0 || display.height === 0) return;
-        if (offscreen.current.width === 0 || offscreen.current.height === 0) return;
+        const off = offscreen.current;
+        if (off.width === 0 || off.height === 0) return;
         const ctx = display.getContext('2d');
         if (!ctx) return;
-        ctx.drawImage(offscreen.current, 0, 0, display.width, display.height);
+        const scale = Math.min(display.width / off.width, display.height / off.height);
+        const dw = Math.round(off.width  * scale);
+        const dh = Math.round(off.height * scale);
+        const dx = Math.round((display.width  - dw) / 2);
+        const dy = Math.round((display.height - dh) / 2);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, display.width, display.height);
+        ctx.drawImage(off, dx, dy, dw, dh);
     }, []);
 
-    // ResizeObserver: ajusta display canvas al contenedor y re-copia
+    // ResizeObserver
     useEffect(() => {
         const container = containerRef.current;
         const display   = displayRef.current;
@@ -106,6 +134,7 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
             if (!width || !height) return;
             display.width  = Math.round(width);
             display.height = Math.round(height);
+            setDisplaySize({ w: Math.round(width), h: Math.round(height) });
             blit();
         });
         obs.observe(container);
@@ -117,6 +146,14 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
         const off = offscreen.current;
         let cancelled = false;
 
+        const done = () => {
+            if (cancelled) return;
+            setNativeW(off.width);
+            setNativeH(off.height);
+            setProgress(null);
+            blit();
+        };
+
         if (type === 'axial') {
             off.width  = volume.cols;
             off.height = volume.rows;
@@ -126,18 +163,15 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
                 renderFrame(volume, slice, wc, ww, imgData);
                 ctx.putImageData(imgData, 0, 0);
             }
-            setNativeW(off.width);
-            blit();
+            done();
 
         } else if (type === 'coronal') {
             renderCoronal(volume, slice, wc, ww, off);
-            setNativeW(off.width);
-            blit();
+            done();
 
         } else if (type === 'sagital') {
             renderSagittal(volume, slice, wc, ww, off);
-            setNativeW(off.width);
-            blit();
+            done();
 
         } else if (type === 'panoramica') {
             setProgress(0);
@@ -148,28 +182,19 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
                 : renderPanoramicaAsync(volume, wc, ww, off, p => {
                       if (cancelled) return; setProgress(p); blit();
                   });
-            promise.then(() => {
-                if (cancelled) return;
-                setNativeW(off.width); setProgress(null); blit();
-            });
+            promise.then(done);
 
         } else if (type === 'mip') {
             setProgress(0);
             renderMIPAsync(volume, wc, ww, off, 1, p => {
                 if (cancelled) return; setProgress(p); blit();
-            }).then(() => {
-                if (cancelled) return;
-                setNativeW(off.width); setProgress(null); blit();
-            });
+            }).then(done);
 
         } else if (type === 'cefa') {
             setProgress(0);
             renderCephalometryAsync(volume, wc, ww, off, 1, p => {
                 if (cancelled) return; setProgress(p); blit();
-            }).then(() => {
-                if (cancelled) return;
-                setNativeW(off.width); setProgress(null); blit();
-            });
+            }).then(done);
         }
 
         return () => { cancelled = true; };
@@ -183,17 +208,19 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
         setSlice(s => Math.max(0, Math.min(maxSlice, s + (e.deltaY > 0 ? 1 : -1))));
     };
 
-    // Coordenadas relativas al display canvas (fracciones [0,1])
+    // Coordenadas relativas al ÁREA DE IMAGEN (fracciones [0,1])
+    // Tiene en cuenta el letterbox — coordenadas fuera de la imagen se clampean al borde
     const getPos = (e: React.MouseEvent): { x: number; y: number } => {
         const rect = displayRef.current!.getBoundingClientRect();
+        const px = (e.clientX - rect.left) - imgRect.x;
+        const py = (e.clientY - rect.top)  - imgRect.y;
         return {
-            x: (e.clientX - rect.left) / rect.width,
-            y: (e.clientY - rect.top)  / rect.height,
+            x: Math.max(0, Math.min(1, px / (imgRect.w || 1))),
+            y: Math.max(0, Math.min(1, py / (imgRect.h || 1))),
         };
     };
 
     const onMouseDown = (e: React.MouseEvent) => {
-        // Modo arco: click en axial añade punto de control
         if (type === 'axial' && archMode) {
             const frac = getPos(e);
             onArchAdd([
@@ -217,16 +244,16 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
         setDrawing(null);
     };
 
-    // Scale bar
+    // Scale bar: 10 mm como fracción del ancho nativo
     const ps        = volume.pixelSpacing?.[1] ?? 0;
     const scaleFrac = ps > 0 && nativeW > 0 ? Math.min(0.35, 10 / (ps * nativeW)) : 0;
 
-    // Spline del arco para overlay SVG (viewBox 0-1000)
+    // Spline del arco (coords en espacio del volumen para el viewBox)
     const archSplineD: string | null = (() => {
         if (type !== 'axial' || archControls.length < 2) return null;
         const pts = sampleArchSpline(archControls, archControls.length * 20);
         return pts.map((p, i) =>
-            `${i === 0 ? 'M' : 'L'} ${(p[0] / volume.cols * 1000).toFixed(1)} ${(p[1] / volume.rows * 1000).toFixed(1)}`
+            `${i === 0 ? 'M' : 'L'} ${p[0].toFixed(1)} ${p[1].toFixed(1)}`
         ).join(' ');
     })();
 
@@ -272,7 +299,7 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
                 onMouseUp={onMouseUp}
                 onMouseLeave={() => setCursor(null)}
             >
-                {/* Display canvas — siempre = tamaño contenedor */}
+                {/* Display canvas */}
                 <canvas ref={displayRef} style={{ position: 'absolute', inset: 0, display: 'block' }} />
 
                 {/* Progress bar */}
@@ -282,89 +309,90 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
                     </div>
                 )}
 
-                {/* Scale bar */}
-                {scaleFrac > 0 && progress === null && (
-                    <div style={{ position: 'absolute', bottom: 8, left: 8, pointerEvents: 'none', zIndex: 2 }}>
-                        <div style={{ color: '#e2e8f0', fontSize: 9, fontWeight: 600, marginBottom: 2 }}>10 mm</div>
-                        <div style={{ height: 2, width: `${scaleFrac * 100}%`, minWidth: 16, background: '#e2e8f0' }} />
-                    </div>
-                )}
-
-                {/* Hint modo arco */}
-                {type === 'axial' && archMode && (
-                    <div style={{ position: 'absolute', top: 6, left: 0, right: 0, display: 'flex', justifyContent: 'center', pointerEvents: 'none', zIndex: 5 }}>
-                        <span style={{ background: '#0c4a6e99', color: '#7dd3fc', fontSize: 10, padding: '2px 10px', borderRadius: 4 }}>
-                            Click para añadir puntos del arco dental
-                        </span>
-                    </div>
-                )}
-
-                {/* SVG overlay: arco dental sobre vista axial */}
-                {type === 'axial' && archControls.length > 0 && (
-                    <svg
-                        viewBox="0 0 1000 1000"
-                        preserveAspectRatio="none"
-                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 4 }}
-                    >
-                        {/* Spline interpolado */}
-                        {archSplineD && (
-                            <path d={archSplineD} stroke="#22d3ee" strokeWidth={2.5} fill="none" opacity={0.9} />
+                {/* ── Overlays posicionados sobre el área real de la imagen (letterbox) ── */}
+                {imgRect.w > 0 && imgRect.h > 0 && (
+                    <div style={{
+                        position: 'absolute',
+                        left: imgRect.x, top: imgRect.y,
+                        width: imgRect.w, height: imgRect.h,
+                        pointerEvents: 'none', zIndex: 3,
+                    }}>
+                        {/* Scale bar */}
+                        {scaleFrac > 0 && progress === null && (
+                            <div style={{ position: 'absolute', bottom: 8, left: 8 }}>
+                                <div style={{ color: '#e2e8f0', fontSize: 9, fontWeight: 600, marginBottom: 2 }}>10 mm</div>
+                                <div style={{ height: 2, width: `${scaleFrac * 100}%`, minWidth: 16, background: '#e2e8f0' }} />
+                            </div>
                         )}
-                        {/* Puntos de control */}
-                        {archControls.map((p, i) => (
-                            <circle
-                                key={i}
-                                cx={p[0] / volume.cols * 1000}
-                                cy={p[1] / volume.rows * 1000}
-                                r={i === 0 || i === archControls.length - 1 ? 8 : 6}
-                                fill={i === 0 ? '#22d3ee' : i === archControls.length - 1 ? '#f59e0b' : '#38bdf8'}
-                                stroke="#0c4a6e"
-                                strokeWidth={1.5}
-                                opacity={0.95}
-                            />
-                        ))}
-                        {/* Índice del último punto */}
-                        {archControls.length > 0 && (() => {
-                            const last = archControls[archControls.length - 1];
-                            return (
-                                <text
-                                    x={last[0] / volume.cols * 1000 + 12}
-                                    y={last[1] / volume.rows * 1000 + 4}
-                                    fontSize={28} fill="#f59e0b" fontWeight={700} opacity={0.9}
-                                >
-                                    {archControls.length}
-                                </text>
-                            );
-                        })()}
-                    </svg>
-                )}
 
-                {/* SVG regla */}
-                {(rulers.length > 0 || (drawing && cursor)) && (
-                    <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 3 }}>
-                        {rulers.map((r, i) => {
-                            const x1 = `${r.x1 * 100}%`, y1 = `${r.y1 * 100}%`;
-                            const x2 = `${r.x2 * 100}%`, y2 = `${r.y2 * 100}%`;
-                            const mx = `${(r.x1 + r.x2) / 2 * 100}%`, my = `${((r.y1 + r.y2) / 2 - 0.04) * 100}%`;
-                            return (
-                                <g key={i}>
-                                    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#fbbf24" strokeWidth={1.5} />
-                                    <circle cx={x1} cy={y1} r={4} fill="#fbbf24" />
-                                    <circle cx={x2} cy={y2} r={4} fill="#fbbf24" />
-                                    <text x={mx} y={my} fontSize={11} fill="#fbbf24" textAnchor="middle" fontWeight={700} fontFamily="monospace">
-                                        {r.mm.toFixed(1)} mm
-                                    </text>
-                                </g>
-                            );
-                        })}
-                        {drawing && cursor && (
-                            <line
-                                x1={`${drawing.x * 100}%`} y1={`${drawing.y * 100}%`}
-                                x2={`${cursor.x  * 100}%`} y2={`${cursor.y  * 100}%`}
-                                stroke="#fbbf24" strokeWidth={1.5} strokeDasharray="6 3"
-                            />
+                        {/* Hint modo arco */}
+                        {type === 'axial' && archMode && (
+                            <div style={{ position: 'absolute', top: 6, left: 0, right: 0, display: 'flex', justifyContent: 'center' }}>
+                                <span style={{ background: '#0c4a6e99', color: '#7dd3fc', fontSize: 10, padding: '2px 10px', borderRadius: 4 }}>
+                                    Click para añadir puntos del arco dental
+                                </span>
+                            </div>
                         )}
-                    </svg>
+
+                        {/* Arco dental sobre vista axial — SVG con viewBox = espacio del volumen */}
+                        {type === 'axial' && archControls.length > 0 && (
+                            <svg
+                                viewBox={`0 0 ${volume.cols} ${volume.rows}`}
+                                preserveAspectRatio="none"
+                                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+                            >
+                                {archSplineD && (
+                                    <path d={archSplineD} stroke="#22d3ee" strokeWidth={2} fill="none" opacity={0.9} />
+                                )}
+                                {archControls.map((p, i) => (
+                                    <circle
+                                        key={i}
+                                        cx={p[0]} cy={p[1]}
+                                        r={i === 0 || i === archControls.length - 1 ? 5 : 4}
+                                        fill={i === 0 ? '#22d3ee' : i === archControls.length - 1 ? '#f59e0b' : '#38bdf8'}
+                                        stroke="#0c4a6e" strokeWidth={1} opacity={0.95}
+                                    />
+                                ))}
+                                {archControls.length > 1 && (() => {
+                                    const last = archControls[archControls.length - 1];
+                                    return (
+                                        <text x={last[0] + 6} y={last[1] + 4} fontSize={16} fill="#f59e0b" fontWeight={700} opacity={0.9}>
+                                            {archControls.length}
+                                        </text>
+                                    );
+                                })()}
+                            </svg>
+                        )}
+
+                        {/* Regla */}
+                        {(rulers.length > 0 || (drawing && cursor)) && (
+                            <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+                                {rulers.map((r, i) => {
+                                    const x1 = `${r.x1 * 100}%`, y1 = `${r.y1 * 100}%`;
+                                    const x2 = `${r.x2 * 100}%`, y2 = `${r.y2 * 100}%`;
+                                    const mx = `${(r.x1 + r.x2) / 2 * 100}%`;
+                                    const my = `${((r.y1 + r.y2) / 2 - 0.04) * 100}%`;
+                                    return (
+                                        <g key={i}>
+                                            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#fbbf24" strokeWidth={1.5} />
+                                            <circle cx={x1} cy={y1} r={4} fill="#fbbf24" />
+                                            <circle cx={x2} cy={y2} r={4} fill="#fbbf24" />
+                                            <text x={mx} y={my} fontSize={11} fill="#fbbf24" textAnchor="middle" fontWeight={700} fontFamily="monospace">
+                                                {r.mm.toFixed(1)} mm
+                                            </text>
+                                        </g>
+                                    );
+                                })}
+                                {drawing && cursor && (
+                                    <line
+                                        x1={`${drawing.x * 100}%`} y1={`${drawing.y * 100}%`}
+                                        x2={`${cursor.x  * 100}%`} y2={`${cursor.y  * 100}%`}
+                                        stroke="#fbbf24" strokeWidth={1.5} strokeDasharray="6 3"
+                                    />
+                                )}
+                            </svg>
+                        )}
+                    </div>
                 )}
             </div>
         </div>
@@ -405,7 +433,6 @@ const CbctViewer: React.FC<CbctViewerProps> = ({ volume, onClose }) => {
         setArchMode(false);
     };
 
-    // Al activar arch mode, desactivar regla y viceversa
     const toggleArchMode = () => {
         setArchMode(m => { if (!m) setRuler(false); return !m; });
     };
@@ -464,7 +491,7 @@ const CbctViewer: React.FC<CbctViewerProps> = ({ volume, onClose }) => {
 
                 <div style={{ width: 1, height: 20, background: '#1e2535', margin: '0 2px' }} />
 
-                {/* ── Herramienta arco dental ── */}
+                {/* Herramienta arco dental */}
                 <button
                     title="Definir arco dental en vista Axial para panorámica personalizada"
                     onClick={toggleArchMode}
@@ -488,7 +515,6 @@ const CbctViewer: React.FC<CbctViewerProps> = ({ volume, onClose }) => {
                     )}
                 </button>
 
-                {/* Slab + limpiar (solo con puntos definidos) */}
                 {archControls.length > 0 && (
                     <>
                         <span style={{ color: '#475569', fontSize: 10, marginLeft: 2 }}>Slab</span>
