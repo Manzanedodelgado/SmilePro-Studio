@@ -5,19 +5,24 @@
  *  - offscreen: renderiza datos DICOM en resolución nativa
  *  - display:   tamaño = contenedor (ResizeObserver), copia desde offscreen con drawImage
  *
- * El display canvas SIEMPRE tiene dimensiones reales → nunca canvas 0×0.
+ * Panorámica con arco personalizado:
+ *  - El usuario activa "Arco" y hace click en la vista Axial para colocar puntos de control
+ *  - El spline Catmull-Rom se muestra como overlay sobre el axial
+ *  - La vista Panorámica usa renderArchPanoramicaAsync con el arco definido
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { LayoutGrid, Ruler, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutGrid, Ruler, X, ChevronLeft, ChevronRight, Activity, Trash2 } from 'lucide-react';
 import {
     type DicomVolume,
     renderFrame,
     renderCoronal,
     renderSagittal,
     renderPanoramicaAsync,
+    renderArchPanoramicaAsync,
     renderMIPAsync,
     renderCephalometryAsync,
+    sampleArchSpline,
     DENTAL_PRESETS,
 } from '../../services/dicom.service';
 
@@ -50,15 +55,22 @@ const IS_SLICE: Record<ViewType, boolean> = {
 // ── ViewPanel ─────────────────────────────────────────────────────────────────
 
 interface ViewPanelProps {
-    volume:      DicomVolume;
-    type:        ViewType;
-    wc:          number;
-    ww:          number;
-    rulerActive: boolean;
+    volume:       DicomVolume;
+    type:         ViewType;
+    wc:           number;
+    ww:           number;
+    rulerActive:  boolean;
+    archControls: Array<[number, number]>;   // [col, row] en px del volumen
+    archMode:     boolean;                   // solo activo en el panel axial
+    slabPx:       number;
+    onArchAdd:    (pt: [number, number]) => void;
 }
 
-const ViewPanel: React.FC<ViewPanelProps> = ({ volume, type, wc, ww, rulerActive }) => {
-    const displayRef   = useRef<HTMLCanvasElement>(null);   // visible, tamaño = contenedor
+const ViewPanel: React.FC<ViewPanelProps> = ({
+    volume, type, wc, ww, rulerActive,
+    archControls, archMode, slabPx, onArchAdd,
+}) => {
+    const displayRef   = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const offscreen    = useRef<HTMLCanvasElement>(document.createElement('canvas'));
 
@@ -67,13 +79,12 @@ const ViewPanel: React.FC<ViewPanelProps> = ({ volume, type, wc, ww, rulerActive
                    : type === 'sagital' ? volume.cols - 1
                    : 0;
 
-    const [slice,      setSlice]      = useState(Math.floor(maxSlice / 2));
-    const [progress,   setProgress]   = useState<number | null>(null);
-    const [rulers,     setRulers]     = useState<RulerLine[]>([]);
-    const [drawing,    setDrawing]    = useState<{ x: number; y: number } | null>(null);
-    const [cursor,     setCursor]     = useState<{ x: number; y: number } | null>(null);
-    // Dimensiones nativas del offscreen — para scale bar (actualizado en state para forzar re-render)
-    const [nativeW,    setNativeW]    = useState(0);
+    const [slice,    setSlice]    = useState(Math.floor(maxSlice / 2));
+    const [progress, setProgress] = useState<number | null>(null);
+    const [rulers,   setRulers]   = useState<RulerLine[]>([]);
+    const [drawing,  setDrawing]  = useState<{ x: number; y: number } | null>(null);
+    const [cursor,   setCursor]   = useState<{ x: number; y: number } | null>(null);
+    const [nativeW,  setNativeW]  = useState(0);
 
     // Copia offscreen → display
     const blit = useCallback(() => {
@@ -102,7 +113,6 @@ const ViewPanel: React.FC<ViewPanelProps> = ({ volume, type, wc, ww, rulerActive
     }, [blit]);
 
     // Render DICOM → offscreen
-    // Para renders async: cleanup flag evita race condition si wc/ww cambia mientras renderiza
     useEffect(() => {
         const off = offscreen.current;
         let cancelled = false;
@@ -131,10 +141,14 @@ const ViewPanel: React.FC<ViewPanelProps> = ({ volume, type, wc, ww, rulerActive
 
         } else if (type === 'panoramica') {
             setProgress(0);
-            renderPanoramicaAsync(volume, wc, ww, off, p => {
-                if (cancelled) return;
-                setProgress(p); blit();
-            }).then(() => {
+            const promise = archControls.length >= 2
+                ? renderArchPanoramicaAsync(volume, archControls, slabPx, wc, ww, off, p => {
+                      if (cancelled) return; setProgress(p); blit();
+                  })
+                : renderPanoramicaAsync(volume, wc, ww, off, p => {
+                      if (cancelled) return; setProgress(p); blit();
+                  });
+            promise.then(() => {
                 if (cancelled) return;
                 setNativeW(off.width); setProgress(null); blit();
             });
@@ -142,8 +156,7 @@ const ViewPanel: React.FC<ViewPanelProps> = ({ volume, type, wc, ww, rulerActive
         } else if (type === 'mip') {
             setProgress(0);
             renderMIPAsync(volume, wc, ww, off, 1, p => {
-                if (cancelled) return;
-                setProgress(p); blit();
+                if (cancelled) return; setProgress(p); blit();
             }).then(() => {
                 if (cancelled) return;
                 setNativeW(off.width); setProgress(null); blit();
@@ -152,8 +165,7 @@ const ViewPanel: React.FC<ViewPanelProps> = ({ volume, type, wc, ww, rulerActive
         } else if (type === 'cefa') {
             setProgress(0);
             renderCephalometryAsync(volume, wc, ww, off, 1, p => {
-                if (cancelled) return;
-                setProgress(p); blit();
+                if (cancelled) return; setProgress(p); blit();
             }).then(() => {
                 if (cancelled) return;
                 setNativeW(off.width); setProgress(null); blit();
@@ -162,7 +174,7 @@ const ViewPanel: React.FC<ViewPanelProps> = ({ volume, type, wc, ww, rulerActive
 
         return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [volume, type, slice, wc, ww]);
+    }, [volume, type, slice, wc, ww, archControls, slabPx]);
 
     // Scroll de slice
     const handleWheel = (e: React.WheelEvent) => {
@@ -171,7 +183,7 @@ const ViewPanel: React.FC<ViewPanelProps> = ({ volume, type, wc, ww, rulerActive
         setSlice(s => Math.max(0, Math.min(maxSlice, s + (e.deltaY > 0 ? 1 : -1))));
     };
 
-    // Herramienta regla — coordenadas relativas al display canvas
+    // Coordenadas relativas al display canvas (fracciones [0,1])
     const getPos = (e: React.MouseEvent): { x: number; y: number } => {
         const rect = displayRef.current!.getBoundingClientRect();
         return {
@@ -180,7 +192,18 @@ const ViewPanel: React.FC<ViewPanelProps> = ({ volume, type, wc, ww, rulerActive
         };
     };
 
-    const onMouseDown = (e: React.MouseEvent) => { if (rulerActive) setDrawing(getPos(e)); };
+    const onMouseDown = (e: React.MouseEvent) => {
+        // Modo arco: click en axial añade punto de control
+        if (type === 'axial' && archMode) {
+            const frac = getPos(e);
+            onArchAdd([
+                Math.round(frac.x * volume.cols),
+                Math.round(frac.y * volume.rows),
+            ]);
+            return;
+        }
+        if (rulerActive) setDrawing(getPos(e));
+    };
     const onMouseMove = (e: React.MouseEvent) => { if (rulerActive) setCursor(getPos(e)); };
     const onMouseUp   = (e: React.MouseEvent) => {
         if (!rulerActive || !drawing) return;
@@ -194,10 +217,22 @@ const ViewPanel: React.FC<ViewPanelProps> = ({ volume, type, wc, ww, rulerActive
         setDrawing(null);
     };
 
-    // Scale bar: 10 mm como fracción del ancho del canvas offscreen
-    // nativeW es state (no ref) → se actualiza en el effect y fuerza re-render
+    // Scale bar
     const ps        = volume.pixelSpacing?.[1] ?? 0;
     const scaleFrac = ps > 0 && nativeW > 0 ? Math.min(0.35, 10 / (ps * nativeW)) : 0;
+
+    // Spline del arco para overlay SVG (viewBox 0-1000)
+    const archSplineD: string | null = (() => {
+        if (type !== 'axial' || archControls.length < 2) return null;
+        const pts = sampleArchSpline(archControls, archControls.length * 20);
+        return pts.map((p, i) =>
+            `${i === 0 ? 'M' : 'L'} ${(p[0] / volume.cols * 1000).toFixed(1)} ${(p[1] / volume.rows * 1000).toFixed(1)}`
+        ).join(' ');
+    })();
+
+    const activeCursor = (type === 'axial' && archMode) ? 'crosshair'
+                       : rulerActive ? 'crosshair'
+                       : 'default';
 
     return (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#060809', border: '1px solid #1e2535', borderRadius: 6, overflow: 'hidden' }}>
@@ -206,6 +241,11 @@ const ViewPanel: React.FC<ViewPanelProps> = ({ volume, type, wc, ww, rulerActive
             <div style={{ height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 8px', gap: 6, background: '#0a0c10', borderBottom: '1px solid #1e2535' }}>
                 <span style={{ color: COLOR[type], fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', flex: 1 }}>
                     {LABEL[type]}
+                    {type === 'panoramica' && archControls.length >= 2 && (
+                        <span style={{ color: '#22d3ee', fontSize: 9, marginLeft: 6, fontWeight: 400, textTransform: 'none' }}>
+                            — arco ({archControls.length} pts)
+                        </span>
+                    )}
                 </span>
                 {IS_SLICE[type] && <>
                     <button onClick={() => setSlice(s => Math.max(0, s - 1))}
@@ -225,7 +265,7 @@ const ViewPanel: React.FC<ViewPanelProps> = ({ volume, type, wc, ww, rulerActive
             {/* Contenedor — ResizeObserver mide aquí */}
             <div
                 ref={containerRef}
-                style={{ flex: 1, minHeight: 0, position: 'relative', background: '#000', cursor: rulerActive ? 'crosshair' : 'default', overflow: 'hidden' }}
+                style={{ flex: 1, minHeight: 0, position: 'relative', background: '#000', cursor: activeCursor, overflow: 'hidden' }}
                 onWheel={handleWheel}
                 onMouseDown={onMouseDown}
                 onMouseMove={onMouseMove}
@@ -233,12 +273,9 @@ const ViewPanel: React.FC<ViewPanelProps> = ({ volume, type, wc, ww, rulerActive
                 onMouseLeave={() => setCursor(null)}
             >
                 {/* Display canvas — siempre = tamaño contenedor */}
-                <canvas
-                    ref={displayRef}
-                    style={{ position: 'absolute', inset: 0, display: 'block' }}
-                />
+                <canvas ref={displayRef} style={{ position: 'absolute', inset: 0, display: 'block' }} />
 
-                {/* Progress */}
+                {/* Progress bar */}
                 {progress !== null && (
                     <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, background: '#1e2535', zIndex: 2 }}>
                         <div style={{ height: '100%', width: `${progress * 100}%`, background: '#3b82f6', transition: 'width 0.1s' }} />
@@ -251,6 +288,55 @@ const ViewPanel: React.FC<ViewPanelProps> = ({ volume, type, wc, ww, rulerActive
                         <div style={{ color: '#e2e8f0', fontSize: 9, fontWeight: 600, marginBottom: 2 }}>10 mm</div>
                         <div style={{ height: 2, width: `${scaleFrac * 100}%`, minWidth: 16, background: '#e2e8f0' }} />
                     </div>
+                )}
+
+                {/* Hint modo arco */}
+                {type === 'axial' && archMode && (
+                    <div style={{ position: 'absolute', top: 6, left: 0, right: 0, display: 'flex', justifyContent: 'center', pointerEvents: 'none', zIndex: 5 }}>
+                        <span style={{ background: '#0c4a6e99', color: '#7dd3fc', fontSize: 10, padding: '2px 10px', borderRadius: 4 }}>
+                            Click para añadir puntos del arco dental
+                        </span>
+                    </div>
+                )}
+
+                {/* SVG overlay: arco dental sobre vista axial */}
+                {type === 'axial' && archControls.length > 0 && (
+                    <svg
+                        viewBox="0 0 1000 1000"
+                        preserveAspectRatio="none"
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 4 }}
+                    >
+                        {/* Spline interpolado */}
+                        {archSplineD && (
+                            <path d={archSplineD} stroke="#22d3ee" strokeWidth={2.5} fill="none" opacity={0.9} />
+                        )}
+                        {/* Puntos de control */}
+                        {archControls.map((p, i) => (
+                            <circle
+                                key={i}
+                                cx={p[0] / volume.cols * 1000}
+                                cy={p[1] / volume.rows * 1000}
+                                r={i === 0 || i === archControls.length - 1 ? 8 : 6}
+                                fill={i === 0 ? '#22d3ee' : i === archControls.length - 1 ? '#f59e0b' : '#38bdf8'}
+                                stroke="#0c4a6e"
+                                strokeWidth={1.5}
+                                opacity={0.95}
+                            />
+                        ))}
+                        {/* Índice del último punto */}
+                        {archControls.length > 0 && (() => {
+                            const last = archControls[archControls.length - 1];
+                            return (
+                                <text
+                                    x={last[0] / volume.cols * 1000 + 12}
+                                    y={last[1] / volume.rows * 1000 + 4}
+                                    fontSize={28} fill="#f59e0b" fontWeight={700} opacity={0.9}
+                                >
+                                    {archControls.length}
+                                </text>
+                            );
+                        })()}
+                    </svg>
                 )}
 
                 {/* SVG regla */}
@@ -302,10 +388,30 @@ const VIEW_LIST: { id: ViewType; label: string }[] = [
 ];
 
 const CbctViewer: React.FC<CbctViewerProps> = ({ volume, onClose }) => {
-    const [layout, setLayout] = useState<Layout>('4x');
-    const [wc, setWc]         = useState(volume.defaultWC);
-    const [ww, setWw]         = useState(volume.defaultWW);
-    const [ruler, setRuler]   = useState(false);
+    const [layout,       setLayout]       = useState<Layout>('4x');
+    const [wc, setWc]                     = useState(volume.defaultWC);
+    const [ww, setWw]                     = useState(volume.defaultWW);
+    const [ruler,        setRuler]        = useState(false);
+    const [archMode,     setArchMode]     = useState(false);
+    const [archControls, setArchControls] = useState<Array<[number, number]>>([]);
+    const [slabPx,       setSlabPx]       = useState(20);
+
+    const addArchPoint = useCallback((pt: [number, number]) => {
+        setArchControls(prev => [...prev, pt]);
+    }, []);
+
+    const clearArch = () => {
+        setArchControls([]);
+        setArchMode(false);
+    };
+
+    // Al activar arch mode, desactivar regla y viceversa
+    const toggleArchMode = () => {
+        setArchMode(m => { if (!m) setRuler(false); return !m; });
+    };
+    const toggleRuler = () => {
+        setRuler(r => { if (!r) setArchMode(false); return !r; });
+    };
 
     return (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#0a0c10' }}>
@@ -358,7 +464,58 @@ const CbctViewer: React.FC<CbctViewerProps> = ({ volume, onClose }) => {
 
                 <div style={{ width: 1, height: 20, background: '#1e2535', margin: '0 2px' }} />
 
-                <button onClick={() => setRuler(r => !r)} style={{
+                {/* ── Herramienta arco dental ── */}
+                <button
+                    title="Definir arco dental en vista Axial para panorámica personalizada"
+                    onClick={toggleArchMode}
+                    style={{
+                        padding: '3px 8px', border: `1px solid ${archMode ? '#22d3ee' : '#1e2535'}`,
+                        borderRadius: 5, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                        background: archMode ? '#0c4a6e' : 'transparent',
+                        color: archMode ? '#22d3ee' : '#475569',
+                        display: 'flex', alignItems: 'center', gap: 4,
+                    }}
+                >
+                    <Activity style={{ width: 12, height: 12 }} />
+                    Arco
+                    {archControls.length > 0 && (
+                        <span style={{
+                            background: '#0e7490', color: '#e0f2fe',
+                            borderRadius: 8, padding: '0 5px', fontSize: 9, fontWeight: 700,
+                        }}>
+                            {archControls.length}
+                        </span>
+                    )}
+                </button>
+
+                {/* Slab + limpiar (solo con puntos definidos) */}
+                {archControls.length > 0 && (
+                    <>
+                        <span style={{ color: '#475569', fontSize: 10, marginLeft: 2 }}>Slab</span>
+                        <input
+                            type="range" min={5} max={80} value={slabPx}
+                            onChange={e => setSlabPx(+e.target.value)}
+                            style={{ width: 50, accentColor: '#22d3ee', cursor: 'pointer' }}
+                            title={`Grosor del slab: ${slabPx} px`}
+                        />
+                        <span style={{ color: '#64748b', fontSize: 10, minWidth: 24 }}>{slabPx}</span>
+                        <button
+                            title="Borrar arco"
+                            onClick={clearArch}
+                            style={{
+                                width: 24, height: 24, border: 'none', borderRadius: 4,
+                                cursor: 'pointer', background: 'transparent',
+                                color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}
+                        >
+                            <Trash2 style={{ width: 12, height: 12 }} />
+                        </button>
+                    </>
+                )}
+
+                <div style={{ width: 1, height: 20, background: '#1e2535', margin: '0 2px' }} />
+
+                <button onClick={toggleRuler} style={{
                     padding: '3px 8px', border: `1px solid ${ruler ? '#fbbf24' : '#1e2535'}`,
                     borderRadius: 5, cursor: 'pointer', fontSize: 11, fontWeight: 600,
                     background: ruler ? '#3d2c0a' : 'transparent',
@@ -371,7 +528,11 @@ const CbctViewer: React.FC<CbctViewerProps> = ({ volume, onClose }) => {
                 <div style={{ flex: 1 }} />
 
                 {onClose && (
-                    <button onClick={onClose} style={{ width: 28, height: 28, border: 'none', borderRadius: 5, cursor: 'pointer', background: 'transparent', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <button onClick={onClose} style={{
+                        width: 28, height: 28, border: 'none', borderRadius: 5, cursor: 'pointer',
+                        background: 'transparent', color: '#475569',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
                         <X style={{ width: 14, height: 14 }} />
                     </button>
                 )}
@@ -381,14 +542,24 @@ const CbctViewer: React.FC<CbctViewerProps> = ({ volume, onClose }) => {
             <div style={{ flex: 1, minHeight: 0, padding: 4 }}>
                 {layout === '4x' ? (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: 4, height: '100%' }}>
-                        <ViewPanel volume={volume} type="axial"      wc={wc} ww={ww} rulerActive={ruler} />
-                        <ViewPanel volume={volume} type="coronal"    wc={wc} ww={ww} rulerActive={ruler} />
-                        <ViewPanel volume={volume} type="panoramica" wc={wc} ww={ww} rulerActive={ruler} />
-                        <ViewPanel volume={volume} type="mip"        wc={wc} ww={ww} rulerActive={ruler} />
+                        <ViewPanel volume={volume} type="axial"      wc={wc} ww={ww} rulerActive={ruler}
+                            archControls={archControls} archMode={archMode} slabPx={slabPx} onArchAdd={addArchPoint} />
+                        <ViewPanel volume={volume} type="coronal"    wc={wc} ww={ww} rulerActive={ruler}
+                            archControls={archControls} archMode={false}    slabPx={slabPx} onArchAdd={addArchPoint} />
+                        <ViewPanel volume={volume} type="panoramica" wc={wc} ww={ww} rulerActive={ruler}
+                            archControls={archControls} archMode={false}    slabPx={slabPx} onArchAdd={addArchPoint} />
+                        <ViewPanel volume={volume} type="mip"        wc={wc} ww={ww} rulerActive={ruler}
+                            archControls={archControls} archMode={false}    slabPx={slabPx} onArchAdd={addArchPoint} />
                     </div>
                 ) : (
                     <div style={{ height: '100%' }}>
-                        <ViewPanel volume={volume} type={layout as ViewType} wc={wc} ww={ww} rulerActive={ruler} />
+                        <ViewPanel
+                            volume={volume} type={layout as ViewType} wc={wc} ww={ww} rulerActive={ruler}
+                            archControls={archControls}
+                            archMode={layout === 'axial' ? archMode : false}
+                            slabPx={slabPx}
+                            onArchAdd={addArchPoint}
+                        />
                     </div>
                 )}
             </div>

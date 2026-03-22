@@ -260,6 +260,107 @@ export async function renderPanoramicaAsync(
     ctx.putImageData(id, 0, 0);
 }
 
+// ── Panorámica con arco dental personalizado ──────────────────────────────────
+
+/** Interpolación Catmull-Rom 1-D */
+function catmullRom1D(p0: number, p1: number, p2: number, p3: number, t: number): number {
+    const t2 = t * t, t3 = t2 * t;
+    return 0.5 * (2*p1 + (-p0+p2)*t + (2*p0-5*p1+4*p2-p3)*t2 + (-p0+3*p1-3*p2+p3)*t3);
+}
+
+/**
+ * Devuelve `nSamples` puntos interpolados a lo largo del spline Catmull-Rom
+ * definido por los puntos de control (coordenadas en píxeles del volumen).
+ */
+export function sampleArchSpline(
+    controls: Array<[number, number]>,
+    nSamples = 256,
+): Array<[number, number]> {
+    const n = controls.length;
+    if (n === 0) return [];
+    if (n === 1) return [controls[0]];
+    const result: Array<[number, number]> = [];
+    const segs   = n - 1;
+    const perSeg = Math.max(2, Math.ceil(nSamples / segs));
+    for (let i = 0; i < segs; i++) {
+        const p0 = controls[Math.max(0, i - 1)];
+        const p1 = controls[i];
+        const p2 = controls[Math.min(n - 1, i + 1)];
+        const p3 = controls[Math.min(n - 1, i + 2)];
+        for (let s = 0; s < perSeg; s++) {
+            const t = s / perSeg;
+            result.push([
+                catmullRom1D(p0[0], p1[0], p2[0], p3[0], t),
+                catmullRom1D(p0[1], p1[1], p2[1], p3[1], t),
+            ]);
+        }
+    }
+    result.push(controls[n - 1]);
+    return result;
+}
+
+/**
+ * Renderiza una panorámica siguiendo el arco definido por `controls`.
+ * Para cada posición del arco muestrea un slab perpendicular y proyecta el máximo (MIP).
+ * Fallback a renderPanoramicaAsync si hay menos de 2 puntos.
+ */
+export async function renderArchPanoramicaAsync(
+    vol:          DicomVolume,
+    controls:     Array<[number, number]>,  // [col, row] en px del volumen
+    slabThickness: number,                  // grosor del slab en px
+    wc: number, ww: number,
+    canvas: HTMLCanvasElement,
+    onProgress?: (pct: number) => void,
+): Promise<void> {
+    if (controls.length < 2) return renderPanoramicaAsync(vol, wc, ww, canvas, onProgress);
+
+    const { cols, rows, numFrames, frameViews } = vol;
+    const archPts = sampleArchSpline(controls, Math.max(128, controls.length * 32));
+    const nCols   = archPts.length;
+    const half    = Math.max(1, Math.floor(slabThickness / 2));
+
+    canvas.width  = nCols;
+    canvas.height = numFrames;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const voi = voiParams(vol, wc, ww);
+    const id  = ctx.createImageData(nCols, numFrames);
+    const d   = id.data;
+
+    const CHUNK = 8;
+    for (let z = 0; z < numFrames; z += CHUNK) {
+        const end = Math.min(z + CHUNK, numFrames);
+        for (let zi = z; zi < end; zi++) {
+            const frame = frameViews[zi];
+            for (let xi = 0; xi < nCols; xi++) {
+                // Tangente por diferencias finitas
+                const ax = archPts[Math.max(0, xi - 1)][0], ay = archPts[Math.max(0, xi - 1)][1];
+                const bx = archPts[Math.min(nCols - 1, xi + 1)][0], by = archPts[Math.min(nCols - 1, xi + 1)][1];
+                const tx = bx - ax, ty = by - ay;
+                const tlen = Math.sqrt(tx * tx + ty * ty) || 1;
+                // Normal perpendicular en el plano axial (sentido de muestreo del slab)
+                const nx = -ty / tlen, ny = tx / tlen;
+                const cx = archPts[xi][0], cy = archPts[xi][1];
+
+                let maxRaw = 0;
+                for (let s = -half; s <= half; s++) {
+                    const sx = Math.round(cx + s * nx);
+                    const sy = Math.round(cy + s * ny);
+                    if (sx < 0 || sx >= cols || sy < 0 || sy >= rows) continue;
+                    const v = frame[sy * cols + sx];
+                    if (v > maxRaw) maxRaw = v;
+                }
+                const g = applyVOI(maxRaw, voi);
+                const p = (zi * nCols + xi) << 2;
+                d[p] = d[p + 1] = d[p + 2] = g; d[p + 3] = 255;
+            }
+        }
+        onProgress?.(end / numFrames);
+        await new Promise<void>(r => setTimeout(r, 0));
+    }
+    ctx.putImageData(id, 0, 0);
+}
+
 // ── Render: MIP 3D (proyección a lo largo del eje Z) ─────────────────────────
 
 export async function renderMIPAsync(
