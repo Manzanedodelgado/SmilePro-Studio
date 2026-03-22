@@ -16,7 +16,7 @@ import Login from './views/Login';
 import QuestionnairePublicPage from './views/QuestionnairePublicPage';
 import SignPage from './views/SignPage';
 import { useAuth } from './context/AuthContext';
-import { setupGlobalErrorHandler } from './components/ErrorBoundary';
+import { setupGlobalErrorHandler, ErrorBoundary } from './components/ErrorBoundary';
 import CommandPalette from './components/CommandPalette';
 
 // Instalar el manejador global de errores una sola vez al cargar la app
@@ -179,6 +179,7 @@ const App: React.FC = () => {
                     </div>
                 )}
                 <main className="flex-1 flex flex-col overflow-hidden relative">
+                <ErrorBoundary onReset={() => { setActiveArea('Agenda'); setActiveSubArea('Jornada de Hoy'); }}>
                     {/* PACIENTES: siempre montado, oculto con CSS cuando no es activo — preserva estado del paciente */}
                     <div style={{ display: activeArea === 'Pacientes' ? 'contents' : 'none' }}>
                         <div className={`flex-1 ${activeSubArea === 'Radiología' ? 'overflow-hidden' : 'overflow-hidden flex flex-col p-[20px] bg-clinical-soft/30'}`}>
@@ -218,6 +219,7 @@ const App: React.FC = () => {
                                 </div>
                             )
                     )}
+                </ErrorBoundary>
                 </main>
             </div>
 

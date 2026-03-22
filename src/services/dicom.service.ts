@@ -1,35 +1,24 @@
 /**
- * dicom.service.ts — v9  MPR Dental con offset correcto
- *
- * Fix principal: usa dicomParser.parseDicom() completo para obtener
- * el dataOffset exacto del Pixel Data element, evitando el escaneo
- * manual que a veces encontraba offsets erróneos.
+ * dicom.service.ts — Carga y renderizado DICOM puro (sin Cornerstone)
+ * Usa dicom-parser para parsear el archivo binario.
  */
 
-// @ts-ignore
 import dicomParser from 'dicom-parser';
 
-// ── PRESETS EXCLUSIVAMENTE DENTALES ──────────────────────────────────────────
+// ── Tipos públicos ────────────────────────────────────────────────────────────
 
 export interface WindowPreset {
-    key: string;
-    label: string;
+    name: string;
     wc: number;
     ww: number;
 }
 
 export const DENTAL_PRESETS: WindowPreset[] = [
-    { key: 'hueso', label: '🦷 Hueso Alveolar', wc: 500, ww: 2500 },
-    { key: 'cortical', label: '🦴 Hueso Cortical', wc: 300, ww: 1200 },
-    { key: 'endodoncia', label: '🔬 Endodoncia', wc: 200, ww: 600 },
-    { key: 'implante', label: '🔩 Implante / Metal', wc: 1500, ww: 5000 },
-    { key: 'tejido', label: '💊 Tejido Blando', wc: 50, ww: 350 },
+    { name: 'Hueso',   wc: 400,   ww: 1500 },
+    { name: 'Tejido',  wc: 40,    ww: 400  },
+    { name: 'Dental',  wc: 600,   ww: 2000 },
+    { name: 'Implante',wc: 1000,  ww: 3000 },
 ];
-
-// Alias
-export const CT_WINDOW_PRESETS = DENTAL_PRESETS;
-
-// ── TIPOS ─────────────────────────────────────────────────────────────────────
 
 export interface DicomVolume {
     rows: number;
@@ -37,7 +26,7 @@ export interface DicomVolume {
     numFrames: number;
     bitsAlloc: number;
     bitsStored: number;
-    pixelRep: number;
+    pixelRep: number;           // 0 = unsigned, 1 = signed
     photometric: string;
     slope: number;
     intercept: number;
@@ -48,480 +37,315 @@ export interface DicomVolume {
     description?: string;
     defaultWC: number;
     defaultWW: number;
+    /** [row_spacing_mm, col_spacing_mm] — tag (0028,0030) */
+    pixelSpacing?: [number, number];
+    /** Un Uint16Array por frame — comparte buffer del archivo */
     frameViews: Uint16Array[];
-    buffer: ArrayBuffer;
-    // Debug info
-    pixelDataOffset: number;
 }
 
-// ── HELPERS ───────────────────────────────────────────────────────────────────
+// ── Parser ────────────────────────────────────────────────────────────────────
 
-function dsParse(v?: string): number | undefined {
-    if (!v) return undefined;
-    const n = parseFloat(String(v).split('\\')[0].trim());
+function ds(dataset: dicomParser.DataSet, tag: string): string | undefined {
+    try { return dataset.string(tag); } catch { return undefined; }
+}
+function u16(dataset: dicomParser.DataSet, tag: string): number | undefined {
+    try { return dataset.uint16(tag); } catch { return undefined; }
+}
+function f32(str?: string): number | undefined {
+    if (!str) return undefined;
+    const n = parseFloat(str.split('\\')[0].trim());
     return isNaN(n) ? undefined : n;
 }
-
-/** VOI LUT aplicado a un valor uint16 raw */
-function applyVOI(
-    raw: number,
-    storedMax: number, signBit: number, signed: boolean,
-    slope: number, intercept: number,
-    lo: number, ww: number
-): number {
-    let v = raw & storedMax;
-    if (signed && (v & signBit)) v = v - (signBit << 1);
-    const hu = v * slope + intercept;
-    if (hu <= lo) return 0;
-    if (hu >= lo + ww) return 255;
-    return ((hu - lo) / ww * 255) | 0;
-}
-
-// ── LOAD VOLUME ───────────────────────────────────────────────────────────────
 
 export async function loadDicomVolume(file: File): Promise<DicomVolume> {
     const buffer = await file.arrayBuffer();
     const bytes = new Uint8Array(buffer);
+    // Sin untilTag: necesitamos el dataOffset del pixel data element (7fe00010)
+    const dataset = dicomParser.parseDicom(bytes);
 
-    // ── 1. Parsear CABECERAS (hasta Pixel Data) ───────────────────────────
-    let ds: ReturnType<typeof dicomParser.parseDicom>;
-    try { ds = dicomParser.parseDicom(bytes, { untilTag: '7fe00010' }); }
-    catch { ds = dicomParser.parseDicom(bytes); }
+    const rows       = u16(dataset, 'x00280010') ?? 512;
+    const cols       = u16(dataset, 'x00280011') ?? 512;
+    const numFrames  = parseInt(ds(dataset, 'x00280008') ?? '1', 10) || 1;
+    const bitsAlloc  = u16(dataset, 'x00280100') ?? 16;
+    const bitsStored = u16(dataset, 'x00280101') ?? 12;
+    const pixelRep   = u16(dataset, 'x00280103') ?? 0;
+    const photometric= ds(dataset, 'x00280004') ?? 'MONOCHROME2';
+    const slope      = f32(ds(dataset, 'x00281053')) ?? 1;
+    const intercept  = f32(ds(dataset, 'x00281052')) ?? -1024;
+    const modality   = ds(dataset, 'x00080060') ?? 'CT';
+    const manufacturer = ds(dataset, 'x00080070');
+    const studyDate  = ds(dataset, 'x00080020');
+    const patientId  = ds(dataset, 'x00100020');
+    const description= ds(dataset, 'x00081030');
 
-    const rows = ds.uint16('x00280010') ?? 0;
-    const cols = ds.uint16('x00280011') ?? 0;
-    const bitsAlloc = ds.uint16('x00280100') ?? 16;
-    const bitsStored = ds.uint16('x00280101') ?? 16;
-    const pixelRep = ds.uint16('x00280103') ?? 0;
-    const photometric = (ds.string('x00280004') ?? 'MONOCHROME2').trim();
-    const numFrames = parseInt((ds.string('x00280008') ?? '1').trim()) || 1;
-    const slope = dsParse(ds.string('x00281053')) ?? 1;
-    const intercept = dsParse(ds.string('x00281052')) ?? 0;
-    const modality = (ds.string('x00080060') ?? 'CT').trim();
+    // Window center / width
+    const wcStr = ds(dataset, 'x00281050');
+    const wwStr = ds(dataset, 'x00281051');
+    let wc = f32(wcStr) ?? 0;
+    let ww = f32(wwStr) ?? 0;
 
-    if (!rows || !cols) throw new Error(`DICOM inválido: ${rows}×${cols}`);
-
-    // ── 2. Encontrar offset exacto del Pixel Data ─────────────────────────
-    //
-    // ESTRATEGIA FIABLE: escanear los últimos bytes del archivo sabiendo que
-    // pixelData = numFrames * rows * cols * (bitsAlloc/8), así localizamos e
-    // verificamos el offset antes de crear las vistas.
-    const px = rows * cols;
-    const bytesPerPx = bitsAlloc === 16 ? 2 : 1;
-    const frameBytes = px * bytesPerPx;
-    const totalPxBytes = frameBytes * numFrames;
-
-    // El pixel data debe empezar exactamente en: fileSize - totalPxBytes (aprox.)
-    // Buscar el tag (7FE0,0010) en la zona esperada del archivo
-    const searchFrom = Math.max(0, buffer.byteLength - totalPxBytes - 256);
-    const searchTo = Math.min(buffer.byteLength - totalPxBytes + 256, buffer.byteLength - 12);
-
-    let pixelDataOffset = -1;
-
-    // Buscar el tag en la zona esperada primero (rápido)
-    for (let i = searchFrom; i < searchTo; i++) {
-        if (bytes[i] === 0xE0 && bytes[i + 1] === 0x7F &&
-            bytes[i + 2] === 0x10 && bytes[i + 3] === 0x00) {
-            const vr = String.fromCharCode(bytes[i + 4], bytes[i + 5]);
-            const candidate = (vr === 'OW' || vr === 'OB') ? i + 12 : i + 8;
-            // Verificar: ¿hay suficiente espacio para al menos 1 frame?
-            if (candidate + frameBytes <= buffer.byteLength) {
-                pixelDataOffset = candidate;
-                break;
-            }
-        }
+    // Pixel spacing [row, col]
+    const psStr = ds(dataset, 'x00280030');
+    let pixelSpacing: [number, number] | undefined;
+    if (psStr) {
+        const parts = psStr.split('\\');
+        const r = parseFloat(parts[0] ?? '');
+        const c = parseFloat(parts[1] ?? parts[0] ?? '');
+        if (!isNaN(r) && !isNaN(c) && r > 0 && c > 0) pixelSpacing = [r, c];
     }
 
-    // Fallback: escanear todo el archivo
-    if (pixelDataOffset === -1) {
-        for (let i = 0; i < bytes.length - 12; i++) {
-            if (bytes[i] === 0xE0 && bytes[i + 1] === 0x7F &&
-                bytes[i + 2] === 0x10 && bytes[i + 3] === 0x00) {
-                const vr = String.fromCharCode(bytes[i + 4], bytes[i + 5]);
-                const candidate = (vr === 'OW' || vr === 'OB') ? i + 12 : i + 8;
-                if (candidate + frameBytes <= buffer.byteLength) {
-                    pixelDataOffset = candidate;
-                    break;
-                }
-            }
-        }
+    // Pixel data element
+    const pixEl = dataset.elements['x7fe00010'];
+    if (!pixEl) throw new Error('No pixel data in DICOM file');
+    const framePixels = rows * cols;
+    const frameBytes  = framePixels * (bitsAlloc / 8);
+
+    // Copia alineada: Uint16Array requiere offset múltiplo de 2
+    const totalPixels = numFrames * framePixels;
+    const allPixels   = new Uint16Array(totalPixels);
+    // Límite seguro: nunca exceder el buffer original
+    const maxBytes = buffer.byteLength - pixEl.dataOffset;
+    const dataLen  = Math.min(frameBytes * numFrames, maxBytes);
+    const src      = new DataView(buffer, pixEl.dataOffset, dataLen);
+    const maxPx    = Math.floor(dataLen / 2);
+    for (let i = 0; i < Math.min(totalPixels, maxPx); i++) {
+        allPixels[i] = src.getUint16(i * 2, true); // little-endian
     }
 
-    if (pixelDataOffset === -1) throw new Error('Pixel Data no encontrado en el archivo');
-
-    // Asegurar alineación a 2 bytes para Uint16Array
-    const alignedOffset = (pixelDataOffset % 2 === 0) ? pixelDataOffset : pixelDataOffset + 1;
-
-    // ── 3. Crear vistas zero-copy de cada frame ───────────────────────────
     const frameViews: Uint16Array[] = [];
-    const actualFrames = Math.min(numFrames,
-        Math.floor((buffer.byteLength - alignedOffset) / frameBytes));
-
-    for (let f = 0; f < actualFrames; f++) {
-        const start = alignedOffset + f * frameBytes;
-        if (start + frameBytes > buffer.byteLength) break;
-        if (bitsAlloc === 16) {
-            frameViews.push(new Uint16Array(buffer, start, px));
-        } else {
-            const u8 = new Uint8Array(buffer, start, px);
-            const u16 = new Uint16Array(px);
-            for (let i = 0; i < px; i++) u16[i] = u8[i];
-            frameViews.push(u16);
-        }
+    for (let f = 0; f < numFrames; f++) {
+        frameViews.push(allPixels.subarray(f * framePixels, (f + 1) * framePixels));
     }
 
-    if (frameViews.length === 0) throw new Error('No se pudieron extraer frames del DICOM');
-
-    // ── Diagnóstico en consola ────────────────────────────────────────────
-    const midFrame = frameViews[Math.floor(frameViews.length / 2)];
-    const sampleMin = Math.min(...Array.from(midFrame.slice(0, 100)));
-    const sampleMax = Math.max(...Array.from(midFrame.slice(0, 100)));
-    console.group('[DICOM v9] Volumen cargado');
-    console.log(`Dimensiones: ${cols}×${rows}×${frameViews.length} | ${modality} | ${bitsStored}bit`);
-    console.log(`Pixeldata offset: ${pixelDataOffset} (alineado: ${alignedOffset})`);
-    console.log(`Rescale: slope=${slope} intercept=${intercept}`);
-    console.log(`Muestra frame central [0..100]: min=${sampleMin} max=${sampleMax}`);
-    console.log(`Archivo: ${(buffer.byteLength / 1024 / 1024).toFixed(1)} MB`);
-    console.groupEnd();
+    // Auto window: solo si los tags WC/WW no existen o WW no es válido
+    if (!wcStr || !wwStr || ww <= 1) {
+        const mid = frameViews[Math.floor(numFrames / 2)];
+        let lo = Infinity, hi = -Infinity;
+        for (let i = 0; i < mid.length; i++) {
+            let v = mid[i];
+            if (pixelRep && (v & 0x8000)) v = v - 0x10000;
+            const hu = v * slope + intercept;
+            if (hu < lo) lo = hu;
+            if (hu > hi) hi = hu;
+        }
+        wc = (lo + hi) / 2;
+        ww = Math.max(1, hi - lo);
+    }
 
     return {
-        rows, cols, numFrames: frameViews.length,
-        bitsAlloc, bitsStored, pixelRep, photometric,
-        slope, intercept, modality,
-        manufacturer: ds.string('x00080070'),
-        studyDate: ds.string('x00080020'),
-        patientId: ds.string('x00100020'),
-        description: ds.string('x00081030') ?? ds.string('x00080060'),
-        defaultWC: 500, defaultWW: 2500,
-        frameViews, buffer, pixelDataOffset,
+        rows, cols, numFrames, bitsAlloc, bitsStored, pixelRep, photometric,
+        slope, intercept, modality, manufacturer, studyDate, patientId, description,
+        defaultWC: wc, defaultWW: ww, pixelSpacing, frameViews,
     };
 }
 
-// ── PREPARAR PARÁMETROS VOI ──────────────────────────────────────────────────
+// ── VOI LUT helper ────────────────────────────────────────────────────────────
 
-function voiParams(vol: DicomVolume, wc: number, ww: number) {
-    return {
-        storedMax: (1 << vol.bitsStored) - 1,
-        signBit: 1 << (vol.bitsStored - 1),
-        signed: vol.pixelRep === 1,
-        isMono1: vol.photometric === 'MONOCHROME1',
-        slope: vol.slope,
-        intercept: vol.intercept,
-        lo: wc - ww / 2,
-        ww,
-    };
+interface VOI {
+    lo: number; ww: number;
+    storedMax: number; signBit: number; signed: boolean; isMono1: boolean;
+    slope: number; intercept: number;
 }
 
-// ── RENDER AXIAL (plano Z) ────────────────────────────────────────────────────
+function voiParams(vol: DicomVolume, wc: number, ww: number): VOI {
+    const storedMax = (1 << vol.bitsStored) - 1;
+    const signBit   = 1 << (vol.bitsStored - 1);
+    const signed    = vol.pixelRep === 1;
+    const isMono1   = vol.photometric === 'MONOCHROME1';
+    const lo        = wc - ww / 2;
+    return { lo, ww, storedMax, signBit, signed, isMono1, slope: vol.slope, intercept: vol.intercept };
+}
 
-export function renderAxial(
-    vol: DicomVolume, z: number, wc: number, ww: number, imgData: ImageData
-): void {
+function applyVOI(raw: number, v: VOI): number {
+    let px = raw & v.storedMax;
+    if (v.signed && (px & v.signBit)) px = px - (v.signBit << 1);
+    const hu = px * v.slope + v.intercept;
+    let g = hu <= v.lo ? 0 : hu >= v.lo + v.ww ? 255 : ((hu - v.lo) / v.ww * 255) | 0;
+    return v.isMono1 ? 255 - g : g;
+}
+
+// ── Render: Axial ─────────────────────────────────────────────────────────────
+
+export function renderFrame(vol: DicomVolume, z: number, wc: number, ww: number, imgData: ImageData): void {
     const frame = vol.frameViews[Math.max(0, Math.min(z, vol.numFrames - 1))];
     if (!frame) return;
+    const voi = voiParams(vol, wc, ww);
     const d = imgData.data;
-    const { storedMax, signBit, signed, isMono1, slope, intercept, lo } = voiParams(vol, wc, ww);
     const px = vol.rows * vol.cols;
     for (let i = 0; i < px; i++) {
-        let g = applyVOI(frame[i], storedMax, signBit, signed, slope, intercept, lo, ww);
-        if (isMono1) g = 255 - g;
+        const g = applyVOI(frame[i], voi);
         const p = i << 2;
         d[p] = d[p + 1] = d[p + 2] = g; d[p + 3] = 255;
     }
 }
 
-export function renderFrame(vol: DicomVolume, z: number, wc: number, ww: number, imgData: ImageData): void {
-    renderAxial(vol, z, wc, ww, imgData);
-}
+// ── Render: Coronal ───────────────────────────────────────────────────────────
 
-// ── RENDER CORONAL (plano Y) ──────────────────────────────────────────────────
-// Salida: cols × numFrames  (horizontal=X, vertical=Z de arriba a abajo)
-
-export function renderCoronal(
-    vol: DicomVolume, y: number, wc: number, ww: number, canvas: HTMLCanvasElement
-): void {
+export function renderCoronal(vol: DicomVolume, y: number, wc: number, ww: number, canvas: HTMLCanvasElement): void {
     const { cols, rows, numFrames, frameViews } = vol;
-    const Yi = Math.max(0, Math.min(y, rows - 1));
-    const outW = cols;
-    const outH = numFrames;
-    canvas.width = outW;
-    canvas.height = outH;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const id = ctx.createImageData(outW, outH);
-    const d = id.data;
-    const { storedMax, signBit, signed, isMono1, slope, intercept, lo } = voiParams(vol, wc, ww);
-    const rowOffset = Yi * cols;  // posición Y dentro de cada frame axial
-    for (let z = 0; z < numFrames; z++) {
-        const frame = frameViews[z];
-        const outBase = z * outW;
-        for (let x = 0; x < outW; x++) {
-            let g = applyVOI(frame[rowOffset + x], storedMax, signBit, signed, slope, intercept, lo, ww);
-            if (isMono1) g = 255 - g;
-            const p = (outBase + x) << 2;
-            d[p] = d[p + 1] = d[p + 2] = g; d[p + 3] = 255;
-        }
-    }
-    ctx.putImageData(id, 0, 0);
-}
-
-// ── RENDER SAGITAL (plano X) ──────────────────────────────────────────────────
-// Salida: rows × numFrames  (horizontal=Y ant-post, vertical=Z sup-inf)
-
-export function renderSagittal(
-    vol: DicomVolume, x: number, wc: number, ww: number, canvas: HTMLCanvasElement
-): void {
-    const { cols, rows, numFrames, frameViews } = vol;
-    const Xi = Math.max(0, Math.min(x, cols - 1));
-    const outW = rows;
-    const outH = numFrames;
-    canvas.width = outW;
-    canvas.height = outH;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const id = ctx.createImageData(outW, outH);
-    const d = id.data;
-    const { storedMax, signBit, signed, isMono1, slope, intercept, lo } = voiParams(vol, wc, ww);
-    for (let z = 0; z < numFrames; z++) {
-        const frame = frameViews[z];
-        const outBase = z * outW;
-        for (let yi = 0; yi < rows; yi++) {
-            let g = applyVOI(frame[yi * cols + Xi], storedMax, signBit, signed, slope, intercept, lo, ww);
-            if (isMono1) g = 255 - g;
-            const p = (outBase + yi) << 2;
-            d[p] = d[p + 1] = d[p + 2] = g; d[p + 3] = 255;
-        }
-    }
-    ctx.putImageData(id, 0, 0);
-}
-
-// ── RENDER PANORÁMICA (slab MIP del arco dental) ──────────────────────────────
-// Proyecta la intensidad máxima a lo largo del eje Y (antero-posterior)
-// Salida: cols × numFrames — vista superior del arco dental
-
-export function renderPanoramica(
-    vol: DicomVolume, wc: number, ww: number, canvas: HTMLCanvasElement
-): void {
-    const { cols, rows, numFrames, frameViews } = vol;
-    const yStart = Math.floor(rows * 0.25);
-    const yEnd = Math.floor(rows * 0.75);
-    canvas.width = cols;
-    canvas.height = numFrames;
+    const yi = Math.max(0, Math.min(y, rows - 1));
+    canvas.width = cols; canvas.height = numFrames;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const id = ctx.createImageData(cols, numFrames);
     const d = id.data;
-    const { storedMax, signBit, signed, slope, intercept, lo, ww: wWindow } = voiParams(vol, wc, ww);
-
+    const voi = voiParams(vol, wc, ww);
     for (let z = 0; z < numFrames; z++) {
         const frame = frameViews[z];
-        const outBase = z * cols;
         for (let x = 0; x < cols; x++) {
-            let maxHU = -Infinity;
-            for (let yi = yStart; yi < yEnd; yi++) {
-                let v = frame[yi * cols + x] & storedMax;
-                if (signed && (v & signBit)) v = v - (signBit << 1);
-                const hu = v * slope + intercept;
-                if (hu > maxHU) maxHU = hu;
-            }
-            const g = maxHU <= lo ? 0 : maxHU >= lo + wWindow ? 255
-                : ((maxHU - lo) / wWindow * 255) | 0;
-            const p = (outBase + x) << 2;
+            const g = applyVOI(frame[yi * cols + x], voi);
+            const p = (z * cols + x) << 2;
             d[p] = d[p + 1] = d[p + 2] = g; d[p + 3] = 255;
         }
     }
     ctx.putImageData(id, 0, 0);
 }
 
-// ── RENDER MIP 3D async (chunked, no bloquea el hilo) ────────────────────────
-// Proyecta el máximo HU a lo largo del eje Z → vista superior 3D
-// OnProgress(0..1) se llama para actualizar una barra de progreso
+// ── Render: Sagital ───────────────────────────────────────────────────────────
 
-export async function renderMIPAsync(
-    vol: DicomVolume, wc: number, ww: number, canvas: HTMLCanvasElement,
-    step = 1,
-    onProgress?: (pct: number) => void
-): Promise<void> {
+export function renderSagittal(vol: DicomVolume, x: number, wc: number, ww: number, canvas: HTMLCanvasElement): void {
     const { cols, rows, numFrames, frameViews } = vol;
-    const px = rows * cols;
-    canvas.width = cols;
-    canvas.height = rows;
+    const xi = Math.max(0, Math.min(x, cols - 1));
+    canvas.width = rows; canvas.height = numFrames;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
-    const { storedMax, signBit, signed, slope, intercept, lo, ww: wWindow } = voiParams(vol, wc, ww);
-    const maxHU = new Float32Array(px).fill(-32768);
-    const CHUNK = 10; // frames por chunk
-
-    for (let z = 0; z < numFrames; z += CHUNK * step) {
-        const end = Math.min(z + CHUNK * step, numFrames);
-        for (let f = z; f < end; f += step) {
-            const frame = frameViews[f];
-            for (let i = 0; i < px; i++) {
-                let v = frame[i] & storedMax;
-                if (signed && (v & signBit)) v = v - (signBit << 1);
-                const hu = v * slope + intercept;
-                if (hu > maxHU[i]) maxHU[i] = hu;
-            }
-        }
-        onProgress?.(end / numFrames);
-        // Yield para no bloquear la UI
-        await new Promise<void>(r => setTimeout(r, 0));
-    }
-
-    // Renderizado final
-    const id = ctx.createImageData(cols, rows);
+    const id = ctx.createImageData(rows, numFrames);
     const d = id.data;
-    for (let i = 0; i < px; i++) {
-        const hu = maxHU[i];
-        const g = hu <= lo ? 0 : hu >= lo + wWindow ? 255 : ((hu - lo) / wWindow * 255) | 0;
-        const p = i << 2;
-        d[p] = d[p + 1] = d[p + 2] = g; d[p + 3] = 255;
-    }
-    ctx.putImageData(id, 0, 0);
-}
-
-// Versión sync rápida (step alto) para thumbnails
-export function renderMIP(
-    vol: DicomVolume, wc: number, ww: number, canvas: HTMLCanvasElement, step = 4
-): void {
-    const { cols, rows, numFrames, frameViews } = vol;
-    const px = rows * cols;
-    canvas.width = cols; canvas.height = rows;
-    const ctx = canvas.getContext('2d'); if (!ctx) return;
-    const { storedMax, signBit, signed, slope, intercept, lo, ww: wW } = voiParams(vol, wc, ww);
-    const maxHU = new Float32Array(px).fill(-32768);
-    for (let z = 0; z < numFrames; z += step) {
+    const voi = voiParams(vol, wc, ww);
+    for (let z = 0; z < numFrames; z++) {
         const frame = frameViews[z];
-        for (let i = 0; i < px; i++) {
-            let v = frame[i] & storedMax;
-            if (signed && (v & signBit)) v = v - (signBit << 1);
-            const hu = v * slope + intercept;
-            if (hu > maxHU[i]) maxHU[i] = hu;
+        for (let yi = 0; yi < rows; yi++) {
+            const g = applyVOI(frame[yi * cols + xi], voi);
+            const p = (z * rows + yi) << 2;
+            d[p] = d[p + 1] = d[p + 2] = g; d[p + 3] = 255;
         }
-    }
-    const id = ctx.createImageData(cols, rows); const d = id.data;
-    for (let i = 0; i < px; i++) {
-        const hu = maxHU[i];
-        const g = hu <= lo ? 0 : hu >= lo + wW ? 255 : ((hu - lo) / wW * 255) | 0;
-        const p = i << 2; d[p] = d[p + 1] = d[p + 2] = g; d[p + 3] = 255;
     }
     ctx.putImageData(id, 0, 0);
 }
 
-// ── CEFALOMETRÍA LATERAL (proyección MIP a lo largo del eje X) ───────────────
-// Genera una imagen equivalente a una Rx lateral de cráneo (teleradiografía).
-// Salida: rows × numFrames  (horizontal=antero-posterior, vertical=sup-inf)
-
-export async function renderCephalometryAsync(
-    vol: DicomVolume, wc: number, ww: number, canvas: HTMLCanvasElement,
-    stepX = 1,
-    onProgress?: (pct: number) => void
-): Promise<void> {
-    const { cols, rows, numFrames, frameViews } = vol;
-    canvas.width = rows;       // anterior-posterior
-    canvas.height = numFrames;  // superior-inferior
-    const ctx = canvas.getContext('2d'); if (!ctx) return;
-
-    const { storedMax, signBit, signed, slope, intercept, lo, ww: wW } = voiParams(vol, wc, ww);
-    // maxHU[z * rows + y] = max a lo largo del eje X
-    const totalPx = numFrames * rows;
-    const maxHU = new Float32Array(totalPx).fill(-32768);
-    const CHUNKX = Math.max(1, Math.floor(cols / 20)); // 20 chunks de columnas X
-
-    for (let x = 0; x < cols; x += CHUNKX * stepX) {
-        const xEnd = Math.min(x + CHUNKX * stepX, cols);
-        for (let xi = x; xi < xEnd; xi += stepX) {
-            for (let z = 0; z < numFrames; z++) {
-                const frame = frameViews[z];
-                for (let y = 0; y < rows; y++) {
-                    let v = frame[y * cols + xi] & storedMax;
-                    if (signed && (v & signBit)) v = v - (signBit << 1);
-                    const hu = v * slope + intercept;
-                    const idx = z * rows + y;
-                    if (hu > maxHU[idx]) maxHU[idx] = hu;
-                }
-            }
-        }
-        onProgress?.(xEnd / cols);
-        await new Promise<void>(r => setTimeout(r, 0));
-    }
-
-    const id = ctx.createImageData(rows, numFrames); const d = id.data;
-    for (let i = 0; i < totalPx; i++) {
-        const hu = maxHU[i];
-        const g = hu <= lo ? 0 : hu >= lo + wW ? 255 : ((hu - lo) / wW * 255) | 0;
-        const p = i << 2; d[p] = d[p + 1] = d[p + 2] = g; d[p + 3] = 255;
-    }
-    ctx.putImageData(id, 0, 0);
-}
-
-// ── PANORÁMICA ASYNC (slab MIP del arco, chunked) ────────────────────────────
+// ── Render: Panorámica (MIP a lo largo del eje Y, slab central) ───────────────
 
 export async function renderPanoramicaAsync(
     vol: DicomVolume, wc: number, ww: number, canvas: HTMLCanvasElement,
     onProgress?: (pct: number) => void
 ): Promise<void> {
     const { cols, rows, numFrames, frameViews } = vol;
-    const yStart = Math.floor(rows * 0.25); const yEnd = Math.floor(rows * 0.75);
+    const y0 = Math.floor(rows * 0.25);
+    const y1 = Math.floor(rows * 0.75);
     canvas.width = cols; canvas.height = numFrames;
-    const ctx = canvas.getContext('2d'); if (!ctx) return;
-    const { storedMax, signBit, signed, slope, intercept, lo, ww: wW } = voiParams(vol, wc, ww);
-
-    const id = ctx.createImageData(cols, numFrames); const d = id.data;
-    const CHUNK = 20; // frames por chunk
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const voi = voiParams(vol, wc, ww);
+    const id = ctx.createImageData(cols, numFrames);
+    const d = id.data;
+    const CHUNK = 8;
     for (let z = 0; z < numFrames; z += CHUNK) {
-        const zEnd = Math.min(z + CHUNK, numFrames);
-        for (let zi = z; zi < zEnd; zi++) {
-            const frame = frameViews[zi]; const outBase = zi * cols;
+        const end = Math.min(z + CHUNK, numFrames);
+        for (let zi = z; zi < end; zi++) {
+            const frame = frameViews[zi];
             for (let x = 0; x < cols; x++) {
-                let maxHU = -Infinity;
-                for (let y = yStart; y < yEnd; y++) {
-                    let v = frame[y * cols + x] & storedMax;
-                    if (signed && (v & signBit)) v = v - (signBit << 1);
-                    const hu = v * slope + intercept;
-                    if (hu > maxHU) maxHU = hu;
+                let maxRaw = 0;
+                for (let yi = y0; yi < y1; yi++) {
+                    const v = frame[yi * cols + x];
+                    if (v > maxRaw) maxRaw = v;
                 }
-                const g = maxHU <= lo ? 0 : maxHU >= lo + wW ? 255 : ((maxHU - lo) / wW * 255) | 0;
-                const p = (outBase + x) << 2; d[p] = d[p + 1] = d[p + 2] = g; d[p + 3] = 255;
+                const g = applyVOI(maxRaw, voi);
+                const p = (zi * cols + x) << 2;
+                d[p] = d[p + 1] = d[p + 2] = g; d[p + 3] = 255;
             }
         }
-        ctx.putImageData(id, 0, 0); // render parcial
-        onProgress?.(zEnd / numFrames);
+        onProgress?.(end / numFrames);
         await new Promise<void>(r => setTimeout(r, 0));
     }
-}
-
-// ── THUMBNAIL ─────────────────────────────────────────────────────────────────
-
-export async function dicomFileToImageUrl(file: File): Promise<string> {
-    const vol = await loadDicomVolume(file);
-    const z = Math.floor(vol.numFrames / 2);
-    const c = document.createElement('canvas');
-    c.width = vol.cols; c.height = vol.rows;
-    const ctx = c.getContext('2d')!;
-    const id = ctx.createImageData(vol.cols, vol.rows);
-    renderAxial(vol, z, vol.defaultWC, vol.defaultWW, id);
     ctx.putImageData(id, 0, 0);
-    const MAX = 512;
-    if (c.width > MAX || c.height > MAX) {
-        const r = Math.min(MAX / c.width, MAX / c.height);
-        const sc = document.createElement('canvas');
-        sc.width = Math.round(c.width * r); sc.height = Math.round(c.height * r);
-        sc.getContext('2d')!.drawImage(c, 0, 0, sc.width, sc.height);
-        return sc.toDataURL('image/webp', 0.85);
-    }
-    return c.toDataURL('image/webp', 0.85);
 }
 
-// ── DETECT ────────────────────────────────────────────────────────────────────
+// ── Render: MIP 3D (proyección a lo largo del eje Z) ─────────────────────────
+
+export async function renderMIPAsync(
+    vol: DicomVolume, wc: number, ww: number, canvas: HTMLCanvasElement,
+    _step = 1,
+    onProgress?: (pct: number) => void
+): Promise<void> {
+    const { cols, rows, numFrames, frameViews } = vol;
+    const px = rows * cols;
+    canvas.width = cols; canvas.height = rows;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const voi = voiParams(vol, wc, ww);
+    const maxRaw = new Uint16Array(px);
+    const CHUNK = 10;
+    for (let z = 0; z < numFrames; z += CHUNK) {
+        const end = Math.min(z + CHUNK, numFrames);
+        for (let f = z; f < end; f++) {
+            const frame = frameViews[f];
+            for (let i = 0; i < px; i++) {
+                if (frame[i] > maxRaw[i]) maxRaw[i] = frame[i];
+            }
+        }
+        onProgress?.(end / numFrames);
+        await new Promise<void>(r => setTimeout(r, 0));
+    }
+    const id = ctx.createImageData(cols, rows);
+    const d = id.data;
+    for (let i = 0; i < px; i++) {
+        const g = applyVOI(maxRaw[i], voi);
+        const p = i << 2;
+        d[p] = d[p + 1] = d[p + 2] = g; d[p + 3] = 255;
+    }
+    ctx.putImageData(id, 0, 0);
+}
+
+// ── Render: Cefalometría (MIP a lo largo del eje X) ──────────────────────────
+
+export async function renderCephalometryAsync(
+    vol: DicomVolume, wc: number, ww: number, canvas: HTMLCanvasElement,
+    _step = 1,
+    onProgress?: (pct: number) => void
+): Promise<void> {
+    const { cols, rows, numFrames, frameViews } = vol;
+    canvas.width = rows; canvas.height = numFrames;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const voi = voiParams(vol, wc, ww);
+    const id = ctx.createImageData(rows, numFrames);
+    const d = id.data;
+    const CHUNK = 8;
+    for (let z = 0; z < numFrames; z += CHUNK) {
+        const end = Math.min(z + CHUNK, numFrames);
+        for (let zi = z; zi < end; zi++) {
+            const frame = frameViews[zi];
+            for (let yi = 0; yi < rows; yi++) {
+                let maxRaw = 0;
+                for (let x = 0; x < cols; x++) {
+                    const v = frame[yi * cols + x];
+                    if (v > maxRaw) maxRaw = v;
+                }
+                const g = applyVOI(maxRaw, voi);
+                const p = (zi * rows + yi) << 2;
+                d[p] = d[p + 1] = d[p + 2] = g; d[p + 3] = 255;
+            }
+        }
+        onProgress?.(end / numFrames);
+        await new Promise<void>(r => setTimeout(r, 0));
+    }
+    ctx.putImageData(id, 0, 0);
+}
+
+// ── Utilidades ────────────────────────────────────────────────────────────────
+
+export async function extractDicomPixelSpacing(file: File): Promise<[number, number] | undefined> {
+    try {
+        const vol = await loadDicomVolume(file);
+        return vol.pixelSpacing;
+    } catch { return undefined; }
+}
 
 export async function isDicomFile(file: File): Promise<boolean> {
-    const ext = (file.name.split('.').pop() ?? '').toLowerCase();
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
     if (['dcm', 'dic', 'dicom'].includes(ext)) return true;
     try {
-        const v = new DataView(await file.slice(128, 132).arrayBuffer());
-        return v.getUint8(0) === 0x44 && v.getUint8(1) === 0x49 &&
-            v.getUint8(2) === 0x43 && v.getUint8(3) === 0x4D;
+        const buf = await file.slice(128, 132).arrayBuffer();
+        return new TextDecoder().decode(buf) === 'DICM';
     } catch { return false; }
 }

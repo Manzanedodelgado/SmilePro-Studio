@@ -25,6 +25,7 @@ interface SOAPEditorProps {
     onCancel?: () => void;
     numPac?: string;
     onCitar?: (citaData: { tratamiento: string; pacienteNumPac: string; duracionMinutos?: number }) => void;
+    autoListen?: boolean;
 }
 
 type ListenState = 'idle' | 'listening' | 'analyzing' | 'done';
@@ -45,31 +46,218 @@ const PIEZAS_ADULTO = [
     41, 42, 43, 44, 45, 46, 47, 48,
 ];
 
-/** Fallback rule-based cuando la IA no está disponible */
+// ── Abreviaturas dentales comunes ──────────────────────────────────
+const ABBREV: Record<string, string> = {
+    'endo': 'endodoncia', 'endos': 'endodoncias',
+    'reco': 'reconstrucción', 'recos': 'reconstrucciones',
+    'exo': 'exodoncia', 'exos': 'exodoncias',
+    'extrac': 'extracción', 'extracs': 'extracciones',
+    'obtu': 'obturación', 'obtus': 'obturaciones',
+    'ppr': 'prótesis parcial removible',
+    'rdi': 'raspado y alisado radicular', 'rar': 'raspado y alisado radicular',
+    'tar': 'tartrectomía', 'incrusta': 'incrustación',
+    'tto': 'tratamiento', 'ttos': 'tratamientos',
+    'dcho': 'derecho', 'izdo': 'izquierdo', 'izq': 'izquierdo',
+    'sup': 'superior', 'inf': 'inferior',
+    'rx': 'radiografía', 'ortopanto': 'ortopantomografía',
+    'pano': 'panorámica', 'peri': 'periapical',
+    'prot': 'prótesis', 'implan': 'implante',
+    'cir': 'cirugía', 'anest': 'anestesia', 'compo': 'composite',
+    'amal': 'amalgama', 'profi': 'profilaxis',
+    'perio': 'periodontitis', 'gin': 'gingivitis',
+};
+
+// ── Diccionario dental: cada término → campo SOAP ──────────────────
+type SoapField = 'S' | 'O' | 'A' | 'P';
+
+const DENTAL_TERMS: [string, SoapField][] = [
+    // S: Síntomas / motivo del paciente
+    ['dolor', 'S'], ['molestia', 'S'], ['sensibilidad', 'S'],
+    ['le duele', 'S'], ['le molesta', 'S'], ['le pica', 'S'],
+    ['sangrado', 'S'], ['sangra', 'S'], ['le sangra', 'S'],
+    ['hinchazón', 'S'], ['hinchado', 'S'], ['inflamado', 'S'],
+    ['mal aliento', 'S'], ['halitosis', 'S'],
+    ['se le ha caído', 'S'], ['se le ha roto', 'S'], ['se le cayó', 'S'],
+    ['se le mueve', 'S'], ['no puede morder', 'S'], ['no puede masticar', 'S'],
+    ['no puede abrir', 'S'], ['supura', 'S'], ['pus', 'S'],
+    ['chasquido', 'S'], ['traumatismo', 'S'], ['golpe', 'S'],
+    ['sensible al frío', 'S'], ['sensible al calor', 'S'],
+    ['diente roto', 'S'], ['muela rota', 'S'], ['flemón', 'S'], ['bulto', 'S'],
+    ['desde hace', 'S'], ['lleva días', 'S'], ['lleva semanas', 'S'],
+
+    // O: Hallazgos clínicos / exploración
+    ['caries', 'O'], ['cavidad', 'O'], ['lesión', 'O'],
+    ['fractura', 'O'], ['fisura', 'O'], ['grieta', 'O'],
+    ['sarro', 'O'], ['cálculo', 'O'], ['placa', 'O'],
+    ['bolsa', 'O'], ['bolsas', 'O'], ['sondaje', 'O'],
+    ['recesión', 'O'], ['retracción', 'O'],
+    ['movilidad grado', 'O'], ['movilidad', 'O'],
+    ['fístula', 'O'], ['absceso', 'O'], ['supuración', 'O'],
+    ['edema', 'O'], ['eritema', 'O'],
+    ['exposición pulpar', 'O'], ['nervio expuesto', 'O'],
+    ['afectación', 'O'], ['afectacion', 'O'],
+    ['destrucción', 'O'], ['pérdida ósea', 'O'],
+    ['furcación', 'O'], ['dehiscencia', 'O'],
+    ['ausencia', 'O'], ['ausente', 'O'], ['edéntulo', 'O'],
+    ['clase i', 'O'], ['clase ii', 'O'], ['clase iii', 'O'], ['clase iv', 'O'], ['clase v', 'O'],
+    ['profunda', 'O'], ['superficial', 'O'], ['incipiente', 'O'],
+    ['encias', 'O'], ['encías', 'O'], ['encía', 'O'],
+    ['mucosa', 'O'], ['tejido', 'O'], ['hueso', 'O'],
+    ['radiografía', 'O'], ['ortopantomografía', 'O'],
+    ['vitalidad positiva', 'O'], ['vitalidad negativa', 'O'],
+    ['percusión positiva', 'O'], ['percusión negativa', 'O'],
+    ['pieza', 'O'], ['molar', 'O'], ['premolar', 'O'],
+    ['incisivo', 'O'], ['canino', 'O'],
+    ['nervio', 'O'], ['raíz', 'O'], ['ápice', 'O'],
+    ['resto radicular', 'O'], ['incluido', 'O'], ['impactado', 'O'],
+
+    // A: Diagnósticos
+    ['pulpitis', 'A'], ['pulpitis irreversible', 'A'], ['pulpitis reversible', 'A'],
+    ['necrosis', 'A'], ['necrosis pulpar', 'A'],
+    ['periodontitis', 'A'], ['gingivitis', 'A'],
+    ['pericoronaritis', 'A'], ['alveolitis', 'A'],
+    ['maloclusión', 'A'], ['mordida abierta', 'A'], ['mordida cruzada', 'A'],
+    ['bruxismo', 'A'], ['disfunción ATM', 'A'],
+    ['caries profunda', 'A'], ['caries penetrante', 'A'],
+    ['absceso periapical', 'A'], ['absceso periodontal', 'A'],
+    ['fractura vertical', 'A'], ['erosión dental', 'A'],
+    ['quiste', 'A'], ['granuloma', 'A'], ['épulis', 'A'],
+    ['leucoplasia', 'A'], ['liquen plano', 'A'],
+
+    // P: Tratamientos / acciones
+    ['endodoncia', 'P'], ['reconstrucción', 'P'], ['perno muñón', 'P'], ['perno', 'P'],
+    ['corona', 'P'], ['funda', 'P'], ['puente', 'P'],
+    ['implante', 'P'], ['exodoncia', 'P'], ['extracción', 'P'],
+    ['empaste', 'P'], ['obturación', 'P'], ['composite', 'P'], ['amalgama', 'P'],
+    ['carilla', 'P'], ['incrustación', 'P'],
+    ['limpieza', 'P'], ['higiene', 'P'], ['profilaxis', 'P'],
+    ['tartrectomía', 'P'], ['raspado', 'P'], ['alisado', 'P'], ['curetaje', 'P'],
+    ['cirugía', 'P'], ['colgajo', 'P'], ['injerto', 'P'],
+    ['elevación de seno', 'P'], ['regeneración', 'P'],
+    ['ortodoncia', 'P'], ['brackets', 'P'], ['alineadores', 'P'],
+    ['prótesis', 'P'], ['blanqueamiento', 'P'], ['férula', 'P'],
+    ['sellador', 'P'], ['sellante', 'P'],
+    ['sutura', 'P'], ['retirada de puntos', 'P'], ['drenaje', 'P'],
+    ['biopsia', 'P'], ['provisional', 'P'], ['cementado', 'P'],
+    ['tallado', 'P'], ['pulido', 'P'], ['ajuste', 'P'], ['rebase', 'P'],
+    ['antibiótico', 'P'], ['amoxicilina', 'P'], ['augmentine', 'P'],
+    ['metronidazol', 'P'], ['clindamicina', 'P'],
+    ['ibuprofeno', 'P'], ['paracetamol', 'P'], ['nolotil', 'P'],
+    ['analgésico', 'P'], ['antiinflamatorio', 'P'],
+    ['enjuague', 'P'], ['clorhexidina', 'P'],
+    ['anestesia', 'P'], ['infiltrativa', 'P'], ['troncular', 'P'],
+    ['dique de goma', 'P'], ['aislamiento', 'P'],
+    ['revisión', 'P'], ['control', 'P'], ['seguimiento', 'P'],
+    ['derivar', 'P'], ['remitir', 'P'], ['interconsulta', 'P'],
+    ['ferulización', 'P'], ['fluoruro', 'P'], ['barniz', 'P'],
+    ['cita', 'P'], ['receta', 'P'], ['recetar', 'P'], ['medicación', 'P'], ['prescripción', 'P'],
+    ['valorar', 'P'], ['estudiar', 'P'], ['planificar', 'P'],
+];
+
+// Verbos contextuales → campo SOAP
+const CONTEXT_VERBS: [RegExp, SoapField][] = [
+    [/\b(refiere|dice|comenta|indica|menciona|acude|viene|consulta|queja|siente)\b/i, 'S'],
+    [/\b(presenta|observa|aprecia|exploración|inspección|palpación|muestra)\b/i, 'O'],
+    [/\b(diagnóstico|diagnostico|compatible|se trata de|impresión)\b/i, 'A'],
+    [/\b(necesario|necesita|requiere|precisa|procede|realiza|aplica|prescribe|recomienda|pauta|hay que|falta|hacer|hará|planifica|derivar|remitir|próxima|siguiente|volver|damos|dar|doy|pautamos|citamos|recetamos|pedimos)\b/i, 'P'],
+];
+
+function expandAbbrev(text: string): string {
+    let r = text;
+    for (const [a, f] of Object.entries(ABBREV)) {
+        r = r.replace(new RegExp(`\\b${a}\\b`, 'gi'), f);
+    }
+    return r;
+}
+
+/** Clasifica un fragmento en un campo SOAP */
+function classifyFragment(frag: string): SoapField | null {
+    const lower = frag.toLowerCase();
+
+    // 1) Verbo contextual (más fiable)
+    for (const [regex, field] of CONTEXT_VERBS) {
+        if (regex.test(lower)) return field;
+    }
+
+    // 2) Contar términos dentales por campo
+    const hits: Record<SoapField, number> = { S: 0, O: 0, A: 0, P: 0 };
+    for (const [term, field] of DENTAL_TERMS) {
+        if (lower.includes(term)) hits[field]++;
+    }
+
+    const max = Math.max(hits.S, hits.O, hits.A, hits.P);
+    if (max === 0) return null;
+
+    // Desempate: P > A > S > O (en dictado telegráfico, síntomas antes que hallazgos)
+    if (hits.P === max) return 'P';
+    if (hits.A === max) return 'A';
+    if (hits.S === max) return 'S';
+    return 'O';
+}
+
+/** Fallback inteligente — analiza lenguaje dental natural sin IA */
 function analyzeTranscriptFallback(transcript: string): {
     subjetivo: string; objetivo: string; analisis: string; plan: string; eva: number;
 } {
     const t = transcript.toLowerCase();
-    const evaMatch = t.match(/eva\s*(\d+)|dolor\s*(\d+)(?:\s*sobre\s*10)?|(\d+)\s*(?:sobre|de)\s*10/);
-    const eva = evaMatch ? parseInt(evaMatch[1] ?? evaMatch[2] ?? evaMatch[3] ?? '0') : 0;
 
-    const extract = (patterns: RegExp[]) => {
-        const parts: string[] = [];
-        patterns.forEach(r => { const m = transcript.match(r); if (m) parts.push(...m); });
-        return parts.join(' ').trim();
-    };
+    // ── EVA ───────────────────────────────────────────────
+    const evaMatch = t.match(
+        /eva\s*(?:de\s*)?(\d+)|dolor\s*(?:de\s*)?(\d+)\s*(?:sobre|de|\/)\s*10|(\d+)\s*(?:sobre|de|\/)\s*10|intensidad\s*(\d+)/
+    );
+    const eva = evaMatch
+        ? Math.min(10, parseInt(evaMatch[1] ?? evaMatch[2] ?? evaMatch[3] ?? evaMatch[4] ?? '0'))
+        : 0;
 
-    return {
-        subjetivo: extract([/(?:paciente (?:refiere|dice|comenta|indica|menciona|acude|viene)[^.]*\.)/gi, /(?:motivo de consulta[^.]*\.)/gi, /(?:dolor (?:en|de)[^.]*\.)/gi]),
-        objetivo:  extract([/(?:(?:a la exploración|exploración clínica|radiografía|rx|sondaje)[^.]*\.)/gi, /(?:(?:encía|mucosa|tejidos|implante)[^.]*\.)/gi]),
-        analisis:  extract([/(?:(?:diagnóstico|diagnosi|se trata de|compatible con|juicio clínico)[^.]*\.)/gi]),
-        plan:      extract([/(?:(?:se procede|se realiza|se aplica|tratamiento|plan|prescrib|siguiente visita|próxima cita)[^.]*\.)/gi]),
-        eva,
-    };
+    // ── Expandir abreviaturas ─────────────────────────────
+    const expanded = expandAbbrev(transcript);
+
+    // ── Dividir en fragmentos ────────────────────────────
+    const byPeriod = expanded.split(/(?<=[.!?])\s+|\.\s*/).filter(s => s.trim().length > 2);
+    const fragments: string[] = [];
+    for (const chunk of byPeriod) {
+        // 1) Split por "que" relativo (ambas partes ≥3 words)
+        const qParts = chunk.split(/\s+que\s+/i);
+        if (qParts.length >= 2 && qParts.every(p => p.trim().split(/\s+/).length >= 3)) {
+            fragments.push(...qParts.map(p => p.trim()));
+            continue;
+        }
+        // 2) Split por conectores causales: "por", "debido a", "porque", "ya que", "dado que"
+        //    Separa acción de causa: "implantes por ausencias" → ["implantes", "ausencias"]
+        const causalMatch = chunk.match(/^(.+?)\s+(?:por|debido a|porque|ya que|dado que|a causa de)\s+(.+)$/i);
+        if (causalMatch && causalMatch[1].trim().split(/\s+/).length >= 2 && causalMatch[2].trim().split(/\s+/).length >= 1) {
+            fragments.push(causalMatch[1].trim());
+            fragments.push(causalMatch[2].trim());
+            continue;
+        }
+        // 3) Split por comas (fragmentos cortos ≤6 words)
+        const cParts = chunk.split(/,\s*/).map(p => p.trim()).filter(p => p.length > 1);
+        if (cParts.length >= 2 && cParts.every(p => p.split(/\s+/).length <= 6)) {
+            fragments.push(...cParts);
+        } else {
+            fragments.push(chunk.trim());
+        }
+    }
+
+    // ── Clasificar cada fragmento ─────────────────────────
+    const out: Record<SoapField, string[]> = { S: [], O: [], A: [], P: [] };
+    for (const frag of fragments) {
+        const field = classifyFragment(frag);
+        out[field ?? (out.S.length === 0 ? 'S' : 'O')].push(frag);
+    }
+
+    // ── S nunca debería estar vacío — es el motivo de la consulta ──
+    // Si S está vacío, promover el primer O (razón de la visita)
+    if (out.S.length === 0 && out.O.length > 0) {
+        out.S.push(out.O.shift()!);
+    }
+
+    const join = (arr: string[]) => arr.join('. ').replace(/\.\s*\./g, '.').trim();
+    return { subjetivo: join(out.S), objetivo: join(out.O), analisis: join(out.A), plan: join(out.P), eva };
 }
 
 const SOAPEditor: React.FC<SOAPEditorProps> = ({
-    onSave, alergiasPaciente: _alergiasPaciente, initialData, onCancel, numPac, onCitar,
+    onSave, alergiasPaciente: _alergiasPaciente, initialData, onCancel, numPac, onCitar, autoListen,
 }) => {
     const todayISO = new Date().toISOString().split('T')[0];
     const [nota, setNota] = useState({
@@ -151,6 +339,15 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
         recognitionRef.current?.stop();
         if (timerRef.current) clearInterval(timerRef.current);
     }, []);
+
+    // Auto-listen on mount if requested
+    useEffect(() => {
+        if (autoListen && listenState === 'idle') {
+            const timeout = setTimeout(() => startListening(), 300);
+            return () => clearTimeout(timeout);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoListen]);
 
     // ── Escucha activa ───────────────────────────────────
     const startListening = () => {

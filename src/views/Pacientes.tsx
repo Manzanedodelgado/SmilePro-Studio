@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import SOAPEditor from '../components/pacientes/SOAPEditor';
 import PatientSearchModal from '../components/pacientes/PatientSearchModal';
 import Odontograma from '../components/pacientes/Odontograma';
-import { getToothImageSrc, shouldMirrorTooth, isToothPNGFlipped } from '../components/pacientes/toothPaths';
+import { getToothImageSrc, getOcclusalImageSrc, shouldMirrorTooth, isToothPNGFlipped } from '../components/pacientes/toothPaths';
 import { getOdontograma } from '../services/odontograma.service';
 import { getHallazgoById } from '../components/pacientes/hallazgos';
 import Periodontograma from '../components/pacientes/Periodontograma';
@@ -18,7 +18,7 @@ import {
     FileText, CircleDollarSign,
     ShieldCheck, ShieldAlert, Pencil,
     Phone, Calendar, MessageSquare, ArrowLeftRight, ExternalLink, Maximize2,
-    Gavel, UserPlus, X, Plus, Save, Pill, Search, ImagePlus, Stethoscope, ChevronLeft, ChevronRight, ScanLine
+    Gavel, UserPlus, X, Plus, Save, Pill, Search, ImagePlus, Stethoscope, ChevronLeft, ChevronRight, ScanLine, Mic
 } from 'lucide-react';
 import {
     getPatientPhotos, isGDriveConfigured, createPatientDriveFolder, type PatientPhoto
@@ -93,6 +93,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
     const [rowSplit, setRowSplit] = useState(55);       // % altura de la fila superior
     const [topColSplit, setTopColSplit] = useState(50); // % anchura de Odontograma dentro de la fila superior
     const [showEvolutivoModal, setShowEvolutivoModal] = useState(false);
+    const [autoListenMode, setAutoListenMode] = useState(false);
     const [odontogramData, setOdontogramData] = useState(MINI_DEMO);
     const layoutRef = React.useRef<HTMLDivElement>(null);
     const dragRef = React.useRef<{ type: 'row' | 'topCol'; startPos: number; startVal: number; containerSize: number } | null>(null);
@@ -356,12 +357,12 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
         if (!paciente) return null;
         return (
             <div ref={layoutRef} className="animate-tab-enter flex-1 min-h-0 overflow-hidden"
-                style={{ display: 'grid', gridTemplateColumns: '60% 40%', gridTemplateRows: '40% 5% 55%', gap: 6 }}>
+                style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gridTemplateRows: '40fr 5fr 55fr', gap: 6 }}>
 
                 {/* ── ODONTOGRAMA — row1 col1 ─────────────────────────────────── */}
-                <div className="min-h-0 min-w-0 overflow-hidden" style={{ gridRow: 1, gridColumn: 1 }}>
+                <div className="min-h-0 min-w-0 overflow-hidden rounded-xl" style={{ gridRow: 1, gridColumn: 1 }}>
                         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col h-full min-h-0">
-                            <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-200 flex-shrink-0">
+                            <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-200 flex-shrink-0 rounded-t-xl">
                                 <div className="p-1.5 bg-blue-700 rounded-lg flex-shrink-0">
                                     <Stethoscope className="w-3 h-3 text-white" />
                                 </div>
@@ -373,7 +374,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                             </div>
                             <div className="flex-1 flex overflow-auto relative z-10">
                                 {/* Leyenda vertical */}
-                                <div className="flex flex-col gap-1.5 px-2 py-2 border-r border-slate-200 flex-shrink-0 justify-center">
+                                <div className="flex flex-col gap-1.5 px-2 py-2 border-r border-slate-200 flex-shrink-0 justify-center rounded-bl-xl">
                                     {Object.entries(MINI_ECOL).filter(([k]) => k !== 'normal').map(([k, c]) => (
                                         <div key={k} className="flex items-center gap-1.5">
                                             <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-sm" style={{ background: c, boxShadow: `0 0 6px ${c}80` }} />
@@ -404,6 +405,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                                                                 }} draggable={false} />
                                                             {mainColor && <div className="absolute inset-0 rounded-md mix-blend-multiply pointer-events-none" style={{ backgroundColor: mainColor, opacity: 0.3 }} />}
                                                         </div>
+                                                        <img src={getOcclusalImageSrc(d.numero)} alt="" className={`w-6 h-6 object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`} style={{ filter: mainColor ? `drop-shadow(0 0 2px ${mainColor})` : undefined }} draggable={false} />
                                                     </div>
                                                 );
                                             })}
@@ -428,6 +430,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                                                                 }} draggable={false} />
                                                             {mainColor && <div className="absolute inset-0 rounded-md mix-blend-multiply pointer-events-none" style={{ backgroundColor: mainColor, opacity: 0.3 }} />}
                                                         </div>
+                                                        <img src={getOcclusalImageSrc(d.numero)} alt="" className={`w-6 h-6 object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`} style={{ filter: mainColor ? `drop-shadow(0 0 2px ${mainColor})` : undefined }} draggable={false} />
                                                     </div>
                                                 );
                                             })}
@@ -445,6 +448,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                                                 const mirrored = shouldMirrorTooth(d.numero);
                                                 return (
                                                     <div key={d.numero} className="flex flex-col items-center gap-0.5">
+                                                        <img src={getOcclusalImageSrc(d.numero)} alt="" className={`w-6 h-6 object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`} style={{ filter: mainColor ? `drop-shadow(0 0 2px ${mainColor})` : undefined }} draggable={false} />
                                                         <div className="relative">
                                                             <img src={getToothImageSrc(d.numero)} alt={d.numero}
                                                                 className={`h-24 w-auto object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`}
@@ -469,6 +473,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                                                 const mirrored = shouldMirrorTooth(d.numero);
                                                 return (
                                                     <div key={d.numero} className="flex flex-col items-center gap-0.5">
+                                                        <img src={getOcclusalImageSrc(d.numero)} alt="" className={`w-6 h-6 object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`} style={{ filter: mainColor ? `drop-shadow(0 0 2px ${mainColor})` : undefined }} draggable={false} />
                                                         <div className="relative">
                                                             <img src={getToothImageSrc(d.numero)} alt={d.numero}
                                                                 className={`h-24 w-auto object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`}
@@ -490,15 +495,21 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                 </div>
 
                 {/* ── RX — row1 col2 ──────────────────────────────────────────── */}
-                <div className="min-h-0 min-w-0 overflow-hidden" style={{ gridRow: 1, gridColumn: 2 }}>
-                        <div className="bg-slate-900 rounded-xl border border-slate-700 overflow-hidden flex flex-col h-full min-h-0">
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-slate-700/50 flex-shrink-0">
-                                <ScanLine className="w-3 h-3 text-slate-400" />
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Última Ortopanto</span>
+                <div className="min-h-0 min-w-0 overflow-hidden rounded-xl" style={{ gridRow: 1, gridColumn: 2 }}>
+                        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col h-full min-h-0">
+                            <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-200 flex-shrink-0 rounded-t-xl">
+                                <div className="p-1.5 bg-blue-700 rounded-lg flex-shrink-0">
+                                    <ScanLine className="w-3 h-3 text-white" />
+                                </div>
+                                <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Última Ortopanto</span>
+                                <div className="ml-auto flex items-center gap-1.5 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                                    <span className="text-[10px] font-black text-blue-700">1</span>
+                                    <span className="text-[8px] font-bold text-blue-400 uppercase tracking-widest">RX</span>
+                                </div>
                             </div>
-                            <div className="flex-1 min-h-0 flex">
+                            <div className="flex-1 min-h-0 flex rounded-b-xl overflow-hidden">
                                 {/* Main ortopanto image */}
-                                <div className="flex-1 min-h-0 relative bg-black flex items-center justify-center cursor-zoom-in"
+                                <div className="flex-1 min-h-0 relative bg-black flex items-center justify-center cursor-zoom-in rounded-bl-xl overflow-hidden"
                                     onClick={() => setZoomImage('/rx-demo-panoramica.png')}>
                                     <img
                                         src="/rx-demo-panoramica.png"
@@ -508,19 +519,19 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                                     />
                                 </div>
                                 {/* Thumbnails sidebar */}
-                                <div className="w-16 flex-shrink-0 border-l border-slate-700/50 flex flex-col gap-1 p-1 overflow-y-auto bg-slate-900/50">
+                                <div className="w-16 flex-shrink-0 border-l border-slate-200 flex flex-col gap-1 p-1 overflow-y-auto bg-slate-50 rounded-br-xl">
                                     {[
                                         { id: 'pano', label: 'Panorámica', src: '/rx-demo-panoramica.png' },
                                     ].map((rx, i) => (
                                         <div key={rx.id}
-                                            className={`relative rounded overflow-hidden cursor-pointer border ${i === 0 ? 'border-blue-500 ring-1 ring-blue-500/50' : 'border-slate-700 hover:border-slate-500'}`}>
+                                            className={`relative rounded overflow-hidden cursor-pointer border ${i === 0 ? 'border-blue-500 ring-1 ring-blue-500/50' : 'border-slate-200 hover:border-slate-400'}`}>
                                             <img src={rx.src} alt={rx.label}
                                                 className="w-full aspect-[4/3] object-cover"
                                                 style={{ filter: 'contrast(1.1) brightness(0.8)' }} />
-                                            <span className="absolute bottom-0 inset-x-0 bg-black/70 text-[6px] text-slate-400 font-bold text-center py-0.5 truncate">{rx.label}</span>
+                                            <span className="absolute bottom-0 inset-x-0 bg-black/70 text-[6px] text-slate-300 font-bold text-center py-0.5 truncate">{rx.label}</span>
                                         </div>
                                     ))}
-                                    <div className="flex items-center justify-center aspect-[4/3] rounded border border-dashed border-slate-700 text-slate-600 hover:text-slate-400 hover:border-slate-500 cursor-pointer transition-colors">
+                                    <div className="flex items-center justify-center aspect-[4/3] rounded border border-dashed border-slate-300 text-slate-400 hover:text-slate-600 hover:border-slate-400 cursor-pointer transition-colors">
                                         <span className="text-[8px] font-bold uppercase tracking-wider">+ RX</span>
                                     </div>
                                 </div>
@@ -528,33 +539,35 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                         </div>
                 </div>
 
-                {/* ── NUEVO EVOLUTIVO — row2 col1 ───────────────────────────── */}
-                <div className="flex items-stretch" style={{ gridRow: 2, gridColumn: 1 }}>
+                {/* ── ESCUCHA ACTIVA — row2 col2 ─────────────────────────────── */}
+                <div className="flex items-stretch min-w-0 rounded-xl" style={{ gridRow: 2, gridColumn: 2 }}>
                     <button
-                        onClick={() => setShowEvolutivoModal(true)}
-                        className="w-full flex items-center justify-center gap-2.5 py-3 bg-gradient-to-r from-[#051650] to-blue-800 text-white text-[12px] font-black uppercase tracking-widest rounded-xl shadow-md shadow-blue-900/30 hover:from-[#051650] hover:to-blue-700 hover:-translate-y-0.5 active:scale-95 transition-all duration-200"
+                        onClick={() => { setAutoListenMode(true); setShowEvolutivoModal(true); }}
+                        className="w-full flex items-center justify-center gap-2.5 bg-gradient-to-r from-rose-600 to-pink-500 text-white text-[12px] font-black uppercase tracking-widest rounded-xl shadow-md shadow-rose-900/30 hover:from-rose-700 hover:to-pink-600 hover:-translate-y-0.5 active:scale-95 transition-all duration-200"
                     >
-                        <Plus className="w-4 h-4 flex-shrink-0" /> Nuevo Evolutivo
+                        <Mic className="w-4 h-4 flex-shrink-0" /> Escucha Activa
                     </button>
                 </div>
 
-                {/* ── HISTORIA MÉDICA — row3 col1 ─────────────────────────────── */}
-                <div className="min-h-0 min-w-0 overflow-hidden" style={{ gridRow: 3, gridColumn: 1 }}>
+                {/* ── NUEVO EVOLUTIVO — row2 col1 top ───────────────────────── */}
+                <div className="flex flex-col gap-1.5 min-h-0 min-w-0 overflow-hidden rounded-xl" style={{ gridRow: '2 / 4', gridColumn: 1 }}>
+                    <button
+                        onClick={() => setShowEvolutivoModal(true)}
+                        className="flex-shrink-0 flex items-center justify-center gap-2.5 py-2.5 bg-gradient-to-r from-[#051650] to-blue-800 text-white text-[12px] font-black uppercase tracking-widest rounded-xl shadow-md shadow-blue-900/30 hover:from-[#051650] hover:to-blue-700 hover:-translate-y-0.5 active:scale-95 transition-all duration-200"
+                    >
+                        <Plus className="w-4 h-4 flex-shrink-0" /> Nuevo Evolutivo
+                    </button>
+                {/* ── HISTORIA MÉDICA — same cell, below button ──────────── */}
                     <div className="bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden h-full min-h-0">
-                        <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-100 flex-shrink-0">
-                            <div className="flex items-center gap-2">
-                                <div className="p-1.5 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg shadow-sm">
+                        <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-200 flex-shrink-0 rounded-t-xl">
+                                <div className="p-1.5 bg-blue-700 rounded-lg flex-shrink-0">
                                     <Activity className="w-3 h-3 text-white" />
                                 </div>
-                                <h3 className="text-[11px] font-black text-slate-800 tracking-tight">Historia Médica</h3>
-                                <span className="text-[9px] font-black text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-md">{paciente.historial.length} entradas</span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                                <span className="flex h-2 w-2 relative">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                </span>
-                            </div>
+                                <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Historia Médica</span>
+                                <div className="ml-auto flex items-center gap-1.5 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                                    <span className="text-[10px] font-black text-blue-700">{paciente.historial.length}</span>
+                                    <span className="text-[8px] font-bold text-blue-400 uppercase tracking-widest">Entradas</span>
+                                </div>
                         </div>
                         <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 custom-scrollbar">
                             <EntradasMedicas idPac={paciente.idPac ?? (paciente.numPac ? parseInt(paciente.numPac, 10) : 0)} hideHeader />
@@ -563,16 +576,18 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                 </div>
 
                 {/* ── FOTOS — row2+row3 col2 (spans 60%) ──────────────────────── */}
-                <div className="min-h-0 min-w-0 overflow-hidden" style={{ gridRow: '2 / 4', gridColumn: 2 }}>
+                <div className="min-h-0 min-w-0 overflow-hidden rounded-xl" style={{ gridRow: 3, gridColumn: 2 }}>
                         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col h-full min-h-0">
-                            <div className="relative flex items-center gap-1 px-3 py-1.5 border-b border-slate-100/60 flex-shrink-0 z-10">
-                                <Camera className="w-3 h-3 text-slate-400" />
-                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Fotos</span>
-                                {fotos.length > 0 && <span className="text-[9px] font-black text-[#051650] bg-blue-50 border border-blue-100 px-1.5 rounded-full">{fotos.length}</span>}
+                            <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-200 flex-shrink-0 rounded-t-xl">
+                                <div className="p-1.5 bg-blue-700 rounded-lg flex-shrink-0">
+                                    <Camera className="w-3 h-3 text-white" />
+                                </div>
+                                <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Fotos</span>
+                                {fotos.length > 0 && <span className="ml-auto text-[10px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">{fotos.length}</span>}
                             </div>
-                            <div className="flex-1 min-h-0 flex">
+                            <div className="flex-1 min-h-0 flex rounded-b-xl overflow-hidden">
                                 {/* Main photo */}
-                                <div className="flex-1 min-h-0 relative overflow-hidden cursor-zoom-in group bg-slate-900"
+                                <div className="flex-1 min-h-0 relative overflow-hidden cursor-zoom-in group bg-slate-900 rounded-bl-xl"
                                     onClick={() => fotos.length > 0 && setZoomImage(fotos[fotoIdx]?.url)}
                                     onMouseEnter={() => setCarouselPaused(true)}
                                     onMouseLeave={() => setCarouselPaused(false)}>
@@ -601,7 +616,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                                     }
                                 </div>
                                 {/* Thumbnails sidebar */}
-                                <div className="w-16 flex-shrink-0 border-l border-slate-200 flex flex-col gap-1 p-1 overflow-y-auto bg-slate-50">
+                                <div className="w-16 flex-shrink-0 border-l border-slate-200 flex flex-col gap-1 p-1 overflow-y-auto bg-slate-50 rounded-br-xl">
                                     {fotos.map((f, i) => (
                                         <button key={f.id} onClick={() => { setFotoIdx(i); setCarouselPaused(true); }}
                                             className={`relative flex-shrink-0 rounded overflow-hidden border transition-all ${fotoIdx === i ? 'border-blue-500 ring-1 ring-blue-500/50' : 'border-slate-200 hover:border-slate-400 opacity-60 hover:opacity-100'}`}>
@@ -630,13 +645,14 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                 {/* ── MODAL: SOAP Editor ─────────────────────────────────────────── */}
                 {showEvolutivoModal && (
                     <div className="fixed inset-0 z-[9000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200"
-                        onClick={(e) => { if (e.target === e.currentTarget) setShowEvolutivoModal(false); }}>
+                        onClick={(e) => { if (e.target === e.currentTarget) { setShowEvolutivoModal(false); setAutoListenMode(false); } }}>
                         <div className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl overflow-hidden shadow-2xl">
                             <SOAPEditor
-                                onSave={(noteData) => { handleSaveNote(noteData); setShowEvolutivoModal(false); }}
+                                onSave={(noteData) => { handleSaveNote(noteData); setShowEvolutivoModal(false); setAutoListenMode(false); }}
                                 alergiasPaciente={paciente!.alergias}
                                 numPac={paciente!.numPac ?? undefined}
-                                onCancel={() => setShowEvolutivoModal(false)}
+                                onCancel={() => { setShowEvolutivoModal(false); setAutoListenMode(false); }}
+                                autoListen={autoListenMode}
                                 onCitar={(citaData) => {
                                     setShowEvolutivoModal(false);
                                     onNavigate?.('Agenda', undefined, {
@@ -938,7 +954,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                 </div>
 
                 {/* ── SARA — franja pestaña dentro de la cabecera ── */}
-                <div className="flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-blue-950 via-indigo-950 to-blue-950 border-t border-blue-900/30">
+                <div className="flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-blue-950 via-indigo-950 to-blue-950 border-t border-blue-900/30 rounded-b-xl">
                     <Brain className="w-3.5 h-3.5 text-blue-300 flex-shrink-0" />
                     <p className="flex-1 text-[10px] text-blue-100/80 italic truncate">
                         "{saraTyped.slice(0, 120)}{saraTyped.length > 120 ? '…' : ''}"

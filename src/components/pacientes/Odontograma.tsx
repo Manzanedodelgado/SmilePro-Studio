@@ -5,7 +5,7 @@ import { getOdontograma, saveOdontograma } from '../../services/odontograma.serv
 import { getPresupuestosByPaciente } from '../../services/presupuestos.service';
 import { analyzeOdontograma, isAIConfiguredSync } from '../../services/ia-dental.service';
 import Periodontograma from './Periodontograma';
-import { getToothImageSrc, shouldMirrorTooth, isToothPNGFlipped, SURFACE_PATHS } from './toothPaths';
+import { getToothImageSrc, getOcclusalImageSrc, shouldMirrorTooth, isToothPNGFlipped, SURFACE_PATHS } from './toothPaths';
 import { CATEGORIAS, HALLAZGOS, getHallazgoById, type HallazgoCategoria, type Hallazgo } from './hallazgos';
 
 // ── Types ──
@@ -93,6 +93,7 @@ const DienteSilueta: React.FC<{
   onClick: () => void;
 }> = ({ data, isSelected, onClick }) => {
   const imgSrc = getToothImageSrc(data.numero);
+  const occlusalSrc = getOcclusalImageSrc(data.numero);
   const mirrored = shouldMirrorTooth(data.numero);
   const pngFlipped = isToothPNGFlipped(data.numero);
   const quadrant = Math.floor(parseInt(data.numero, 10) / 10);
@@ -155,6 +156,20 @@ const DienteSilueta: React.FC<{
           <div className="absolute top-0 right-0 w-3 h-3 bg-blue-600 rounded-full border border-white" />
         )}
       </div>
+
+      {/* Occlusal – near the crown */}
+      {isUpper && (
+        <img src={occlusalSrc} alt={`Oclusal ${data.numero}`}
+          className={`w-10 h-10 object-contain mt-0.5 ${isAusente ? 'opacity-20 grayscale' : ''}`}
+          style={{ filter: mainColor ? `drop-shadow(0 0 2px ${mainColor})` : undefined }}
+          draggable={false} />
+      )}
+      {!isUpper && (
+        <img src={occlusalSrc} alt={`Oclusal ${data.numero}`}
+          className={`w-10 h-10 object-contain mb-0.5 ${isAusente ? 'opacity-20 grayscale' : ''}`}
+          style={{ filter: mainColor ? `drop-shadow(0 0 2px ${mainColor})` : undefined }}
+          draggable={false} />
+      )}
 
       {!isUpper && (
         <span className={`text-[11px] font-bold leading-none mt-1 transition-colors

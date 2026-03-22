@@ -17,9 +17,7 @@ export const SURFACE_PATHS = {
  */
 export function getToothImageSrc(numero: string): string {
   const num = parseInt(numero, 10);
-  const quadrant = Math.floor(num / 10);
   const position = num % 10;
-  const prefix = quadrant <= 2 ? 'upper' : 'lower';
 
   let type: string;
   if (position >= 6) type = 'molar';
@@ -30,6 +28,21 @@ export function getToothImageSrc(numero: string): string {
   // Always use upper tooth images (better quality); lower teeth are
   // flipped vertically via CSS in the rendering code.
   return `/teeth/upper_${type}.png`;
+}
+
+/**
+ * Get the occlusal (top-down) image path for a given FDI tooth number
+ */
+export function getOcclusalImageSrc(numero: string): string {
+  const position = parseInt(numero, 10) % 10;
+
+  let type: string;
+  if (position >= 6) type = 'molar';
+  else if (position >= 4) type = 'premolar';
+  else if (position === 3) type = 'canine';
+  else type = 'incisor';
+
+  return `/teeth/occlusal_${type}.png`;
 }
 
 /**

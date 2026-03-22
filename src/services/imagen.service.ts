@@ -72,6 +72,8 @@ export interface DicomMeta {
     seriesDescription?: string;
     manufacturer?: string;
     institutionName?: string;
+    /** Physical pixel size in mm [row, col] from DICOM tag (0028,0030) */
+    pixelSpacing?: [number, number];
 }
 
 export interface Anotacion {
@@ -388,6 +390,16 @@ export async function addEstudio(
     const isDicom = await isDicomFile(file);
     const tipo: ImageType = isDicom ? 'dicom' : meta.tipo;
 
+    // Extract PixelSpacing from DICOM header (only reads first 32 KB — fast)
+    // Dynamic import avoids loading dicom-parser at module init time
+    let dicomPixelSpacing: [number, number] | undefined;
+    if (isDicom) {
+        try {
+            const { extractDicomPixelSpacing } = await import('./dicom.service');
+            dicomPixelSpacing = await extractDicomPixelSpacing(file);
+        } catch { /* non-fatal */ }
+    }
+
     // ── Obtener URL visualizable ─────────────────────────────────────────────
     // DICOM: solo blob URL — el renderizado lo hace CbctViewer directamente
     // desde el File object con su propio parser. Evitamos parsear dos veces.
@@ -417,6 +429,7 @@ export async function addEstudio(
             studyDate: new Date().toISOString().split('T')[0].replace(/-/g, ''),
             modality: ext === 'dcm' || ext === 'dic' ? 'PX' : 'DX',
             studyDescription: meta.descripcion ?? 'Estudio radiológico DICOM',
+            pixelSpacing: dicomPixelSpacing,
         } : undefined,
     };
 
