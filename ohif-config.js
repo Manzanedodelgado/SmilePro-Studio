@@ -25,9 +25,10 @@ window.config = {
         friendlyName: 'SmilePro — Orthanc Local',
         name: 'orthanc',
 
-        wadoUriRoot:  'http://localhost:8042/wado',
-        qidoRoot:     'http://localhost:8042/dicom-web',
-        wadoRoot:     'http://localhost:8042/dicom-web',
+        // Orthanc es accesible desde el contenedor OHIF via nombre de servicio Docker
+        wadoUriRoot:  'http://orthanc:8042/wado',
+        qidoRoot:     'http://orthanc:8042/dicom-web',
+        wadoRoot:     'http://orthanc:8042/dicom-web',
 
         qidoSupportsIncludeField: false,
         supportsReject: false,

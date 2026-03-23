@@ -95,6 +95,9 @@ const RadiologyTab: React.FC<RadiologyTabProps> = ({ numPac }) => {
 
     // ── Subida ────────────────────────────────────────────────────────────────
 
+    // DICOMs > 30 MB se envían directo a OHIF (evita bloquear el browser con JS)
+    const DICOM_BROWSER_LIMIT_MB = 30;
+
     const handleFiles = useCallback(async (files: FileList | null) => {
         if (!files || files.length === 0) return;
         setUploading(true);
@@ -111,11 +114,24 @@ const RadiologyTab: React.FC<RadiologyTabProps> = ({ numPac }) => {
                 fileMapRef.current.set(nuevo.id, file);
                 setEstudios(prev => [nuevo, ...prev]);
                 setSelectedId(nuevo.id);
-                if (tipo === 'dicom') setDicomFile(file);
+
+                if (tipo === 'dicom') {
+                    const sizeMb = file.size / 1_048_576;
+                    // Archivos grandes → subir directo a Orthanc/OHIF sin parsear en el browser
+                    if (sizeMb > DICOM_BROWSER_LIMIT_MB && orthancOnline) {
+                        setOhifUploading(true);
+                        uploadDicomToOrthanc(file)
+                            .then(url => { setOhifUrl(url); openInOhif(url); })
+                            .catch(e => setOhifError(e.message))
+                            .finally(() => setOhifUploading(false));
+                    } else {
+                        setDicomFile(file);
+                    }
+                }
             } catch (err) { console.error('[RadiologyTab]', err); }
         }
         setUploading(false);
-    }, [numPac]);
+    }, [numPac, orthancOnline]);
 
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault(); setIsDragging(false);
