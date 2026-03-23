@@ -22,10 +22,11 @@ services:
       - ./orthanc.json:/etc/orthanc/orthanc.json:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8042/system"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8042/system')"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 15s
 
   ohif:
     image: ohif/app:latest
