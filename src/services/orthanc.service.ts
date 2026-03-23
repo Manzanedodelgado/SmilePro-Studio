@@ -12,7 +12,8 @@
  *  5. openInOhif(url)    → abre OHIF en nueva ventana
  */
 
-const ORTHANC = 'http://localhost:8042';
+// Proxy Vite: /orthanc → http://localhost:8042 (evita CORS)
+const ORTHANC = '/orthanc';
 const OHIF    = 'http://localhost:3001';
 
 // ── Tipos internos ────────────────────────────────────────────────────────────
@@ -95,5 +96,5 @@ export function openInOhif(ohifUrl: string): void {
 /**
  * URL base de la lista de estudios de OHIF (sin StudyInstanceUID).
  */
-export const OHIF_URL = OHIF;
-export const ORTHANC_URL = ORTHANC;
+export const OHIF_URL    = OHIF;
+export const ORTHANC_URL = 'http://localhost:8042'; // directo, solo para referencia
