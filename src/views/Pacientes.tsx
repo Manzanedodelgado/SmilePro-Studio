@@ -689,7 +689,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                 showToast={showToast}
             />;
             case 'Documentos y Consentimientos':
-            case 'Documentos': return <Documentos numPac={paciente?.numPac ?? ''} nombrePaciente={paciente ? `${paciente.nombre} ${paciente.apellidos}` : undefined} telefono={paciente?.telefono} onDocumentSigned={handleDocumentSigned} />;
+            case 'Documentos': return <Documentos numPac={paciente?.numPac ?? ''} nombrePaciente={paciente ? `${paciente.nombre} ${paciente.apellidos}` : undefined} telefono={paciente?.telefono} fechaNacimiento={paciente?.fechaNacimiento} onDocumentSigned={handleDocumentSigned} showToast={showToast} />;
             case 'Anamnesis': return paciente ? <QuestionnairePanel paciente={paciente} onUpdated={(p) => setPaciente(p)} /> : null;
             case 'Radiología': return <RadiologyTab numPac={paciente?.numPac} />;
             case 'Historia Clínica':

@@ -122,16 +122,11 @@ const Header: React.FC<HeaderProps> = ({ activeArea, onNavigate, onCommandPalett
                 style={{ width: '260px' }}
                 onClick={() => onNavigate('CLÍNICA', 'General')}
             >
-                <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 rounded-[8px] overflow-hidden shadow-lg">
-                    <rect x="0" y="0" width="18" height="18" fill="#FF4B68" />
-                    <rect x="18" y="0" width="18" height="18" fill="#FBFFA3" />
-                    <rect x="0" y="18" width="18" height="18" fill="#118DF0" />
-                    <rect x="18" y="18" width="18" height="18" fill="#004182" />
-                </svg>
-                <div className="flex items-baseline gap-1.5 leading-none select-none">
-                    <span className="text-white font-bold text-[22px] tracking-tight uppercase whitespace-nowrap">RUBIO GARCÍA</span>
-                    <span className="font-bold text-[22px] tracking-tight uppercase whitespace-nowrap" style={{ color: '#2563eb', WebkitTextStroke: '0.5px rgba(255,255,255,0.6)' }}>DENTAL</span>
-                </div>
+                <img
+                    src="/clinic-logo-simple.png"
+                    alt="Rubio García Dental"
+                    style={{ height: '240px', objectFit: 'contain' }}
+                />
             </div>
 
             {/* Nav */}

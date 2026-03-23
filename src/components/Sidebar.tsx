@@ -45,9 +45,9 @@ const useOperativaHoy = () => {
                 })
             );
 
-            // En gabinete: estado 'gabinete'
+            // En consulta: estado 'consulta'
             setGabinete(citas
-                .filter(c => c.estado === 'gabinete')
+                .filter(c => c.estado === 'consulta')
                 .slice(0, 2)
                 .map(c => {
                     const [h, m] = c.horaInicio.split(':').map(Number);
@@ -107,6 +107,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
             case 'description': return FileText;
             case 'payments': return CreditCard;
             case 'request_quote': return Receipt;
+            case 'receipt': return Receipt;
 
             // Sub-items IA
             case 'smart_toy': return Brain;
@@ -157,6 +158,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
                 onMouseLeave={() => setIsHovered(false)}
                 className={`absolute inset-y-0 left-0 h-full flex flex-col border-r-0 z-40 transition-[width] duration-200 ease-out flex-shrink-0 overflow-hidden shadow-2xl bg-gradient-to-br from-[#0c2a80] to-[#051650] border-[#051650] ${isExpanded ? 'w-80' : 'w-[84px]'}`}
             >
+
                 {/* Header del Sidebar (Global Actions) */}
                 <div className="h-16 flex items-center justify-center px-4 border-b border-white/10 flex-shrink-0 relative overflow-hidden w-full">
                     {/* Botones expandidos */}
@@ -299,17 +301,17 @@ const Sidebar: React.FC<SidebarProps> = ({ activeArea, activeSubArea, onNavigate
                                         </div>
                                     </div>
 
-                                    {/* WIDGET: En Gabinete */}
+                                    {/* WIDGET: En Consulta */}
                                     <div>
                                         <div className="flex items-center justify-between mb-3 px-1 mt-2">
                                             <div className="flex items-center gap-2 text-white/80">
                                                 <Activity className="w-3.5 h-3.5" />
-                                                <span className="text-[12px] font-bold uppercase tracking-widest">En Gabinete</span>
+                                                <span className="text-[12px] font-bold uppercase tracking-widest">En Consulta</span>
                                             </div>
                                             <span className="bg-[#0ea5e9] text-white text-[12px] font-bold px-1.5 py-0.5 rounded-md">{stats.gabinete.length}</span>
                                         </div>
                                         {stats.gabinete.length === 0 ? (
-                                            <p className="text-[12px] text-white/40 px-1 italic">Sin pacientes en gabinete</p>
+                                            <p className="text-[12px] text-white/40 px-1 italic">Sin pacientes en consulta</p>
                                         ) : stats.gabinete.map(g => (
                                             <div key={g.id}
                                                 onClick={() => { if (g.numPac && !g.numPac.startsWith('CTX-')) onNavigate('Pacientes', 'Historia Clínica', g.numPac); }}

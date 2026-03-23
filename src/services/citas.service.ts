@@ -17,7 +17,7 @@ const estadoFromBackend = (estado: string): EstadoCita => {
         case 'scheduled':   return 'planificada';
         case 'confirmed':   return 'confirmada';
         case 'waiting':     return 'espera';
-        case 'in_progress': return 'gabinete';
+        case 'in_progress': return 'consulta';
         case 'completed':   return 'finalizada';
         case 'no_show':     return 'fallada';
         case 'cancelled':   return 'anulada';
@@ -31,7 +31,7 @@ const estadoToBackend = (estado: EstadoCita): string => {
         case 'planificada': return 'scheduled';
         case 'confirmada':  return 'confirmed';
         case 'espera':      return 'waiting';
-        case 'gabinete':    return 'in_progress';
+        case 'consulta':    return 'in_progress';
         case 'finalizada':  return 'completed';
         case 'fallada':     return 'no_show';
         case 'anulada':     return 'cancelled';

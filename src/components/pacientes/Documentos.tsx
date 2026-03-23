@@ -7,6 +7,7 @@ import {
 import { sendTextMessage, isEvolutionConfigured, normalizePhone } from '../../services/evolution.service';
 import { useAuth } from '../../context/AuthContext';
 import { logAudit } from '../../services/audit.service';
+import RecetasTab from './RecetasTab';
 
 // ── Plantillas de documentos disponibles ──────────────────────────
 
@@ -23,16 +24,18 @@ interface DocumentosProps {
     numPac: string;
     nombrePaciente?: string;
     telefono?: string;
+    fechaNacimiento?: string;
     onDocumentSigned?: () => void;
+    showToast?: (msg: string) => void;
 }
 
 // ── Componente principal ───────────────────────────────────────────
 
-const Documentos: React.FC<DocumentosProps> = ({ numPac, nombrePaciente, telefono, onDocumentSigned }) => {
+const Documentos: React.FC<DocumentosProps> = ({ numPac, nombrePaciente, telefono, fechaNacimiento, onDocumentSigned, showToast: externalToast }) => {
     const { user } = useAuth() as any;
     const [docs, setDocs] = useState<PatientDocument[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'pendientes' | 'historial' | 'generar'>('pendientes');
+    const [activeTab, setActiveTab] = useState<'pendientes' | 'historial' | 'generar' | 'recetas'>('pendientes');
     const [signingDoc, setSigningDoc] = useState<PatientDocument | null>(null);
     const [consentChecked, setConsentChecked] = useState(false);
     const [isSigning, setIsSigning] = useState(false);
@@ -175,11 +178,11 @@ const Documentos: React.FC<DocumentosProps> = ({ numPac, nombrePaciente, telefon
             {/* Header / tabs */}
             <div className="flex justify-between items-center flex-wrap gap-3">
                 <div className="flex bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm">
-                    {(['pendientes', 'historial', 'generar'] as const).map(tab => (
+                    {(['pendientes', 'historial', 'recetas', 'generar'] as const).map(tab => (
                         <button key={tab} onClick={() => setActiveTab(tab)}
                             className={`px-4 py-2 rounded-lg text-[12px] font-bold uppercase tracking-widest transition-all flex items-center gap-2
                                 ${activeTab === tab ? 'bg-primary text-white shadow-md' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
-                            {tab === 'generar' ? '+ Nuevo' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                            {tab === 'generar' ? '+ Nuevo' : tab === 'recetas' ? '📋 Recetas' : tab.charAt(0).toUpperCase() + tab.slice(1)}
                             {tab === 'pendientes' && pendientes.length > 0 && (
                                 <span className="bg-red-500 text-white w-4 h-4 rounded-full flex items-center justify-center text-[12px]">{pendientes.length}</span>
                             )}
@@ -340,6 +343,19 @@ const Documentos: React.FC<DocumentosProps> = ({ numPac, nombrePaciente, telefon
                             <p className="text-[12px] text-slate-400 mt-1 uppercase tracking-widest">{tpl.tipo}</p>
                         </button>
                     ))}
+                </div>
+            )}
+
+            {/* VISTA: RECETAS */}
+            {activeTab === 'recetas' && (
+                <div className="h-[calc(100vh-280px)] min-h-[400px]">
+                    <RecetasTab
+                        numPac={numPac}
+                        pacienteNombre={nombrePaciente}
+                        pacienteDNI={undefined}
+                        pacienteFechaNac={fechaNacimiento}
+                        showToast={externalToast ?? ((msg: string) => showFeedback(msg.includes('⚠') || msg.includes('Error') ? 'error' : 'success', msg))}
+                    />
                 </div>
             )}
 

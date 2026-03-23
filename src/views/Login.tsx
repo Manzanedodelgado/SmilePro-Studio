@@ -22,10 +22,10 @@ const Login: React.FC = () => {
     const { login } = useAuth();
 
     useEffect(() => {
-        const tLogo    = setTimeout(() => setShowLogo(true),     100);   // fondo → blanco inmediato
-        const tLogoImg = setTimeout(() => setShowLogoImg(true), 1700);  // imagen entra
-        const t1    = setTimeout(() => setPhase(1), 6500);        // empieza a subir
-        const t2    = setTimeout(() => setPhase(2), 8500);        // formulario aparece
+        const tLogo    = setTimeout(() => setShowLogo(true),     100);   // fondo → blanco
+        const tLogoImg = setTimeout(() => setShowLogoImg(true),  300);   // logo aparece rápido
+        const t1    = setTimeout(() => setPhase(1), 3500);        // empieza a bajar
+        const t2    = setTimeout(() => setPhase(2), 5500);        // formulario aparece
         return () => { clearTimeout(tLogo); clearTimeout(tLogoImg); clearTimeout(t1); clearTimeout(t2); };
     }, []);
 
@@ -68,17 +68,14 @@ const Login: React.FC = () => {
         }
     };
 
-    // El vídeo vive siempre en su posición final (pequeño, arriba del formulario).
+    // El logo vive en su posición final (debajo del formulario).
     // Durante la fase 0 lo proyectamos al centro de la pantalla con transform.
-    // translateY(17vh) ≈ desplazamiento desde la parte superior del bloque centrado
-    // hasta el centro de la pantalla. scale(4) lo hace suficientemente grande.
+    // translateY negativo porque el logo está abajo y debe subir al centro.
     const videoTransform = phase === 0
-        ? 'translateY(17vh) scale(2.2)'
+        ? 'translateY(-17vh) scale(2.2)'
         : 'translateY(0) scale(1)';
 
-    const videoTransition = phase === 1
-        ? 'transform 3s cubic-bezier(0.25, 0, 0.1, 1), box-shadow 3s ease'
-        : 'none';
+    const videoTransition = 'transform 3s cubic-bezier(0.33, 0, 0, 1), box-shadow 3s ease, margin 3s cubic-bezier(0.33, 0, 0, 1)';
 
     return (
         <div className="min-h-screen flex items-center justify-center overflow-hidden bg-[#020e2a] relative">
@@ -90,75 +87,34 @@ const Login: React.FC = () => {
             {/* ── Bloque principal centrado ─────────────────────────────────── */}
             <div className="relative z-10 flex flex-col items-center w-full max-w-sm px-8">
 
-                {/* Vídeo / Logo — misma posición, cross-fade */}
+                {/* SmilePro Studio — arriba del formulario (donde estaba el logo) */}
                 <div
+                    className="mb-7 text-center"
                     style={{
-                        transform: videoTransform,
-                        transition: videoTransition,
-                        boxShadow: showLogoImg
-                            ? '0 0 0px transparent'
-                            : phase === 0
-                                ? '0 0 120px rgba(17,141,240,0.35), 0 0 40px rgba(17,141,240,0.2)'
-                                : '0 0 24px rgba(17,141,240,0.15)',
-                        borderRadius: '14px',
-                        overflow: 'hidden',
-                        width: '100%',
-                        // logo ratio 3312:1440 ≈ 2.3:1 → al ancho completo del bloque (~288px) = ~125px
-                        height: '158px',
-                        flexShrink: 0,
-                        position: 'relative',
-                        willChange: 'transform',
+                        opacity: phase >= 2 ? 1 : 0,
+                        transform: phase >= 2 ? 'translateY(0)' : 'translateY(-10px)',
+                        transition: 'opacity 1.2s ease 0.4s, transform 1.2s ease 0.4s',
                     }}
                 >
-                    <video
-                        ref={videoRef}
-                        src="/login-bg.mp4"
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            objectPosition: 'center center',
-                            transform: 'scale(1.35)',
-                            opacity: showLogo ? 0 : 1,
-                            transition: 'opacity 2.5s ease',
-                        }}
-                    />
-                    {/* Fondo que transiciona de oscuro a blanco antes de revelar el logo */}
-                    <div style={{
-                        position: 'absolute',
-                        inset: 0,
-                        backgroundColor: showLogo ? '#ffffff' : '#020e2a',
-                        transition: 'background-color 1.5s ease',
-                    }} />
-                    <img
-                        src="/clinic-logo.jpg"
-                        alt="Rubio García Dental"
-                        style={{
-                            position: 'absolute',
-                            inset: 0,
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'contain',
-                            opacity: showLogoImg ? 1 : 0,
-                            transform: showLogoImg ? 'scale(1)' : 'scale(1.06)',
-                            transition: 'opacity 2s ease, transform 2.2s ease',
-                        }}
-                    />
+                    <h2 className="text-4xl font-bold text-white tracking-tight">
+                        SmilePro <span className="text-[#118DF0]">Studio</span>
+                    </h2>
+                    <p className="text-white/30 text-xs font-semibold uppercase tracking-[0.15em] mt-2">
+                        Ecosistema Dental Inteligente
+                    </p>
                 </div>
 
 
                 {/* Formulario — aparece en fase 2 con ligero retraso */}
                 <form
                     onSubmit={handleSubmit}
-                    className="w-full space-y-4 mt-7"
+                    className="w-full"
                     style={{
                         opacity: phase >= 2 ? 1 : 0,
-                        transform: phase >= 2 ? 'translateY(0)' : 'translateY(14px)',
+                        transform: phase >= 2 ? 'translateY(0) translateZ(0)' : 'translateY(14px) translateZ(0)',
                         transition: 'opacity 1s ease 0.15s, transform 1s ease 0.15s',
+                        willChange: 'opacity',
+                        WebkitFontSmoothing: 'antialiased',
                     }}
                 >
                     {error && (
@@ -167,7 +123,7 @@ const Login: React.FC = () => {
                             <p className="text-[13px] font-semibold">{error}</p>
                         </div>
                     )}
-
+                    <div className="space-y-8">
                     <div className="flex items-center bg-white/5 border border-white/10 rounded-xl focus-within:ring-2 focus-within:ring-blue-500/30 focus-within:border-[#118DF0]/60 transition-all">
                         <div className="flex items-center justify-center w-11 flex-shrink-0">
                             <Mail className="w-[18px] h-[18px] text-white/50" />
@@ -211,22 +167,43 @@ const Login: React.FC = () => {
                             </>
                         )}
                     </button>
+                    </div>
                 </form>
 
-                {/* SmilePro Studio — baja a los pies del formulario */}
+                {/* Logo / Vídeo — debajo del formulario (posición del footer) */}
                 <div
-                    className="mt-10 text-center"
                     style={{
-                        opacity: phase >= 2 ? 1 : 0,
-                        transition: 'opacity 1.2s ease 0.4s',
+                        transform: videoTransform,
+                        transition: videoTransition,
+                        boxShadow: 'none',
+                        borderRadius: '0px',
+                        overflow: 'visible',
+                        width: '100%',
+                        height: '100px',
+                        flexShrink: 0,
+                        position: 'relative',
+                        willChange: 'transform, margin',
+                        marginTop: phase === 0 ? '10px' : '16px',
+                        marginBottom: phase === 0 ? '0px' : '0px',
                     }}
                 >
-                    <h2 className="text-2xl font-bold text-white tracking-tight">
-                        SmilePro <span className="text-[#118DF0]">Studio</span>
-                    </h2>
-                    <p className="text-white/30 text-[11px] font-semibold uppercase tracking-[0.2em] mt-1.5">
-                        Ecosistema Dental Inteligente
-                    </p>
+                    <img
+                        src="/clinic-logo.jpeg"
+                        alt="Rubio García Dental"
+                        style={{
+                            position: 'absolute',
+                            inset: 0,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'contain',
+                            opacity: 1,
+                            transform: showLogoImg ? 'scale(1)' : 'scale(1.06)',
+                            transition: 'opacity 2s ease, transform 2.2s ease, filter 3s ease',
+                            filter: phase === 0
+                                ? 'drop-shadow(0 0 20px rgba(17,141,240,0.5)) drop-shadow(0 0 50px rgba(17,141,240,0.3)) drop-shadow(0 0 80px rgba(17,141,240,0.15))'
+                                : 'drop-shadow(0 0 0px transparent)',
+                        }}
+                    />
                 </div>
             </div>
 
@@ -259,6 +236,15 @@ const Login: React.FC = () => {
                     75%       { transform: translateX(4px); }
                 }
                 .animate-shake { animation: shake 0.2s ease-in-out 0s 2; }
+                input:-webkit-autofill,
+                input:-webkit-autofill:hover,
+                input:-webkit-autofill:focus {
+                    -webkit-box-shadow: 0 0 0px 1000px transparent inset !important;
+                    -webkit-text-fill-color: white !important;
+                    transition: background-color 5000s ease-in-out 0s;
+                    font-size: 15px !important;
+                    font-weight: 500 !important;
+                }
             `}</style>
         </div>
     );

@@ -27,6 +27,7 @@ import {
 } from '../services/citas.service';
 import { searchPacientes, getPaciente } from '../services/pacientes.service';
 import { crearContacto } from '../services/contactos.service';
+import { onCitaFinalizada } from '../services/workflow-engine.service';
 import { generateId } from '../services/db';
 import { logger } from '../services/logger';
 import { sendTextMessage, isEvolutionConfigured, onAgendaUpdate } from '../services/evolution.service';
@@ -64,7 +65,7 @@ const getPalette = (tto: string) => PALETTE[tto] ?? { bg: 'linear-gradient(135de
 const EC: Record<string, { label: string; dot: string; cls: string }> = {
     confirmada: { label: 'Confirmada', dot: '#118DF0', cls: 'bg-blue-50 text-[#004182] border-blue-200' },
     espera: { label: 'En espera', dot: '#ec4899', cls: 'bg-pink-50 text-pink-700 border-pink-200' },
-    gabinete: { label: 'En gabinete', dot: '#004182', cls: 'bg-blue-100 text-[#051650] border-blue-300' },
+    consulta: { label: 'En consulta', dot: '#004182', cls: 'bg-blue-100 text-[#051650] border-blue-300' },
     finalizada: { label: 'Finalizada', dot: '#93C5FD', cls: 'bg-[#F0F8FF] text-[#004182] border-[#BFDBFE]' },
     anulada: { label: 'Anulada', dot: '#FF4B68', cls: 'bg-[#FFF0F3] text-[#FF4B68] border-[#FFC0CB]' },
     cancelada: { label: 'Cancelada', dot: '#FF4B68', cls: 'bg-[#FFF0F3] text-[#FF4B68] border-[#FFC0CB]' },
@@ -300,9 +301,23 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
     const updateCitaEstado = async (estado: EstadoCita, citaId?: string) => {
         const id = citaId ?? contextMenu?.cita.id;
         if (!id) return;
+        const citaRef = citas.find(c => c.id === id) ?? contextMenu?.cita;
         setCitas(prev => prev.map(c => c.id === id ? { ...c, estado } : c));
         setContextMenu(null);
         await updateEstadoCita(id, estado);
+
+        // Al finalizar: enviar mensajes al paciente (próxima cita + consejos + justificante)
+        if (estado === 'finalizada' && citaRef?.pacienteNumPac) {
+            try {
+                // Refrescar cita para obtener notas actualizadas por PostSOAPActions
+                const citasHoy = await getCitasByFecha(selectedDate);
+                const citaFresh = citasHoy.find(c => c.id === id) ?? citaRef;
+                const pac = await getPaciente(citaFresh.pacienteNumPac);
+                if (pac?.telefono) {
+                    onCitaFinalizada(citaFresh, pac.telefono, citaFresh.nombrePaciente).catch(() => {});
+                }
+            } catch { /* no bloquear UI si falla el envío */ }
+        }
     };
 
     const handleAction = async (action: string) => {
@@ -968,7 +983,7 @@ const Agenda: React.FC<AgendaProps> = ({ activeSubArea, initialCita, onNavigate 
                                 Cambiar Estado <MoreVertical className="w-3 h-3 text-slate-400" />
                             </button>
                             <div className="absolute left-full top-0 ml-1 hidden group-hover/sub:flex flex-col bg-white border border-slate-200 shadow-xl rounded-xl py-1 w-36 z-10">
-                                {(['confirmada', 'espera', 'gabinete', 'finalizada', 'planificada', 'anulada', 'cancelada', 'fallada'] as EstadoCita[]).map(e => (
+                                {(['confirmada', 'espera', 'consulta', 'finalizada', 'planificada', 'anulada', 'cancelada', 'fallada'] as EstadoCita[]).map(e => (
                                     <button 
                                         key={e} 
                                         onClick={() => updateCitaEstado(e)} 

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"if \\(type === ''sagital''\\)\" src/components/radiologia/CbctViewer.tsx)"
+    ]
+  }
+}

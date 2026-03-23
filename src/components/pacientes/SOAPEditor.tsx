@@ -7,6 +7,7 @@ import {
 import { searchTratamientos, getCategorias, type Tratamiento } from '../../services/tratamientos.service';
 import { analyzeTranscriptWithAI, isAIConfiguredSync } from '../../services/ia-dental.service';
 import { getPresupuestosByPaciente, type Presupuesto, type LineaPresupuesto } from '../../services/presupuestos.service';
+import PostSOAPActions from './PostSOAPActions';
 
 interface SOAPEditorProps {
     onSave: (noteData: {
@@ -278,6 +279,8 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
     const [categoriaFilter, setCategoriaFilter] = useState('');
     const [categorias, setCategorias] = useState<string[]>([]);
     const [pieza, setPieza] = useState<number | undefined>(initialData?.pieza);
+    const [showPostActions, setShowPostActions] = useState(false);
+    const [savedSOAPData, setSavedSOAPData] = useState<{ subjetivo: string; objetivo: string; analisis: string; plan: string } | null>(null);
     const [cuadrante, setCuadrante] = useState<number | undefined>(initialData?.cuadrante);
     const [arcada, setArcada] = useState<string | undefined>(initialData?.arcada);
     const ttoRef = useRef<HTMLDivElement>(null);
@@ -445,6 +448,12 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
             arcada,
         });
         setSaving(false);
+
+        // Mostrar panel de acciones post-SOAP si hay contenido en Plan
+        if (nota.plan.trim().length > 3) {
+            setSavedSOAPData({ subjetivo: nota.subjetivo, objetivo: nota.objetivo, analisis: nota.analisis, plan: nota.plan });
+            setShowPostActions(true);
+        }
         // Reset if new entry (no initialData)
         if (!initialData) {
             setNota({ subjetivo: '', objetivo: '', analisis: '', plan: '', eva: 0, fecha: todayISO, especialidad: 'General / Libre' });
@@ -475,6 +484,7 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
     );
 
     return (
+        <>
         <form onSubmit={handleSave} className="flex flex-col h-full bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
             {/* Header — premium gradient */}
             <div className="bg-gradient-to-r from-[#051650] to-blue-800 px-5 py-3 flex items-center justify-between flex-wrap gap-2 shrink-0">
@@ -793,6 +803,18 @@ const SOAPEditor: React.FC<SOAPEditorProps> = ({
                 </div>
             </div>
         </form>
+
+            {/* ── Panel post-SOAP ─────────────────────── */}
+            {showPostActions && savedSOAPData && numPac && (
+                <PostSOAPActions
+                    soapData={savedSOAPData}
+                    numPac={numPac}
+                    pacienteNombre=""
+                    onClose={() => setShowPostActions(false)}
+                    onCitar={onCitar ? () => onCitar({ tratamiento: '', pacienteNumPac: numPac }) : undefined}
+                />
+            )}
+        </>
     );
 };
 

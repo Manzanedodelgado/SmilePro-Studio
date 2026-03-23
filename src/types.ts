@@ -82,7 +82,7 @@ export type EstadoCita =
     | 'planificada' // Borde punteado
     | 'confirmada'  // Borde sólido
     | 'espera'      // Parpadeo suave
-    | 'gabinete'    // Saturación aumentada
+    | 'consulta'    // En consulta (antes 'gabinete')
     | 'finalizada'  // Semitransparente
     | 'fallada'     // No-Show
     | 'anulada'     // Sql: IdSitC 1
@@ -116,6 +116,7 @@ export interface Cita {
     pruebasPendientes?: boolean; // Icono Rayos X
     trabajoLaboratorio?: boolean; // Icono Matraz
     notas?: string;              // NOTAS de DCitas
+    ciPendiente?: boolean;       // Consentimiento informado pendiente de firma
 }
 
 // --- 5.0 INVENTARIO & TRAZABILIDAD ---

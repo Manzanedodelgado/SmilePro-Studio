@@ -1,0 +1,62 @@
+[
+  {
+    "id": "img-1774241229215-1",
+    "num_pac": "4134",
+    "tipo": "dicom",
+    "nombre": "I46590.dcm",
+    "fecha": "2026-03-23T04:47:09.215Z",
+    "doctor": "Dra. Rubio",
+    "descripcion": "Importado desde archivo",
+    "measurements": [],
+    "created_at": "2026-03-23T04:47:09.225Z",
+    "updated_at": "2026-03-23T04:47:09.225Z"
+  },
+  {
+    "id": "img-1774249357667-1",
+    "num_pac": "4134",
+    "tipo": "dicom",
+    "nombre": "I46590.dcm",
+    "fecha": "2026-03-23T07:02:37.667Z",
+    "doctor": "Dra. Rubio",
+    "descripcion": "Importado desde archivo",
+    "measurements": [],
+    "created_at": "2026-03-23T07:02:37.703Z",
+    "updated_at": "2026-03-23T07:02:37.703Z"
+  },
+  {
+    "id": "img-1774249718963-1",
+    "num_pac": "4134",
+    "tipo": "dicom",
+    "nombre": "I46590.dcm",
+    "fecha": "2026-03-23T07:08:38.965Z",
+    "doctor": "Dra. Rubio",
+    "descripcion": "Importado desde archivo",
+    "measurements": [],
+    "created_at": "2026-03-23T07:08:39.101Z",
+    "updated_at": "2026-03-23T07:08:39.101Z"
+  },
+  {
+    "id": "img-1774251533314-1",
+    "num_pac": "4134",
+    "tipo": "dicom",
+    "nombre": "I46590.dcm",
+    "fecha": "2026-03-23T07:38:53.314Z",
+    "doctor": "Dra. Rubio",
+    "descripcion": "Importado desde archivo",
+    "measurements": [],
+    "created_at": "2026-03-23T07:38:53.423Z",
+    "updated_at": "2026-03-23T07:38:53.423Z"
+  },
+  {
+    "id": "img-1774252690613-1",
+    "num_pac": "4134",
+    "tipo": "dicom",
+    "nombre": "I46590.dcm",
+    "fecha": "2026-03-23T07:58:10.613Z",
+    "doctor": "Dra. Rubio",
+    "descripcion": "Importado desde archivo",
+    "measurements": [],
+    "created_at": "2026-03-23T07:58:10.689Z",
+    "updated_at": "2026-03-23T07:58:10.689Z"
+  }
+]
