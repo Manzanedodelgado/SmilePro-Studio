@@ -1,0 +1,44 @@
+# ─── SmilePro Studio — OHIF Viewer + Orthanc DICOM Server ───────────────────
+#
+# Arranca con:  docker compose -f docker-compose.ohif.yml up -d
+# Para:         docker compose -f docker-compose.ohif.yml down
+#
+# Orthanc   → http://localhost:8042  (admin UI + REST API)
+# OHIF      → http://localhost:3001  (visor DICOM 3D)
+# ─────────────────────────────────────────────────────────────────────────────
+
+version: '3.8'
+
+services:
+
+  orthanc:
+    image: orthancteam/orthanc:latest
+    container_name: smilepro-orthanc
+    ports:
+      - "8042:8042"   # REST API + web UI
+      - "4242:4242"   # DICOM port
+    volumes:
+      - orthanc_storage:/var/lib/orthanc/db
+      - ./orthanc.json:/etc/orthanc/orthanc.json:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8042/system"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ohif:
+    image: ohif/app:latest
+    container_name: smilepro-ohif
+    ports:
+      - "3001:80"
+    volumes:
+      - ./ohif-config.js:/usr/share/nginx/html/app-config.js:ro
+    depends_on:
+      orthanc:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  orthanc_storage:
+    name: smilepro_orthanc_storage

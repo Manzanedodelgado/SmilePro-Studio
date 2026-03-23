@@ -6,8 +6,9 @@ import React, { useState, useCallback, useRef, Suspense } from 'react';
 import RadiologiaViewer from '../radiologia/RadiologiaViewer';
 import PlanmecaLauncher from '../radiologia/PlanmecaLauncher';
 import { loadDicomVolume, type DicomVolume } from '../../services/dicom.service';
+import { checkOrthancOnline, uploadDicomToOrthanc, openInOhif } from '../../services/orthanc.service';
 import {
-    Upload, Search, Trash2, ChevronLeft, ChevronRight, Layers, FileImage, Info,
+    Upload, Search, Trash2, ChevronLeft, ChevronRight, Layers, FileImage, Info, ExternalLink, Loader,
 } from 'lucide-react';
 import {
     addEstudio, deleteEstudio, loadEstudiosFromBackend, getEstudios,
@@ -55,6 +56,17 @@ const RadiologyTab: React.FC<RadiologyTabProps> = ({ numPac }) => {
     const [search,     setSearch]     = useState('');
     const [isDragging, setIsDragging] = useState(false);
     const [uploading,  setUploading]  = useState(false);
+
+    // OHIF / Orthanc
+    const [orthancOnline,  setOrthancOnline]  = useState<boolean | null>(null);
+    const [ohifUrl,        setOhifUrl]        = useState<string | null>(null);
+    const [ohifUploading,  setOhifUploading]  = useState(false);
+    const [ohifError,      setOhifError]      = useState<string | null>(null);
+
+    // Comprobar Orthanc al montar
+    React.useEffect(() => {
+        checkOrthancOnline().then(setOrthancOnline);
+    }, []);
 
     // Cargar desde backend
     React.useEffect(() => {
@@ -114,6 +126,21 @@ const RadiologyTab: React.FC<RadiologyTabProps> = ({ numPac }) => {
         setSelectedId(est.id);
         setDicomFile(fileMapRef.current.get(est.id) ?? null);
     };
+
+    // Subir a Orthanc y obtener URL de OHIF
+    const handleOpenOhif = useCallback(async (file: File) => {
+        setOhifError(null);
+        setOhifUploading(true);
+        try {
+            const url = await uploadDicomToOrthanc(file);
+            setOhifUrl(url);
+            openInOhif(url);
+        } catch (err) {
+            setOhifError(err instanceof Error ? err.message : 'Error al conectar con Orthanc');
+        } finally {
+            setOhifUploading(false);
+        }
+    }, []);
 
     const handleDelete = (id: string) => {
         deleteEstudio(id);
@@ -213,9 +240,31 @@ const RadiologyTab: React.FC<RadiologyTabProps> = ({ numPac }) => {
                         </button>
                     </div>
                 ) : dicomFile ? (
-                    <Suspense fallback={<LoadingScreen text="Cargando visor DICOM…" />}>
-                        <DicomLoader file={dicomFile} />
-                    </Suspense>
+                    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ flex: 1, minHeight: 0 }}>
+                            <Suspense fallback={<LoadingScreen text="Cargando visor DICOM…" />}>
+                                <DicomLoader file={dicomFile} />
+                            </Suspense>
+                        </div>
+                        {/* Barra inferior con acceso a OHIF */}
+                        <div style={{ flexShrink: 0, borderTop: '1px solid #1e2535', background: '#0d1018', padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ color: '#334155', fontSize: 10, flex: 1 }}>
+                                {orthancOnline === true && '● Orthanc activo'}
+                                {orthancOnline === false && '○ Orthanc inactivo — arranca Docker primero'}
+                                {orthancOnline === null && '…'}
+                            </span>
+                            {ohifError && <span style={{ color: '#f87171', fontSize: 10 }}>{ohifError}</span>}
+                            <OhifButton
+                                online={orthancOnline}
+                                loading={ohifUploading}
+                                ohifUrl={ohifUrl}
+                                onOpen={() => {
+                                    if (ohifUrl) { openInOhif(ohifUrl); }
+                                    else { handleOpenOhif(dicomFile); }
+                                }}
+                            />
+                        </div>
+                    </div>
                 ) : displayUrl ? (
                     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                         <div style={{ flex: 1, minHeight: 0 }}>
@@ -254,6 +303,41 @@ const LoadingScreen: React.FC<{ text: string }> = ({ text }) => (
         {text}
     </div>
 );
+
+// ── OhifButton ────────────────────────────────────────────────────────────────
+
+interface OhifButtonProps {
+    online: boolean | null;
+    loading: boolean;
+    ohifUrl: string | null;
+    onOpen: () => void;
+}
+
+const OhifButton: React.FC<OhifButtonProps> = ({ online, loading, ohifUrl, onOpen }) => {
+    const disabled = online === false || loading;
+    const label = loading ? 'Subiendo…' : ohifUrl ? 'Abrir OHIF' : 'Visor 3D Profesional';
+    return (
+        <button
+            onClick={onOpen}
+            disabled={disabled}
+            title={online === false ? 'Arranca Docker: docker compose -f docker-compose.ohif.yml up -d' : 'Abrir en OHIF Viewer'}
+            style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '4px 12px', borderRadius: 6, border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
+                background: disabled ? '#1e2535' : '#1e3a5f',
+                color: disabled ? '#334155' : '#93c5fd',
+                fontSize: 11, fontWeight: 600,
+                opacity: disabled ? 0.6 : 1,
+            }}
+        >
+            {loading
+                ? <Loader style={{ width: 11, height: 11, animation: 'spin 1s linear infinite' }} />
+                : <ExternalLink style={{ width: 11, height: 11 }} />
+            }
+            {label}
+        </button>
+    );
+};
 
 const CbctViewerLazy  = React.lazy(() => import('../radiologia/CbctViewer'));
 const DicomViewerLazy = React.lazy(() => import('../radiologia/DicomViewer'));
