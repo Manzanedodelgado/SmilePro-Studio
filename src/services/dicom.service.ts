@@ -414,12 +414,12 @@ interface TFEntry { huMin: number; huMax: number; r: number; g: number; b: numbe
 const TF_PRESETS: Record<Preset3D, { threshold: number; entries: TFEntry[] }> = {
     // ámbar cálido estilo Romexis — hueso cortical hasta esmalte dental
     tejido_duro: {
-        threshold: 150,
+        threshold: 300,
         entries: [
-            { huMin:150,  huMax:350,  r:160, g:90,  b:20,  aMin:0,    aMax:0.35 },
-            { huMin:350,  huMax:700,  r:200, g:130, b:30,  aMin:0.35, aMax:0.72 },
-            { huMin:700,  huMax:1300, r:230, g:165, b:50,  aMin:0.72, aMax:0.92 },
-            { huMin:1300, huMax:3000, r:255, g:205, b:100, aMin:0.92, aMax:1.0  },
+            { huMin:300,  huMax:550,  r:185, g:115, b:30,  aMin:0,    aMax:0.45 },
+            { huMin:550,  huMax:900,  r:215, g:145, b:40,  aMin:0.45, aMax:0.78 },
+            { huMin:900,  huMax:1400, r:240, g:175, b:60,  aMin:0.78, aMax:0.94 },
+            { huMin:1400, huMax:3000, r:255, g:215, b:110, aMin:0.94, aMax:1.0  },
         ],
     },
     tejido_blando: {
@@ -512,17 +512,32 @@ export async function render3DVolumeAsync(
 
     // Ray extent
     const halfDiag = 0.62 * Math.sqrt(cols*cols + rows*rows + numFrames*numFrames);
-    const STEP  = lowRes ? 3.0 : 2.0;
+    const STEP  = lowRes ? 2.5 : 1.2;
     const nStep = Math.ceil(2 * halfDiag / STEP);
 
-    // Sample HU — nearest-neighbour, clamped
-    function sHU(xi: number, yi: number, zi: number): number {
-        const xc = Math.max(0, Math.min(cols-1,      Math.round(xi)));
-        const yc = Math.max(0, Math.min(rows-1,      Math.round(yi)));
-        const zc = Math.max(0, Math.min(numFrames-1, Math.round(zi)));
+    // Sample HU — raw pixel at clamped integer coords
+    function rawHU(xi: number, yi: number, zi: number): number {
+        const xc = Math.max(0, Math.min(cols-1,      xi));
+        const yc = Math.max(0, Math.min(rows-1,      yi));
+        const zc = Math.max(0, Math.min(numFrames-1, zi));
         let raw = frameViews[zc][yc * cols + xc];
         if (pixelRep && (raw & 0x8000)) raw -= 0x10000;
         return raw * slope + intercept;
+    }
+
+    // Sample HU — trilinear interpolation (highRes) / nearest-neighbour (lowRes)
+    function sHU(xi: number, yi: number, zi: number): number {
+        if (lowRes) {
+            return rawHU(Math.round(xi), Math.round(yi), Math.round(zi));
+        }
+        const x0 = Math.floor(xi), y0 = Math.floor(yi), z0 = Math.floor(zi);
+        const x1 = x0+1, y1 = y0+1, z1 = z0+1;
+        const fx = xi-x0, fy = yi-y0, fz = zi-z0;
+        const ifx = 1-fx, ify = 1-fy, ifz = 1-fz;
+        return rawHU(x0,y0,z0)*ifx*ify*ifz + rawHU(x1,y0,z0)*fx*ify*ifz +
+               rawHU(x0,y1,z0)*ifx*fy*ifz  + rawHU(x1,y1,z0)*fx*fy*ifz  +
+               rawHU(x0,y0,z1)*ifx*ify*fz  + rawHU(x1,y0,z1)*fx*ify*fz  +
+               rawHU(x0,y1,z1)*ifx*fy*fz   + rawHU(x1,y1,z1)*fx*fy*fz;
     }
 
     // Precomputed light
@@ -567,6 +582,7 @@ export async function render3DVolumeAsync(
                     if (ca <= 0) continue;
 
                     const caS = Math.min(1, ca * opacityMul);
+                    if (caS < 0.03) continue;
 
                     // Gradiente central para normal de superficie
                     const xi = Math.round(vx), yi = Math.round(vy), zi = Math.round(vz);

@@ -68,12 +68,12 @@ const Login: React.FC = () => {
         }
     };
 
-    // El logo vive en su posición final (debajo del formulario).
+    // El logo vive en su posición final (sobre el formulario).
     // Durante la fase 0 lo proyectamos al centro de la pantalla con transform.
-    // translateY negativo porque el logo está abajo y debe subir al centro.
+    // translateY positivo porque el logo está arriba y baja al centro en la animación.
     const videoTransform = phase === 0
-        ? 'translateY(-17vh) scale(2.2)'
-        : 'translateY(0) scale(1)';
+        ? 'translateY(22vh) scale(7)'
+        : 'translateY(-16px) scale(1)';
 
     const videoTransition = 'transform 3s cubic-bezier(0.33, 0, 0, 1), box-shadow 3s ease, margin 3s cubic-bezier(0.33, 0, 0, 1)';
 
@@ -87,24 +87,54 @@ const Login: React.FC = () => {
             {/* ── Bloque principal centrado ─────────────────────────────────── */}
             <div className="relative z-10 flex flex-col items-center w-full max-w-sm px-8">
 
-                {/* SmilePro Studio — arriba del formulario (donde estaba el logo) */}
+                {/* Icono animado — Animación inicial y posición final SOBRE el formulario */}
                 <div
-                    className="mb-7 text-center"
                     style={{
-                        opacity: phase >= 2 ? 1 : 0,
-                        transform: phase >= 2 ? 'translateY(0)' : 'translateY(-10px)',
-                        transition: 'opacity 1.2s ease 0.4s, transform 1.2s ease 0.4s',
+                        transform: videoTransform,
+                        transition: videoTransition,
+                        boxShadow: 'none',
+                        borderRadius: '0px',
+                        overflow: 'visible',
+                        width: '100%',
+                        height: '80px',
+                        flexShrink: 0,
+                        position: 'relative',
+                        willChange: 'transform, margin',
+                        marginBottom: phase === 0 ? '10px' : '12px',
                     }}
                 >
-                    <h2 className="text-4xl font-bold text-white tracking-tight">
-                        SmilePro <span className="text-[#118DF0]">Studio</span>
-                    </h2>
-                    <p className="text-white/30 text-xs font-semibold uppercase tracking-[0.15em] mt-2">
-                        Ecosistema Dental Inteligente
-                    </p>
+                    <img
+                        src="/icono-captura.png?v=3"
+                        alt="Logo"
+                        style={{
+                            position: 'absolute',
+                            inset: 0,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'contain',
+                            opacity: 1,
+                            transform: 'scale(1)',
+                            transition: 'opacity 2s ease, transform 2.2s ease, filter 3s ease',
+                            filter: phase === 0
+                                ? 'drop-shadow(0 0 20px rgba(17,141,240,0.5)) drop-shadow(0 0 50px rgba(17,141,240,0.3)) drop-shadow(0 0 80px rgba(17,141,240,0.15))'
+                                : 'drop-shadow(0 0 0px transparent)',
+                        }}
+                    />
                 </div>
 
-
+                {/* Texto Rubio García Dental bajo el icono */}
+                <div
+                    className="text-center w-full mb-10"
+                    style={{
+                        opacity: phase >= 2 ? 1 : 0,
+                        transform: phase >= 2 ? 'translateY(8px)' : 'translateY(0px)',
+                        transition: 'opacity 1.2s ease 0.5s, transform 1.2s ease 0.5s',
+                    }}
+                >
+                    <p className="text-white/70 text-[22px] font-semibold uppercase tracking-[0.15em] drop-shadow-md whitespace-nowrap">
+                        Rubio García Dental
+                    </p>
+                </div>
                 {/* Formulario — aparece en fase 2 con ligero retraso */}
                 <form
                     onSubmit={handleSubmit}
@@ -170,43 +200,24 @@ const Login: React.FC = () => {
                     </div>
                 </form>
 
-                {/* Logo / Vídeo — debajo del formulario (posición del footer) */}
+                {/* SmilePro Studio — Justo debajo del formulario */}
                 <div
+                    className="mt-4 flex flex-col items-center justify-center pointer-events-none"
                     style={{
-                        transform: videoTransform,
-                        transition: videoTransition,
-                        boxShadow: 'none',
-                        borderRadius: '0px',
-                        overflow: 'visible',
-                        width: '100%',
-                        height: '100px',
-                        flexShrink: 0,
-                        position: 'relative',
-                        willChange: 'transform, margin',
-                        marginTop: phase === 0 ? '10px' : '16px',
-                        marginBottom: phase === 0 ? '0px' : '0px',
+                        opacity: phase >= 2 ? 1 : 0,
+                        transform: phase >= 2 ? 'translateY(0)' : 'translateY(10px)',
+                        transition: 'opacity 1.2s ease 0.6s, transform 1.2s ease 0.6s',
                     }}
                 >
-                    <img
-                        src="/clinic-logo.jpeg"
-                        alt="Rubio García Dental"
-                        style={{
-                            position: 'absolute',
-                            inset: 0,
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'contain',
-                            opacity: 1,
-                            transform: showLogoImg ? 'scale(1)' : 'scale(1.06)',
-                            transition: 'opacity 2s ease, transform 2.2s ease, filter 3s ease',
-                            filter: phase === 0
-                                ? 'drop-shadow(0 0 20px rgba(17,141,240,0.5)) drop-shadow(0 0 50px rgba(17,141,240,0.3)) drop-shadow(0 0 80px rgba(17,141,240,0.15))'
-                                : 'drop-shadow(0 0 0px transparent)',
-                        }}
-                    />
+                    <h2 className="text-4xl font-bold text-white tracking-tight drop-shadow-md">
+                        SmilePro <span className="text-[#118DF0]">Studio</span>
+                    </h2>
+                    <p className="text-white/40 text-[11px] font-semibold uppercase tracking-[0.25em] mt-2 drop-shadow">
+                        Ecosistema Dental Inteligente
+                    </p>
                 </div>
-            </div>
 
+            </div>
             {/* Autoría */}
             <p className="fixed bottom-4 right-5 text-[10px] text-white/20 tracking-widest uppercase select-none pointer-events-none">
                 © {new Date().getFullYear()} Rubio García Dental · SmilePro Studio

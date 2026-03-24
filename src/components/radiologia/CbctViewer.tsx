@@ -394,22 +394,24 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
         );
     }
 
-    // ── Sagital override: 6-slice grid ──
+    // ── Sagital override: 5 vertical coronal cuts through the tooth area ──
     if (type === 'sagital') {
+        const coronalCenter = crosshair.sliceCoronal;
+        const setCoronal = (s: number) => onCrosshairUpdate({ sliceCoronal: s });
         return (
             <div onDoubleClick={onDoubleClick} style={{ height:'100%', display:'flex', flexDirection:'column', background:'#060809', overflow:'hidden', position:'relative' }}>
                 <div style={{ height:22, flexShrink:0, display:'flex', alignItems:'center', padding:'0 6px', gap:4, background:'#0a0c10', borderBottom:'1px solid #ef444430' }}>
                     <span style={{ width:6, height:6, borderRadius:'50%', background:'#ef4444', flexShrink:0 }} />
                     <span style={{ color:'#ef4444', fontSize:10, fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', flex:1 }}>
-                        Sagital(X) — 6 cortes
-                        <span style={{ color:'#475569', fontWeight:400, marginLeft:6 }}>{slice+1}/{volume.cols}</span>
+                        Cortes dentales — 5 verticales
+                        <span style={{ color:'#475569', fontWeight:400, marginLeft:6 }}>C {coronalCenter+1}/{volume.rows}</span>
                     </span>
-                    <button onClick={e=>{e.stopPropagation();onSliceChange(Math.max(0,slice-1));}} style={{ background:'none',border:'none',color:'#334155',cursor:'pointer',padding:0,display:'flex' }}><ChevronLeft style={{width:10,height:10}}/></button>
-                    <button onClick={e=>{e.stopPropagation();onSliceChange(Math.min(volume.cols-1,slice+1));}} style={{ background:'none',border:'none',color:'#334155',cursor:'pointer',padding:0,display:'flex' }}><ChevronRight style={{width:10,height:10}}/></button>
+                    <button onClick={e=>{e.stopPropagation();setCoronal(Math.max(0,coronalCenter-1));}} style={{ background:'none',border:'none',color:'#334155',cursor:'pointer',padding:0,display:'flex' }}><ChevronLeft style={{width:10,height:10}}/></button>
+                    <button onClick={e=>{e.stopPropagation();setCoronal(Math.min(volume.rows-1,coronalCenter+1));}} style={{ background:'none',border:'none',color:'#334155',cursor:'pointer',padding:0,display:'flex' }}><ChevronRight style={{width:10,height:10}}/></button>
                 </div>
                 <div style={{ flex:1, minHeight:0 }}
-                    onWheel={e=>{ e.preventDefault(); onSliceChange(Math.max(0,Math.min(volume.cols-1,slice+(e.deltaY>0?1:-1)))); }}>
-                    <SagitalMultiSlice volume={volume} wc={wc} ww={ww} centerSlice={slice} onSliceChange={onSliceChange} />
+                    onWheel={e=>{ e.preventDefault(); setCoronal(Math.max(0,Math.min(volume.rows-1,coronalCenter+(e.deltaY>0?1:-1)))); }}>
+                    <CoronalMultiSlice volume={volume} wc={wc} ww={ww} centerSlice={coronalCenter} onSliceChange={setCoronal} />
                 </div>
             </div>
         );
@@ -602,9 +604,9 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
     );
 };
 
-// ── Sagital multi-slice components ─────────────────────────────────────────────
+// ── Sagital panel: 5 coronal vertical cuts through the tooth area ───────────────
 
-const SagitalSliceCell: React.FC<{
+const CoronalSliceCell: React.FC<{
     volume: DicomVolume; wc: number; ww: number; slice: number;
     isCenter: boolean; onClick: ()=>void;
 }> = ({ volume, wc, ww, slice, isCenter, onClick }) => {
@@ -626,7 +628,7 @@ const SagitalSliceCell: React.FC<{
     }, []);
 
     useEffect(() => {
-        renderSagittal(volume, slice, wc, ww, offscreen.current);
+        renderCoronal(volume, slice, wc, ww, offscreen.current);
         paint();
     }, [volume, slice, wc, ww, paint]);
 
@@ -649,24 +651,25 @@ const SagitalSliceCell: React.FC<{
                 border: isCenter ? '1.5px solid #ef4444' : '1px solid #1e2535' }}>
             <canvas ref={canvasRef} style={{ position:'absolute', inset:0, display:'block' }} />
             <div style={{ position:'absolute',top:2,left:4,color:isCenter?'#ef4444':'#475569',fontSize:9,fontWeight:700,pointerEvents:'none',textShadow:'0 1px 2px #000' }}>
-                S {slice+1}
+                C {slice+1}
             </div>
         </div>
     );
 };
 
-const SagitalMultiSlice: React.FC<{
+const CoronalMultiSlice: React.FC<{
     volume: DicomVolume; wc: number; ww: number;
     centerSlice: number; onSliceChange: (s:number)=>void;
 }> = ({ volume, wc, ww, centerSlice, onSliceChange }) => {
-    const maxS = volume.cols - 1;
-    // 6 slices: center-2, center-1, center, center+1, center+2, center+3
-    const slices = [-2,-1,0,1,2,3].map(o => Math.max(0, Math.min(maxS, centerSlice + o)));
+    const maxS = volume.rows - 1;
+    // 5 evenly-spaced coronal slices centred on the current coronal position
+    const step = Math.max(1, Math.round(maxS / 12));
+    const slices = [-2,-1,0,1,2].map(o => Math.max(0, Math.min(maxS, centerSlice + o * step)));
     return (
-        <div style={{ height:'100%', display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gridTemplateRows:'1fr 1fr', gap:2, background:'#060809' }}>
+        <div style={{ height:'100%', display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr 1fr', gridTemplateRows:'1fr', gap:2, background:'#060809' }}>
             {slices.map((s,i) => (
-                <SagitalSliceCell key={i} volume={volume} wc={wc} ww={ww} slice={s}
-                    isCenter={s===centerSlice} onClick={()=>onSliceChange(s)} />
+                <CoronalSliceCell key={i} volume={volume} wc={wc} ww={ww} slice={s}
+                    isCenter={s===centerSlice || (i===2 && slices[2]===centerSlice)} onClick={()=>onSliceChange(s)} />
             ))}
         </div>
     );

@@ -122,11 +122,13 @@ const Header: React.FC<HeaderProps> = ({ activeArea, onNavigate, onCommandPalett
                 style={{ width: '260px' }}
                 onClick={() => onNavigate('CLÍNICA', 'General')}
             >
-                <img
-                    src="/clinic-logo-simple.png"
-                    alt="Rubio García Dental"
-                    style={{ height: '240px', objectFit: 'contain' }}
-                />
+                     <div className="flex items-center space-x-6 ml-1">
+                         <img src="/icono-captura.png?v=3" alt="Rubio García Dental" style={{ height: '40px', objectFit: 'contain' }} />
+                         <div className="flex items-baseline gap-1.5 leading-none select-none">
+                             <span className="text-white font-bold text-[22px] tracking-tight uppercase whitespace-nowrap">RUBIO GARCÍA</span>
+                             <span className="font-bold text-[22px] tracking-tight uppercase whitespace-nowrap" style={{ color: '#118DF0', WebkitTextStroke: '0.5px rgba(255,255,255,0.6)' }}>DENTAL</span>
+                         </div>
+                     </div>
             </div>
 
             {/* Nav */}

@@ -142,6 +142,10 @@
                dark:border-slate-800 transition-all hover:border-slate-300;
     }
 
+    .icon-color {
+  filter: brightness(0) saturate(100%) invert(38%) sepia(94%) saturate(5000%) hue-rotate(200deg) brightness(95%) contrast(105%);
+}
+
     /* Custom Scrollbar */
     .custom-scrollbar::-webkit-scrollbar       { width: 4px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
