@@ -26,7 +26,7 @@ export const navigationItems: MenuItem[] = [
             { name: 'Anamnesis', icon: 'assignment' },
             { name: 'Odontograma 3D', icon: 'grid_view' },
             { name: 'Sondaje Periodontal', icon: 'sick' },
-            { name: 'Radiología', icon: 'image_search' },
+            // { name: 'Radiología', icon: 'image_search' }, // oculto temporalmente
             { name: 'Documentos y Consentimientos', icon: 'description' },
             { name: 'Cuenta Corriente', icon: 'payments' },
             { name: 'Presupuestos', icon: 'request_quote' },

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { type Paciente } from '../../types';
 import { searchPacientes, createPaciente, isDbConfigured } from '../../services/pacientes.service';
+import { syncPatientToRomexis, isRomexisReady } from '../../services/romexis-config.service';
 import { X, Search, ChevronRight, UserPlus, Camera, Upload, Shield, User, Phone, AlertTriangle, Pill, Users, Loader2 } from 'lucide-react';
 
 interface PatientSearchModalProps {
@@ -112,11 +113,34 @@ const PatientSearchModal: React.FC<PatientSearchModalProps> = ({ isOpen, onClose
             };
             if (isDbConfigured()) {
                 const created = await createPaciente(patientData);
-                if (created) { onSelect({ ...created, historial: [] }); onClose(); return; }
+                if (created) {
+                    // Sincronizar con Romexis en segundo plano si está configurado
+                    if (isRomexisReady()) {
+                        syncPatientToRomexis({
+                            nombre: created.nombre,
+                            apellidos: created.apellidos,
+                            dni: created.dni,
+                            fechaNacimiento: created.fechaNacimiento,
+                            telefono: created.telefono,
+                        }).catch(() => {/* silencioso — no bloquea el flujo */});
+                    }
+                    onSelect({ ...created, historial: [] });
+                    onClose();
+                    return;
+                }
                 setSaveError('No se pudo guardar el paciente. Comprueba la conexión con el servidor.');
                 return;
             }
-            // Modo sin BD: crear en local
+            // Modo sin BD: crear en local y sincronizar con Romexis si está configurado
+            if (isRomexisReady()) {
+                syncPatientToRomexis({
+                    nombre: patientData.nombre,
+                    apellidos: patientData.apellidos,
+                    dni: patientData.dni,
+                    fechaNacimiento: patientData.fechaNacimiento,
+                    telefono: patientData.telefono,
+                }).catch(() => {/* silencioso */});
+            }
             onSelect({ ...patientData, historial: [] });
             onClose();
         } finally {

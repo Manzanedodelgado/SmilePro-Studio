@@ -2,6 +2,8 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { RotateCcw, Zap, Loader2, Save } from 'lucide-react';
 import { analyzePerioData, isAIConfiguredSync } from '../../services/ia-dental.service';
 import { getPeriodontograma, savePeriodontograma } from '../../services/periodontograma.service';
+import { getToothImageSrc, shouldMirrorTooth, isToothPNGFlipped } from './toothPaths';
+import { buildOdontogramState, type DienteData } from './Odontograma';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type Six = [number, number, number, number, number, number];
@@ -139,10 +141,11 @@ type UpdateFn = (tooth: string, field: keyof PerioData, idx: number, val: number
 const ArchTable: React.FC<{
     teeth: string[];
     data: PerioRecord;
+    odontograma: DienteData[] | null;
     onUpdate: UpdateFn;
     archLabel: string;
     invertChart?: boolean;
-}> = ({ teeth, data, onUpdate, archLabel, invertChart = false }) => {
+}> = ({ teeth, data, odontograma, onUpdate, archLabel, invertChart = false }) => {
 
     const row = (bg = '#fff'): React.CSSProperties => ({
         display: 'flex', alignItems: 'center', minHeight: 26,
@@ -193,14 +196,39 @@ const ArchTable: React.FC<{
                 {archLabel}
             </div>
 
-            {/* Tooth numbers */}
-            <div style={row('#f1f5f9')}>
+            {/* Tooth numbers WITH 3D Images */}
+            <div style={{ ...row('#f1f5f9'), minHeight: 70, alignItems: 'flex-end', paddingBottom: 6 }}>
                 {rowLabel('Pieza', '#f1f5f9')}
-                {teeth.map(t => (
-                    <div key={t} style={{ width: TOOTH_W, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#334155' }}>
-                        {t}
-                    </div>
-                ))}
+                {teeth.map(t => {
+                    const d = odontograma?.find(x => x.numero === t);
+                    const isUpper = parseInt(t) < 30;
+                    const pngFlipped = isToothPNGFlipped(t);
+                    const mirrored = shouldMirrorTooth(t);
+                    const isAusente = d ? Object.values(d.caras).every(c => c === 'ausente') : false;
+                    const isImplante = d ? Object.values(d.caras).some(c => c === 'implante') : false;
+
+                    return (
+                        <div key={t} style={{ width: TOOTH_W, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                            <img
+                                src={getToothImageSrc(t)}
+                                alt={t}
+                                draggable={false}
+                                style={{
+                                    height: 48,
+                                    width: 'auto',
+                                    objectFit: 'contain',
+                                    transform: [
+                                        isUpper !== pngFlipped ? '' : 'scaleY(-1)',
+                                        mirrored ? 'scaleX(-1)' : ''
+                                    ].filter(Boolean).join(' ') || undefined,
+                                    opacity: isAusente ? 0.25 : (isImplante ? 0.7 : 1),
+                                    filter: isAusente ? 'grayscale(100%)' : undefined,
+                                }}
+                            />
+                            <div style={{ fontSize: 12, fontWeight: 800, color: '#334155' }}>{t}</div>
+                        </div>
+                    );
+                })}
             </div>
 
             {/* Mobility */}
@@ -326,6 +354,7 @@ interface PeriodontogramaProps {
 
 const Periodontograma: React.FC<PeriodontogramaProps> = ({ numPac }) => {
     const [data, setData] = useState<PerioRecord>(buildDemo);
+    const [odontograma, setOdontograma] = useState<DienteData[] | null>(null);
     const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
     const [aiLoading, setAiLoading] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -337,6 +366,7 @@ const Periodontograma: React.FC<PeriodontogramaProps> = ({ numPac }) => {
         getPeriodontograma(numPac).then(saved => {
             if (saved && Object.keys(saved).length > 0) setData(saved as PerioRecord);
         });
+        buildOdontogramState(numPac).then(setOdontograma);
     }, [numPac]);
 
     // Auto-save con debounce de 500ms tras cada cambio
@@ -502,6 +532,7 @@ const Periodontograma: React.FC<PeriodontogramaProps> = ({ numPac }) => {
                         <ArchTable
                             teeth={UPPER}
                             data={data}
+                            odontograma={odontograma}
                             onUpdate={onUpdate}
                             archLabel="Maxilar Superior — Arcada Superior"
                         />
@@ -513,6 +544,7 @@ const Periodontograma: React.FC<PeriodontogramaProps> = ({ numPac }) => {
                         <ArchTable
                             teeth={LOWER}
                             data={data}
+                            odontograma={odontograma}
                             onUpdate={onUpdate}
                             archLabel="Mandíbula — Arcada Inferior"
                             invertChart

@@ -1,0 +1,23 @@
+{
+  "name": "smilepro-romexis-agent",
+  "version": "1.0.0",
+  "description": "Agente local SmilePro para bridge con Planmeca Romexis vía DxStart",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js",
+    "build": "pkg agent.js --targets node18-win-x64 --output dist/romexis-agent.exe --compress GZip"
+  },
+  "bin": "agent.js",
+  "pkg": {
+    "targets": ["node18-win-x64"],
+    "outputPath": "dist",
+    "compress": "GZip"
+  },
+  "dependencies": {
+    "mssql": "^11.0.1",
+    "sharp": "^0.33.4"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  }
+}

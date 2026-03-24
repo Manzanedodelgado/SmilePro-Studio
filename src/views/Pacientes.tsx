@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import SOAPEditor from '../components/pacientes/SOAPEditor';
 import PatientSearchModal from '../components/pacientes/PatientSearchModal';
-import Odontograma from '../components/pacientes/Odontograma';
-import { getToothImageSrc, getOcclusalImageSrc, shouldMirrorTooth, isToothPNGFlipped } from '../components/pacientes/toothPaths';
+import Odontograma, { buildOdontogramState, type DienteData } from '../components/pacientes/Odontograma';
+import { getToothImageSrc, getOcclusalImageSrc, shouldMirrorTooth, isToothPNGFlipped, SURFACE_PATHS } from '../components/pacientes/toothPaths';
 import { getOdontograma } from '../services/odontograma.service';
 import { getHallazgoById } from '../components/pacientes/hallazgos';
 import Periodontograma from '../components/pacientes/Periodontograma';
@@ -12,6 +12,7 @@ import Economica from '../components/pacientes/Economica';
 import EntradasMedicas from '../components/pacientes/EntradasMedicas';
 import QuestionnairePanel from '../components/pacientes/QuestionnairePanel';
 import RadiologyTab from '../components/pacientes/RadiologyTab';
+import RomexisLaunchButton from '../components/pacientes/RomexisLaunchButton';
 import { type SOAPNote, type Paciente, type Area } from '../types';
 import {
     Activity, Brain, Camera,
@@ -94,7 +95,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
     const [topColSplit, setTopColSplit] = useState(50); // % anchura de Odontograma dentro de la fila superior
     const [showEvolutivoModal, setShowEvolutivoModal] = useState(false);
     const [autoListenMode, setAutoListenMode] = useState(false);
-    const [odontogramData, setOdontogramData] = useState(MINI_DEMO);
+    const [odontogramData, setOdontogramData] = useState<DienteData[]>(MINI_DEMO as any);
     const layoutRef = React.useRef<HTMLDivElement>(null);
     const dragRef = React.useRef<{ type: 'row' | 'topCol'; startPos: number; startVal: number; containerSize: number } | null>(null);
 
@@ -116,9 +117,9 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
     // Load real odontogram data for mini view
     useEffect(() => {
         if (!paciente?.numPac) return;
-        getOdontograma(paciente.numPac).then(datos => {
+        buildOdontogramState(paciente.numPac).then(datos => {
             if (datos && datos.length > 0) {
-                setOdontogramData(datos as typeof MINI_DEMO);
+                setOdontogramData(datos);
             }
         });
     }, [paciente?.numPac]);
@@ -368,7 +369,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                                 </div>
                                 <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Odontograma</span>
                                 <div className="ml-auto flex items-center gap-1.5 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
-                                    <span className="text-[10px] font-black text-blue-700">{odontogramData.filter(d => Object.values(d.caras).some(c => c !== 'normal')).length}</span>
+                                    <span className="text-[10px] font-black text-blue-700">{odontogramData.filter((d: DienteData) => Object.values(d.caras).some(c => c !== 'normal')).length}</span>
                                     <span className="text-[8px] font-bold text-blue-400 uppercase tracking-widest">Tratadas</span>
                                 </div>
                             </div>
@@ -387,50 +388,70 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                                     {/* Upper row */}
                                     <div className="flex gap-1.5 items-end">
                                         <div className="flex gap-px">
-                                            {odontogramData.slice(0, 8).map(d => {
-                                                const hallazgoColors = Object.values(d.caras).filter(c => c !== 'normal').map(c => getHallazgoById(c)?.color).filter(Boolean);
+                                            {odontogramData.slice(0, 8).map((d: DienteData) => {
+                                                const hallazgoColors = Object.values(d.caras).filter(c => c !== 'normal').map(c => getHallazgoById(c as any)?.color).filter(Boolean);
                                                 const mainColor = hallazgoColors[0] as string | undefined;
-                                                const isAusente = Object.values(d.caras).every(c => c === 'ausente');
+                                                const isAusente = Object.values(d.caras).some(c => c === 'ausente');
                                                 const pngFlipped = isToothPNGFlipped(d.numero);
                                                 const mirrored = shouldMirrorTooth(d.numero);
                                                 return (
                                                     <div key={d.numero} className="flex flex-col items-center gap-0.5">
                                                         <span className="text-[7px] font-bold text-slate-500 tabular-nums">{d.numero}</span>
-                                                        <div className="relative">
-                                                            <img src={getToothImageSrc(d.numero)} alt={d.numero}
-                                                                className={`h-24 w-auto object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`}
-                                                                style={{
-                                                                    transform: [true !== pngFlipped ? '' : 'scaleY(-1)', mirrored ? 'scaleX(-1)' : ''].filter(Boolean).join(' ') || undefined,
-                                                                    filter: mainColor ? `drop-shadow(0 0 3px ${mainColor})` : undefined,
-                                                                }} draggable={false} />
-                                                            {mainColor && <div className="absolute inset-0 rounded-md mix-blend-multiply pointer-events-none" style={{ backgroundColor: mainColor, opacity: 0.3 }} />}
+                                                        <img src={getToothImageSrc(d.numero)} alt={d.numero}
+                                                            className={`h-24 w-auto object-contain transition-all ${isAusente ? 'opacity-20 grayscale' : ''}`}
+                                                            style={{
+                                                                transform: [true !== pngFlipped ? '' : 'scaleY(-1)', mirrored ? 'scaleX(-1)' : ''].filter(Boolean).join(' ') || undefined,
+                                                            }} draggable={false} />
+                                                        <div className="relative w-6 h-6 mt-0.5">
+                                                            <img src={getOcclusalImageSrc(d.numero)} alt="" className={`w-full h-full object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`} draggable={false} />
+                                                            {!isAusente && (
+                                                                <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full mix-blend-multiply opacity-90 pointer-events-none">
+                                                                    {(Object.entries(d.caras) as [string, string][]).map(([cara, estado]) => {
+                                                                        if (estado === 'normal') return null;
+                                                                        const hallazgo = getHallazgoById(estado as any);
+                                                                        if (!hallazgo || !hallazgo.porSuperficie) return null;
+                                                                        const origen = d.origenes?.[cara as any] || 'previo';
+                                                                        const renderColor = origen === 'presupuesto' ? '#ec4899' : '#10b981';
+                                                                        return <path key={cara} d={SURFACE_PATHS[cara as keyof typeof SURFACE_PATHS]} fill={renderColor} stroke={renderColor} strokeWidth="2" strokeLinejoin="round" />;
+                                                                    })}
+                                                                </svg>
+                                                            )}
                                                         </div>
-                                                        <img src={getOcclusalImageSrc(d.numero)} alt="" className={`w-6 h-6 object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`} style={{ filter: mainColor ? `drop-shadow(0 0 2px ${mainColor})` : undefined }} draggable={false} />
                                                     </div>
                                                 );
                                             })}
                                         </div>
                                         <div className="w-px h-10 bg-slate-300 flex-shrink-0" />
                                         <div className="flex gap-px">
-                                            {odontogramData.slice(8, 16).map(d => {
-                                                const hallazgoColors = Object.values(d.caras).filter(c => c !== 'normal').map(c => getHallazgoById(c)?.color).filter(Boolean);
+                                            {odontogramData.slice(8, 16).map((d: DienteData) => {
+                                                const hallazgoColors = Object.values(d.caras).filter(c => c !== 'normal').map(c => getHallazgoById(c as any)?.color).filter(Boolean);
                                                 const mainColor = hallazgoColors[0] as string | undefined;
-                                                const isAusente = Object.values(d.caras).every(c => c === 'ausente');
+                                                const isAusente = Object.values(d.caras).some(c => c === 'ausente');
                                                 const pngFlipped = isToothPNGFlipped(d.numero);
                                                 const mirrored = shouldMirrorTooth(d.numero);
                                                 return (
                                                     <div key={d.numero} className="flex flex-col items-center gap-0.5">
                                                         <span className="text-[7px] font-bold text-slate-500 tabular-nums">{d.numero}</span>
-                                                        <div className="relative">
-                                                            <img src={getToothImageSrc(d.numero)} alt={d.numero}
-                                                                className={`h-24 w-auto object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`}
-                                                                style={{
-                                                                    transform: [true !== pngFlipped ? '' : 'scaleY(-1)', mirrored ? 'scaleX(-1)' : ''].filter(Boolean).join(' ') || undefined,
-                                                                    filter: mainColor ? `drop-shadow(0 0 3px ${mainColor})` : undefined,
-                                                                }} draggable={false} />
-                                                            {mainColor && <div className="absolute inset-0 rounded-md mix-blend-multiply pointer-events-none" style={{ backgroundColor: mainColor, opacity: 0.3 }} />}
+                                                        <img src={getToothImageSrc(d.numero)} alt={d.numero}
+                                                            className={`h-24 w-auto object-contain transition-all ${isAusente ? 'opacity-20 grayscale' : ''}`}
+                                                            style={{
+                                                                transform: [true !== pngFlipped ? '' : 'scaleY(-1)', mirrored ? 'scaleX(-1)' : ''].filter(Boolean).join(' ') || undefined,
+                                                            }} draggable={false} />
+                                                        <div className="relative w-6 h-6 mt-0.5">
+                                                            <img src={getOcclusalImageSrc(d.numero)} alt="" className={`w-full h-full object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`} draggable={false} />
+                                                            {!isAusente && (
+                                                                <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full mix-blend-multiply opacity-90 pointer-events-none">
+                                                                    {(Object.entries(d.caras) as [string, string][]).map(([cara, estado]) => {
+                                                                        if (estado === 'normal') return null;
+                                                                        const hallazgo = getHallazgoById(estado as any);
+                                                                        if (!hallazgo || !hallazgo.porSuperficie) return null;
+                                                                        const origen = d.origenes?.[cara as any] || 'previo';
+                                                                        const renderColor = origen === 'presupuesto' ? '#ec4899' : '#10b981';
+                                                                        return <path key={cara} d={SURFACE_PATHS[cara as keyof typeof SURFACE_PATHS]} fill={renderColor} stroke={renderColor} strokeWidth="2" strokeLinejoin="round" />;
+                                                                    })}
+                                                                </svg>
+                                                            )}
                                                         </div>
-                                                        <img src={getOcclusalImageSrc(d.numero)} alt="" className={`w-6 h-6 object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`} style={{ filter: mainColor ? `drop-shadow(0 0 2px ${mainColor})` : undefined }} draggable={false} />
                                                     </div>
                                                 );
                                             })}
@@ -440,50 +461,70 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                                     {/* Lower row */}
                                     <div className="flex gap-1.5 items-start">
                                         <div className="flex gap-px">
-                                            {odontogramData.slice(16, 24).map(d => {
-                                                const hallazgoColors = Object.values(d.caras).filter(c => c !== 'normal').map(c => getHallazgoById(c)?.color).filter(Boolean);
+                                            {odontogramData.slice(16, 24).map((d: DienteData) => {
+                                                const hallazgoColors = Object.values(d.caras).filter(c => c !== 'normal').map(c => getHallazgoById(c as any)?.color).filter(Boolean);
                                                 const mainColor = hallazgoColors[0] as string | undefined;
-                                                const isAusente = Object.values(d.caras).every(c => c === 'ausente');
+                                                const isAusente = Object.values(d.caras).some(c => c === 'ausente');
                                                 const pngFlipped = isToothPNGFlipped(d.numero);
                                                 const mirrored = shouldMirrorTooth(d.numero);
                                                 return (
-                                                    <div key={d.numero} className="flex flex-col items-center gap-0.5">
-                                                        <img src={getOcclusalImageSrc(d.numero)} alt="" className={`w-6 h-6 object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`} style={{ filter: mainColor ? `drop-shadow(0 0 2px ${mainColor})` : undefined }} draggable={false} />
-                                                        <div className="relative">
-                                                            <img src={getToothImageSrc(d.numero)} alt={d.numero}
-                                                                className={`h-24 w-auto object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`}
-                                                                style={{
-                                                                    transform: [false !== pngFlipped ? '' : 'scaleY(-1)', mirrored ? 'scaleX(-1)' : ''].filter(Boolean).join(' ') || undefined,
-                                                                    filter: mainColor ? `drop-shadow(0 0 3px ${mainColor})` : undefined,
-                                                                }} draggable={false} />
-                                                            {mainColor && <div className="absolute inset-0 rounded-md mix-blend-multiply pointer-events-none" style={{ backgroundColor: mainColor, opacity: 0.3 }} />}
+                                                    <div key={d.numero} className="flex flex-col items-center gap-0.5 mt-0.5">
+                                                        <div className="relative w-6 h-6 mb-0.5">
+                                                            <img src={getOcclusalImageSrc(d.numero)} alt="" className={`w-full h-full object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`} draggable={false} />
+                                                            {!isAusente && (
+                                                                <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full mix-blend-multiply opacity-90 pointer-events-none">
+                                                                    {(Object.entries(d.caras) as [string, string][]).map(([cara, estado]) => {
+                                                                        if (estado === 'normal') return null;
+                                                                        const hallazgo = getHallazgoById(estado as any);
+                                                                        if (!hallazgo || !hallazgo.porSuperficie) return null;
+                                                                        const origen = d.origenes?.[cara as any] || 'previo';
+                                                                        const renderColor = origen === 'presupuesto' ? '#ec4899' : '#10b981';
+                                                                        return <path key={cara} d={SURFACE_PATHS[cara as keyof typeof SURFACE_PATHS]} fill={renderColor} stroke={renderColor} strokeWidth="2" strokeLinejoin="round" />;
+                                                                    })}
+                                                                </svg>
+                                                            )}
                                                         </div>
-                                                        <span className="text-[7px] font-bold text-slate-500 tabular-nums">{d.numero}</span>
+                                                        <img src={getToothImageSrc(d.numero)} alt={d.numero}
+                                                            className={`h-24 w-auto object-contain transition-all ${isAusente ? 'opacity-20 grayscale' : ''}`}
+                                                            style={{
+                                                                transform: [false !== pngFlipped ? '' : 'scaleY(-1)', mirrored ? 'scaleX(-1)' : ''].filter(Boolean).join(' ') || undefined,
+                                                            }} draggable={false} />
+                                                        <span className="text-[7px] font-bold text-slate-500 tabular-nums pt-1">{d.numero}</span>
                                                     </div>
                                                 );
                                             })}
                                         </div>
                                         <div className="w-px h-10 bg-slate-300 flex-shrink-0" />
                                         <div className="flex gap-px">
-                                            {odontogramData.slice(24, 32).map(d => {
-                                                const hallazgoColors = Object.values(d.caras).filter(c => c !== 'normal').map(c => getHallazgoById(c)?.color).filter(Boolean);
+                                            {odontogramData.slice(24, 32).map((d: DienteData) => {
+                                                const hallazgoColors = Object.values(d.caras).filter(c => c !== 'normal').map(c => getHallazgoById(c as any)?.color).filter(Boolean);
                                                 const mainColor = hallazgoColors[0] as string | undefined;
-                                                const isAusente = Object.values(d.caras).every(c => c === 'ausente');
+                                                const isAusente = Object.values(d.caras).some(c => c === 'ausente');
                                                 const pngFlipped = isToothPNGFlipped(d.numero);
                                                 const mirrored = shouldMirrorTooth(d.numero);
                                                 return (
-                                                    <div key={d.numero} className="flex flex-col items-center gap-0.5">
-                                                        <img src={getOcclusalImageSrc(d.numero)} alt="" className={`w-6 h-6 object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`} style={{ filter: mainColor ? `drop-shadow(0 0 2px ${mainColor})` : undefined }} draggable={false} />
-                                                        <div className="relative">
-                                                            <img src={getToothImageSrc(d.numero)} alt={d.numero}
-                                                                className={`h-24 w-auto object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`}
-                                                                style={{
-                                                                    transform: [false !== pngFlipped ? '' : 'scaleY(-1)', mirrored ? 'scaleX(-1)' : ''].filter(Boolean).join(' ') || undefined,
-                                                                    filter: mainColor ? `drop-shadow(0 0 3px ${mainColor})` : undefined,
-                                                                }} draggable={false} />
-                                                            {mainColor && <div className="absolute inset-0 rounded-md mix-blend-multiply pointer-events-none" style={{ backgroundColor: mainColor, opacity: 0.3 }} />}
+                                                    <div key={d.numero} className="flex flex-col items-center gap-0.5 mt-0.5">
+                                                        <div className="relative w-6 h-6 mb-0.5">
+                                                            <img src={getOcclusalImageSrc(d.numero)} alt="" className={`w-full h-full object-contain ${isAusente ? 'opacity-20 grayscale' : ''}`} draggable={false} />
+                                                            {!isAusente && (
+                                                                <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full mix-blend-multiply opacity-90 pointer-events-none">
+                                                                    {(Object.entries(d.caras) as [string, string][]).map(([cara, estado]) => {
+                                                                        if (estado === 'normal') return null;
+                                                                        const hallazgo = getHallazgoById(estado as any);
+                                                                        if (!hallazgo || !hallazgo.porSuperficie) return null;
+                                                                        const origen = d.origenes?.[cara as any] || 'previo';
+                                                                        const renderColor = origen === 'presupuesto' ? '#ec4899' : '#10b981';
+                                                                        return <path key={cara} d={SURFACE_PATHS[cara as keyof typeof SURFACE_PATHS]} fill={renderColor} stroke={renderColor} strokeWidth="2" strokeLinejoin="round" />;
+                                                                    })}
+                                                                </svg>
+                                                            )}
                                                         </div>
-                                                        <span className="text-[7px] font-bold text-slate-500 tabular-nums">{d.numero}</span>
+                                                        <img src={getToothImageSrc(d.numero)} alt={d.numero}
+                                                            className={`h-24 w-auto object-contain transition-all ${isAusente ? 'opacity-20 grayscale' : ''}`}
+                                                            style={{
+                                                                transform: [false !== pngFlipped ? '' : 'scaleY(-1)', mirrored ? 'scaleX(-1)' : ''].filter(Boolean).join(' ') || undefined,
+                                                            }} draggable={false} />
+                                                        <span className="text-[7px] font-bold text-slate-500 tabular-nums pt-1">{d.numero}</span>
                                                     </div>
                                                 );
                                             })}
@@ -950,6 +991,13 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                         >
                             <ArrowLeftRight className="w-3.5 h-3.5" /> Cambiar
                         </button>
+                        <RomexisLaunchButton
+                            numPac={paciente.numPac ?? undefined}
+                            apellidos={paciente.apellidos}
+                            nombre={paciente.nombre}
+                            fechaNacimiento={paciente.fechaNacimiento}
+                            dni={paciente.dni}
+                        />
                     </div>
                 </div>
 

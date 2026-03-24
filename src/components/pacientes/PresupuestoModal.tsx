@@ -8,6 +8,7 @@ import {
 import { sendTextMessage, isEvolutionConfigured } from '../../services/evolution.service';
 import { suggestBudgetFromOdontograma } from '../../services/ia-dental.service';
 import { getOdontograma } from '../../services/odontograma.service';
+import Odontograma from './Odontograma';
 
 const fmt = (n: number) => n.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
 const today = () => new Date().toISOString().slice(0, 10);
@@ -407,8 +408,35 @@ ${notas ? `<p style="font-size:13px;color:#475569"><strong>Notas:</strong> ${not
                     </label>
                 </div>
 
+                {/* ── Visual Odontogram Preview ── */}
+                <div style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', padding: '0 24px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0' }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                            Previsualización 3D del Presupuesto
+                        </span>
+                        <div style={{ display: 'flex', itemsCenter: 'center', gap: 12 }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <div style={{ width: 8, height: 8, background: '#10b981', borderRadius: '50%' }} /> Estado previo
+                            </span>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: '#ec4899', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <div style={{ width: 8, height: 8, background: '#ec4899', borderRadius: '50%' }} /> Tratamiento a realizar
+                            </span>
+                        </div>
+                    </div>
+                    {/* Render Odontograma in readonly mode with scaled container to fit */}
+                    <div style={{ overflow: 'hidden', background: '#fff', borderRadius: '12px 12px 0 0', border: '1px solid #e2e8f0', borderBottom: 'none' }}>
+                        <div style={{ transform: 'scale(0.85)', transformOrigin: 'top center', marginBottom: '-10%' }}>
+                            <Odontograma
+                                numPac={numPac}
+                                readonlyMode={true}
+                                presupuestoLineas={lineas.map(l => ({ descripcion: l.descripcion, pieza: l.pieza }))}
+                            />
+                        </div>
+                    </div>
+                </div>
+
                 {/* ── Lines table ── */}
-                <div style={{ padding: '16px 24px', flex: 1 }}>
+                <div style={{ padding: '16px 24px', flex: 1, borderTop: '1px solid #e2e8f0' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                         <span style={{ fontSize: 12, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                             Tratamientos
