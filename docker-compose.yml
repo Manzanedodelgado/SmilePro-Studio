@@ -26,7 +26,8 @@ services:
       # Override the DATABASE_URL to automatically connect to the internal db container
       - DATABASE_URL=postgresql://${POSTGRES_USER:-smilepro}:${POSTGRES_PASSWORD:-securepassword}@db:5432/${POSTGRES_DB:-smilepro}?schema=public
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
