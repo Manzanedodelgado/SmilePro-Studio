@@ -15,6 +15,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - easypanel
 
   backend:
     build:
@@ -30,13 +32,12 @@ services:
       db:
         condition: service_healthy
     networks:
-      - default
+      - easypanel
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 8
-    # Run Prisma migrations before starting the server process
     command: ["sh", "-c", "npx prisma migrate deploy && dumb-init node dist/server.js"]
 
   frontend:
@@ -46,7 +47,6 @@ services:
     restart: unless-stopped
     networks:
       - easypanel
-      - default
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.smilepro_prod.rule=Host(`gestion.rubiogarciadental.com`)"
