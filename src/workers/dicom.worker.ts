@@ -142,7 +142,7 @@ self.onmessage = async (e: MessageEvent<{ file: File }>) => {
         self.postMessage({ type: 'progress', pct: 100 });
 
         // Transferimos el pixelBuffer (zero-copy) — tras esto el worker ya no puede accederlo
-        self.postMessage({ type: 'done', meta, pixelBuffer }, [pixelBuffer]);
+        (self as any).postMessage({ type: 'done', meta, pixelBuffer }, [pixelBuffer]);
 
     } catch (err) {
         self.postMessage({ type: 'error', message: (err as Error).message });

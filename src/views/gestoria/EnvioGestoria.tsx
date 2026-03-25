@@ -41,11 +41,7 @@ interface EnvioRecord {
     nMovimientos?: number;
 }
 
-const PERIOD_LABELS: Record<string, string> = {
-    mes_actual: 'Mes actual',
-    trimestre_actual: 'Trimestre actual',
-    ano_actual: 'Año actual',
-};
+
 
 // ── Subcomponents ─────────────────────────────────────────────────────────────
 

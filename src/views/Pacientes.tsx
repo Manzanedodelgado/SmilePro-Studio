@@ -410,7 +410,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                                                                         if (estado === 'normal') return null;
                                                                         const hallazgo = getHallazgoById(estado as any);
                                                                         if (!hallazgo || !hallazgo.porSuperficie) return null;
-                                                                        const origen = d.origenes?.[cara as any] || 'previo';
+                                                                        const origen = d.origenes?.[cara as keyof typeof d.origenes] || 'previo';
                                                                         const renderColor = origen === 'presupuesto' ? '#ec4899' : '#10b981';
                                                                         return <path key={cara} d={SURFACE_PATHS[cara as keyof typeof SURFACE_PATHS]} fill={renderColor} stroke={renderColor} strokeWidth="2" strokeLinejoin="round" />;
                                                                     })}
@@ -445,7 +445,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                                                                         if (estado === 'normal') return null;
                                                                         const hallazgo = getHallazgoById(estado as any);
                                                                         if (!hallazgo || !hallazgo.porSuperficie) return null;
-                                                                        const origen = d.origenes?.[cara as any] || 'previo';
+                                                                        const origen = d.origenes?.[cara as keyof typeof d.origenes] || 'previo';
                                                                         const renderColor = origen === 'presupuesto' ? '#ec4899' : '#10b981';
                                                                         return <path key={cara} d={SURFACE_PATHS[cara as keyof typeof SURFACE_PATHS]} fill={renderColor} stroke={renderColor} strokeWidth="2" strokeLinejoin="round" />;
                                                                     })}
@@ -477,7 +477,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                                                                         if (estado === 'normal') return null;
                                                                         const hallazgo = getHallazgoById(estado as any);
                                                                         if (!hallazgo || !hallazgo.porSuperficie) return null;
-                                                                        const origen = d.origenes?.[cara as any] || 'previo';
+                                                                        const origen = d.origenes?.[cara as keyof typeof d.origenes] || 'previo';
                                                                         const renderColor = origen === 'presupuesto' ? '#ec4899' : '#10b981';
                                                                         return <path key={cara} d={SURFACE_PATHS[cara as keyof typeof SURFACE_PATHS]} fill={renderColor} stroke={renderColor} strokeWidth="2" strokeLinejoin="round" />;
                                                                     })}
@@ -512,7 +512,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
                                                                         if (estado === 'normal') return null;
                                                                         const hallazgo = getHallazgoById(estado as any);
                                                                         if (!hallazgo || !hallazgo.porSuperficie) return null;
-                                                                        const origen = d.origenes?.[cara as any] || 'previo';
+                                                                        const origen = d.origenes?.[cara as keyof typeof d.origenes] || 'previo';
                                                                         const renderColor = origen === 'presupuesto' ? '#ec4899' : '#10b981';
                                                                         return <path key={cara} d={SURFACE_PATHS[cara as keyof typeof SURFACE_PATHS]} fill={renderColor} stroke={renderColor} strokeWidth="2" strokeLinejoin="round" />;
                                                                     })}
