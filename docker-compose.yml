@@ -38,14 +38,14 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     networks:
-      - default
       - easypanel
+      - default
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.smilepro.rule=Host(`gestion.rubiogarciadental.com`)"
-      - "traefik.http.routers.smilepro.entrypoints=websecure"
-      - "traefik.http.routers.smilepro.tls.certresolver=letsencrypt"
-      - "traefik.http.services.smilepro.loadbalancer.server.port=80"
+      - "traefik.http.routers.smilepro_prod.rule=Host(`gestion.rubiogarciadental.com`)"
+      - "traefik.http.routers.smilepro_prod.entrypoints=websecure"
+      - "traefik.http.routers.smilepro_prod.tls.certresolver=letsencrypt"
+      - "traefik.http.services.smilepro_prod.loadbalancer.server.port=80"
       - "traefik.docker.network=easypanel"
     depends_on:
       - backend
