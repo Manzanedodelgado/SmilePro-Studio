@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch --import tsx/esm src/server.ts"
+    "dev": "node --watch --import tsx/esm src/server.ts",
+    "build": "tsc"
   },
   "dependencies": {
     "@prisma/client": "^6.4.0",

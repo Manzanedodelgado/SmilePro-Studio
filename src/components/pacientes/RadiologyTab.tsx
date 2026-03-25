@@ -13,6 +13,7 @@ import {
     addEstudio, deleteEstudio, loadEstudiosFromBackend, getEstudios,
     type EstudioRadiologico, type ImageType,
 } from '../../services/imagen.service';
+import RomexisGallery from './RomexisGallery';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -203,18 +204,35 @@ const RadiologyTab: React.FC<RadiologyTabProps> = ({ numPac }) => {
                             {uploading ? 'Subiendo…' : 'Importar archivo'}
                         </button>
                     </div>
+
+                    {/* Romexis RX — solo visible cuando hay estudio seleccionado */}
+                    {selected && (
+                        <div style={{ borderTop: '1px solid #1e2535', padding: '8px 8px 12px', overflowY: 'auto', maxHeight: 220 }}>
+                            <div style={{ color: '#475569', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
+                                Romexis RX
+                            </div>
+                            <RomexisGallery patientId={numPac} />
+                        </div>
+                    )}
                 </>}
             </div>
 
             {/* ── Visor principal ── */}
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                 {!selected ? (
-                    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#334155', gap: 10 }}>
-                        <FileImage style={{ width: 48, height: 48, opacity: 0.3 }} />
-                        <p style={{ fontSize: 13, margin: 0 }}>Selecciona un estudio o arrastra un archivo</p>
-                        <button onClick={() => fileInputRef.current?.click()} style={{ padding: '8px 20px', background: '#1e40af', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#93c5fd', fontSize: 12, fontWeight: 600 }}>
-                            <Upload style={{ width: 12, height: 12, display: 'inline', marginRight: 6 }} /> Importar
-                        </button>
+                    <div style={{ height: '100%', overflowY: 'auto', padding: '20px 24px' }}>
+                        {/* Drop zone */}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#334155', gap: 10, paddingBottom: 20, borderBottom: '1px solid #1e2535' }}>
+                            <FileImage style={{ width: 40, height: 40, opacity: 0.25 }} />
+                            <p style={{ fontSize: 12, margin: 0, color: '#475569' }}>Arrastra un archivo DICOM o imagen</p>
+                            <button onClick={() => fileInputRef.current?.click()} style={{ padding: '7px 18px', background: '#1e40af', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#93c5fd', fontSize: 11, fontWeight: 600 }}>
+                                <Upload style={{ width: 11, height: 11, display: 'inline', marginRight: 6 }} /> Importar archivo
+                            </button>
+                        </div>
+                        {/* Miniaturas Romexis */}
+                        <div style={{ paddingTop: 16 }}>
+                            <RomexisGallery patientId={numPac} />
+                        </div>
                     </div>
                 ) : dicomFile ? (
                     <Suspense fallback={<LoadingScreen text="Cargando visor DICOM…" />}>

@@ -53,8 +53,8 @@ const DXSTART = (() => {
 const IMG_DIR = (process.env.ROMEXIS_IMG_DIR ?? 'C:\\romexis_images').trim();
 
 const SQL_CFG = {
-    server:   (process.env.SQL_SERVER   ?? 'localhost\\ROMEXIS').trim(),
-    database: (process.env.SQL_DATABASE ?? 'ROMEXIS').trim(),
+    server:   (process.env.SQL_SERVER   ?? 'SERVIDOR\\ROMEXIS').trim(),
+    database: (process.env.SQL_DATABASE ?? 'romexis').trim(),
     user:     process.env.SQL_USER     ?? '',
     password: process.env.SQL_PASSWORD ?? '',
     options: {

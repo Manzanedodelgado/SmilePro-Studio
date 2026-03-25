@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-smilepro}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securepassword}
+      POSTGRES_DB: ${POSTGRES_DB:-smilepro}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-smilepro} -d ${POSTGRES_DB:-smilepro}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    # Use env_file to inject secrets if available locally
+    env_file: ./backend/.env
+    environment:
+      # Override the DATABASE_URL to automatically connect to the internal db container
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-smilepro}:${POSTGRES_PASSWORD:-securepassword}@db:5432/${POSTGRES_DB:-smilepro}?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    # Run Prisma migrations before starting the server process
+    command: ["sh", "-c", "npx prisma migrate deploy && dumb-init node dist/server.js"]
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
