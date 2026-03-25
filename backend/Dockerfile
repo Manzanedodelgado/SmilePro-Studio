@@ -38,7 +38,7 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/prisma ./prisma
 
 # Create uploads directory
-RUN mkdir -p /app/uploads && chown -R node:node /app
+RUN mkdir -p /app/uploads && chown node:node /app/uploads
 
 USER node
 EXPOSE 3000
