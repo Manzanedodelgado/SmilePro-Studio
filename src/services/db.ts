@@ -8,7 +8,7 @@
 // ─────────────────────────────────────────────────────────────────
 
 // URL real del backend Node.js
-const API_URL: string = (import.meta as any).env?.VITE_API_URL
+const API_URL: string = String((import.meta as any).env?.VITE_API_URL || '').replace('undefined', '')
     ?? (import.meta as any).env?.VITE__legacyUrl
     ?? 'http://localhost:3000';
 
@@ -21,7 +21,7 @@ const USE_FDW_PROXY = false;
 console.info(`[DB] Backend → ${API_URL}`);
 
 // isDbConfigured: devuelve true si el backend Node.js está disponible
-export const isDbConfigured = (): boolean => Boolean(API_URL);
+export const isDbConfigured = (): boolean => typeof API_URL === 'string';
 
 // ── authFetch: fetch con token JWT automático ─────────────────────
 // Lee el access_token guardado por AuthContext en localStorage.

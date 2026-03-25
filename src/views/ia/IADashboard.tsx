@@ -8,7 +8,7 @@ import { isAIConfigured } from '../../services/ia-dental.service';
 import { getAutomations } from '../../services/automations.service';
 import type { Automation } from './AutomationRules';
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000';
+const API_BASE = String((import.meta as any).env?.VITE_API_URL || '').replace('undefined', '') ?? 'http://localhost:3000';
 
 interface AIMetrics {
     totalMessages24h: number;

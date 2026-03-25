@@ -6,7 +6,7 @@
 // URL del backend Node.js Express. Lee VITE_API_URL (nombre correcto).
 // Fallback a VITE_SUPABASE_URL por compatibilidad con entornos que aún no tengan VITE_API_URL.
 const _rawUrl: string =
-    (import.meta as any).env?.VITE_API_URL ??
+    String((import.meta as any).env?.VITE_API_URL || '').replace('undefined', '') ??
     (import.meta as any).env?.VITE_SUPABASE_URL ??
     'http://localhost:3000';
 

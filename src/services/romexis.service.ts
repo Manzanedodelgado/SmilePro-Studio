@@ -32,7 +32,7 @@ const _legacyAnonKey = _meta.env?.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 /** URL del proxy para Romexis — endpoint en el backend Node.js local */
 const getProxyUrl = (): string | null =>
-    API_URL ? `${API_URL}/api/romexis/proxy` : null;
+    typeof API_URL === 'string' ? `${API_URL}/api/romexis/proxy` : null;
 
 export const isRomexisConfigured = (): boolean => Boolean(getProxyUrl());
 

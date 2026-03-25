@@ -3,7 +3,7 @@ import { MessageSquare, Mail, FileText, Clipboard, Edit3, Save, X, Copy, Check, 
 
 import { authFetch } from '../../services/db';
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000';
+const API_BASE = String((import.meta as any).env?.VITE_API_URL || '').replace('undefined', '') ?? 'http://localhost:3000';
 
 const persistTemplate = async (t: Template): Promise<boolean> => {
     try {

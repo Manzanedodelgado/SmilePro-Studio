@@ -1,6 +1,6 @@
 import { authFetch } from './db';
 
-const API_URL = ((import.meta as any).env?.VITE_API_URL ?? (import.meta as any).env?.VITE_SUPABASE_URL ?? 'http://localhost:3000') as string;
+const API_URL = (String((import.meta as any).env?.VITE_API_URL || '').replace('undefined', '') ?? (import.meta as any).env?.VITE_SUPABASE_URL ?? 'http://localhost:3000') as string;
 
 export const getSpecialties = async () => {
     try {

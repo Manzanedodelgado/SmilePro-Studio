@@ -55,7 +55,7 @@ const ICON_MAP: Record<string, string> = {
     'Post-quirúrgico': '🦷', 'Citas': '📅', 'Cancelación': '❌', 'Resultados': '✅',
 };
 
-const API_BASE_WA = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000';
+const API_BASE_WA = String((import.meta as any).env?.VITE_API_URL || '').replace('undefined', '') ?? 'http://localhost:3000';
 
 // ── Helpers de tiempo ───────────────────────────────────────────────────────
 const relativeTime = (ts: number): string => {

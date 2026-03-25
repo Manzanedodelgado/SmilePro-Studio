@@ -3,7 +3,7 @@ import React, { useState, useRef } from 'react';
 import { X, Plus, Trash2, Send, Printer, FileText } from 'lucide-react';
 import { authFetch } from '../services/db';
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000';
+const API_BASE = String((import.meta as any).env?.VITE_API_URL || '').replace('undefined', '') ?? 'http://localhost:3000';
 
 interface BudgetItem { id: string; description: string; price: number; }
 

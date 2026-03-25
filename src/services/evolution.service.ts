@@ -20,7 +20,7 @@
 import { io as socketIO, type Socket } from 'socket.io-client';
 import { authFetch } from './db';
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000';
+const API_BASE = String((import.meta as any).env?.VITE_API_URL || '').replace('undefined', '') ?? 'http://localhost:3000';
 
 // ── Socket.io ─────────────────────────────────────────────────────────────────
 

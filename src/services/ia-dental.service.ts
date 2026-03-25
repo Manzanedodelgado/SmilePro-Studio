@@ -6,7 +6,7 @@ import { logger } from './logger';
 import { authFetch } from './db';
 
 // la key Groq vive en el backend (.env del servidor).
-const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000';
+const API_BASE = String((import.meta as any).env?.VITE_API_URL || '').replace('undefined', '') ?? 'http://localhost:3000';
 const STREAM_ENDPOINT = `${API_BASE}/api/ai/chat/stream`;
 
 // ── Health check con caché 30s ─────────────────────────────────────

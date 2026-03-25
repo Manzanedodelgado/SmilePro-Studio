@@ -446,7 +446,7 @@ export const parseAllInvoiceEmails = async (
 
 // ── Backend persistence (facturas de email) ───────────────────────
 
-const API_URL = (import.meta.env.VITE_API_URL ?? import.meta.env.VITE_SUPABASE_URL ?? 'http://localhost:3000') as string;
+const API_URL = (String((import.meta as any).env?.VITE_API_URL || '').replace('undefined', '') ?? import.meta.env.VITE_SUPABASE_URL ?? 'http://localhost:3000') as string;
 
 /**
  * Guarda facturas extraídas en el backend Node.js.
@@ -455,7 +455,7 @@ const API_URL = (import.meta.env.VITE_API_URL ?? import.meta.env.VITE_SUPABASE_U
 export const saveFacturasToBackend = async (
     facturas: FacturaExtraida[],
 ): Promise<void> => {
-    if (!API_URL || facturas.length === 0) return;
+    if (facturas.length === 0) return;
 
     const real = facturas.filter(f => !f.gmail_message_id.startsWith('mock-'));
     if (real.length === 0) return;
@@ -483,7 +483,7 @@ export const saveFacturasToBackend = async (
  * Carga facturas guardadas desde el backend Node.js.
  */
 export const loadFacturasFromBackend = async (): Promise<FacturaExtraida[]> => {
-    if (!API_URL) return [];
+    // Allow relative paths
     try {
         const res = await authFetch(
             `${API_URL}/api/accounting/email-invoices?order=fecha_email.desc&limit=200`,
@@ -523,7 +523,7 @@ export const updateFacturaEstado = async (
     gmailMessageId: string,
     estado: FacturaExtraida['estado'],
 ): Promise<void> => {
-    if (!API_URL || gmailMessageId.startsWith('mock-')) return;
+    if (gmailMessageId.startsWith('mock-')) return;
     await authFetch(
         `${API_URL}/api/accounting/email-invoices/${encodeURIComponent(gmailMessageId)}/estado`,
         {

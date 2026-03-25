@@ -9,7 +9,7 @@
 
 import { authFetch } from './db';
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000';
+const API_BASE = String((import.meta as any).env?.VITE_API_URL || '').replace('undefined', '') ?? 'http://localhost:3000';
 
 export const isGDriveConfigured = (): boolean => true; // Siempre activo via backend proxy
 
