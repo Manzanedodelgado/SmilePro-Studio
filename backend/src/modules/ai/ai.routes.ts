@@ -5,9 +5,7 @@ import { requirePermission } from '../../middleware/rbac.js';
 import { AIController } from './ai.controller.js';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const IA_CTRL_FILE = path.join(__dirname, '../../../../data/ia-control.json');
 const PAUSE_MINUTES = 5;
 

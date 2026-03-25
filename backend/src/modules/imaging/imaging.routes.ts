@@ -8,9 +8,7 @@ import type { Request, Response } from 'express';
 import { authenticate } from '../../middleware/auth';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_PATH = path.join(__dirname, '../../../../uploads/imaging-db.json');
 
 // ── In-memory store ───────────────────────────────────────────────────────────

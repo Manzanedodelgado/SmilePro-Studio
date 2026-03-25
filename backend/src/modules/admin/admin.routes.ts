@@ -4,9 +4,7 @@ import { authenticate } from '../../middleware/auth.js';
 import { requirePermission } from '../../middleware/rbac.js';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SETTINGS_FILE = path.join(__dirname, '../../../../data/settings.json');
 
 function readSettings(): any {

@@ -9,10 +9,8 @@
 // ──────────────────────────────────────────────────────────────────────────────
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { logger } from '../../config/logger.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PATTERNS_FILE = path.join(__dirname, '../../../../data/reminder-patterns.json');
 
 export interface PatientReminderPattern {
