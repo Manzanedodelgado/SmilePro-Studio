@@ -29,6 +29,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - default
+      - easypanel
     # Run Prisma migrations before starting the server process
     command: ["sh", "-c", "npx prisma migrate deploy && dumb-init node dist/server.js"]
 
@@ -39,12 +42,12 @@ services:
     restart: unless-stopped
     networks:
       - easypanel
-      - default
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.smilepro_prod.rule=Host(`gestion.rubiogarciadental.com`)"
       - "traefik.http.routers.smilepro_prod.entrypoints=websecure"
       - "traefik.http.routers.smilepro_prod.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.smilepro_prod.priority=1000"
       - "traefik.http.services.smilepro_prod.loadbalancer.server.port=80"
       - "traefik.docker.network=easypanel"
     depends_on:
