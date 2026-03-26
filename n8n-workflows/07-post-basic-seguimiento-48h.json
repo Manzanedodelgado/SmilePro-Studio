@@ -1,0 +1,75 @@
+{
+  "name": "SP · 07 · Seguimiento Post-Visita 48h",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sesion-cerrada",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "sp07-0001",
+      "name": "Webhook · Sesión cerrada en gabinete",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "sesion-cerrada"
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "sp07-0002",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [460, 460]
+    },
+    {
+      "parameters": {
+        "unit": "hours",
+        "amount": 48
+      },
+      "id": "sp07-0003",
+      "name": "Esperar 48 horas",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst fechaVisita = d.fecha || 'tu última visita';\nconst mensaje = `💙 Hola ${d.nombre || 'paciente'}, ¿cómo te encuentras tras tu visita del ${fechaVisita}?\\n\\nSi tienes alguna molestia o pregunta, escríbenos aquí y te atendemos enseguida. 😊`;\nreturn [{ json: { ...d, mensaje } }];"
+      },
+      "id": "sp07-0004",
+      "name": "Preparar mensaje seguimiento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp07-0005",
+      "name": "WhatsApp · Seguimiento 48h",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook · Sesión cerrada en gabinete": {
+      "main": [[{ "node": "Esperar 48 horas", "type": "main", "index": 0 }, { "node": "Responder OK", "type": "main", "index": 0 }]]
+    },
+    "Esperar 48 horas": { "main": [[{ "node": "Preparar mensaje seguimiento", "type": "main", "index": 0 }]] },
+    "Preparar mensaje seguimiento": { "main": [[{ "node": "WhatsApp · Seguimiento 48h", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "id": "sp-post-basic-007",
+  "_nota": "SmilePro POST a /webhook/sesion-cerrada con: { nombre, telefono, fecha (dd/mm/yyyy), tratamiento, idPac }"
+}

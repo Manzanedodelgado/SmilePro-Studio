@@ -6,7 +6,7 @@
 import { logger } from './logger';
 import { authFetch } from './db';
 
-const API_BASE = 'http://localhost:3000/api/accounting';
+const API_BASE = '/api/accounting';
 
 // ── Interfaces UI (sin cambios — compatibles con Gestoria.tsx) ────
 

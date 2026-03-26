@@ -1,0 +1,63 @@
+{
+  "name": "SP · 11 · Recordatorio Pediátrico al Tutor (48h)",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 10 * * *" }] } },
+      "id": "sp11p-0001", "name": "Cron · Diario 10:00h",
+      "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2, "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst d = new Date(now); d.setDate(now.getDate() + 2);\nconst fmt = x => parseInt(`${x.getFullYear()}${String(x.getMonth()+1).padStart(2,'0')}${String(x.getDate()).padStart(2,'0')}`);\nreturn [{ json: { fechaObj: fmt(d) } }];"
+      },
+      "id": "sp11p-0002", "name": "Calcular pasado mañana",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT c.\"IdUsu\", c.\"IdOrden\", c.\"Hora\", c.\"Fecha\",\n  p.\"Nombre\" AS nombre_menor,\n  COALESCE(NULLIF(p.\"TelMovil\",''), p.\"Tel1\") AS telefono_tutor\nFROM \"DCitas\" c\nINNER JOIN \"Pacientes\" p ON p.\"IdPac\" = c.\"IdPac\"\nWHERE c.\"Fecha\" = {{ $json.fechaObj }}\n  AND c.\"Recordada\" = 0\n  AND c.\"IdSitC\" NOT IN (3,4)\n  AND p.\"FecNacim\" IS NOT NULL\n  AND EXTRACT(YEAR FROM AGE(p.\"FecNacim\")) < 14\n  AND COALESCE(NULLIF(p.\"TelMovil\",''), p.\"Tel1\") IS NOT NULL",
+        "additionalFields": {}
+      },
+      "id": "sp11p-0003", "name": "BD · Menores con cita pasado mañana",
+      "type": "n8n-nodes-base.postgres", "typeVersion": 2.4, "position": [680, 300],
+      "credentials": { "postgres": { "id": "1", "name": "SmilePro PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const i = $input.item.json;\nconst h = i.Hora||0, hh=String(Math.floor(h/100)).padStart(2,'0'), mm=String(h%100).padStart(2,'0');\nconst msg = `👶 Hola, recordamos la cita de *${i.nombre_menor}* en ${$vars.CLINICA_NOMBRE}.\\n\\n📅 Pasado mañana a las *${hh}:${mm}h*\\n\\nExplícale que es solo una revisión para que venga tranquilo/a 😊\\n\\nResponde *SÍ* para confirmar o llámanos si necesitas cambiarla: ${$vars.CLINICA_TELEFONO}`;\nreturn [{ json: { ...i, mensaje: msg } }];"
+      },
+      "id": "sp11p-0004", "name": "Preparar mensaje tutor",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono_tutor.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp11p-0005", "name": "WhatsApp · Tutor menor",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE \"DCitas\" SET \"Recordada\"=1 WHERE \"IdUsu\"={{ $json.IdUsu }} AND \"IdOrden\"={{ $json.IdOrden }}",
+        "additionalFields": {}
+      },
+      "id": "sp11p-0006", "name": "BD · Marcar Recordada=1",
+      "type": "n8n-nodes-base.postgres", "typeVersion": 2.4, "position": [1340, 300],
+      "credentials": { "postgres": { "id": "1", "name": "SmilePro PostgreSQL" } }
+    }
+  ],
+  "connections": {
+    "Cron · Diario 10:00h": { "main": [[{ "node": "Calcular pasado mañana", "type": "main", "index": 0 }]] },
+    "Calcular pasado mañana": { "main": [[{ "node": "BD · Menores con cita pasado mañana", "type": "main", "index": 0 }]] },
+    "BD · Menores con cita pasado mañana": { "main": [[{ "node": "Preparar mensaje tutor", "type": "main", "index": 0 }]] },
+    "Preparar mensaje tutor": { "main": [[{ "node": "WhatsApp · Tutor menor", "type": "main", "index": 0 }]] },
+    "WhatsApp · Tutor menor": { "main": [[{ "node": "BD · Marcar Recordada=1", "type": "main", "index": 0 }]] }
+  },
+  "active": false, "settings": { "executionOrder": "v1" }, "id": "sp-rem-pediatric-011"
+}

@@ -1,0 +1,40 @@
+{
+  "name": "SP · 23 · Consentimiento Digital al Confirmar Cita",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST", "path": "cita-confirmada-consentimiento",
+        "responseMode": "lastNode", "options": {}
+      },
+      "id": "sp23c-0001", "name": "Webhook · Cita confirmada → consentimiento",
+      "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [240, 300],
+      "webhookId": "cita-confirmada-consentimiento"
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "sp23c-0002", "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$input.first().json;\nconst link=`${$vars.CUESTIONARIO_BASE_URL}/consentimiento?token=${d.token||d.idPac}&tto=${encodeURIComponent(d.tratamiento||'')}`;\nconst asunto=`Consentimiento previo a tu cita — ${$vars.CLINICA_NOMBRE}`;\nconst cuerpo=`Estimado/a ${d.nombre},\\n\\nHas confirmado tu cita del ${d.fechaStr} a las ${d.horaStr}h.\\n\\nNecesitamos tu consentimiento informado firmado antes de la visita. Puedes hacerlo online en 2 minutos:\\n\\n${link}\\n\\nSi tienes dudas, llámanos al ${$vars.CLINICA_TELEFONO}.\\n\\nHasta pronto,\\n${$vars.CLINICA_NOMBRE}`;\nreturn [{ json: { ...d, link, asunto, cuerpo } }];"
+      },
+      "id": "sp23c-0003", "name": "Preparar email consentimiento",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.SMTP_USER }}", "toEmail": "={{ $json.email }}",
+        "subject": "={{ $json.asunto }}", "emailType": "text", "message": "={{ $json.cuerpo }}", "options": {}
+      },
+      "id": "sp23c-0004", "name": "Email · Consentimiento digital",
+      "type": "n8n-nodes-base.emailSend", "typeVersion": 2.1, "position": [680, 300],
+      "credentials": { "smtp": { "id": "2", "name": "SmilePro SMTP" } }
+    }
+  ],
+  "connections": {
+    "Webhook · Cita confirmada → consentimiento": { "main": [[{ "node": "Preparar email consentimiento", "type": "main", "index": 0 }, { "node": "Responder OK", "type": "main", "index": 0 }]] },
+    "Preparar email consentimiento": { "main": [[{ "node": "Email · Consentimiento digital", "type": "main", "index": 0 }]] }
+  },
+  "active": false, "settings": { "executionOrder": "v1" }, "id": "sp-consent-confirmed-023"
+}

@@ -1,0 +1,43 @@
+{
+  "name": "SP · 17 · Primera Visita — Confirmación de Reserva",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST", "path": "primera-visita",
+        "responseMode": "lastNode", "options": {}
+      },
+      "id": "sp17-0001", "name": "Webhook · Primera Visita creada",
+      "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [240, 300],
+      "webhookId": "primera-visita"
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "sp17-0002", "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst esMenor = (d.edad !== undefined) ? d.edad < 18 : false;\nconst telefonoDestino = esMenor && d.telefonoTutor ? d.telefonoTutor : d.telefono;\nconst nombreDestino = esMenor && d.nombreTutor ? d.nombreTutor : d.nombre;\nlet msg;\nif (esMenor) {\n  msg = `👶 Hola ${nombreDestino}, información sobre la primera cita de *${d.nombre}* en ${$vars.CLINICA_NOMBRE}.\\n\\n📅 ${d.fechaStr} a las *${d.horaStr}h*\\n👨‍⚕️ ${d.doctor || 'nuestro equipo'}\\n\\nEn breve te enviaremos los documentos para prepararla. 😊`;\n} else {\n  msg = `🏥 Hola ${d.nombre}, tu *primera visita* ha sido reservada en ${$vars.CLINICA_NOMBRE}.\\n\\n📅 ${d.fechaStr} a las *${d.horaStr}h*\\n👨‍⚕️ ${d.doctor || 'nuestro equipo'}\\n\\nEn breve te enviamos los formularios. ¿Necesitas cambiarla? 📞 ${$vars.CLINICA_TELEFONO}`;\n}\nreturn [{ json: { ...d, esMenor, telefonoDestino, mensaje: msg } }];"
+      },
+      "id": "sp17-0003", "name": "Preparar confirmación",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefonoDestino.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp17-0004", "name": "WhatsApp · Confirmación PV",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Webhook · Primera Visita creada": { "main": [[{ "node": "Preparar confirmación", "type": "main", "index": 0 }, { "node": "Responder OK", "type": "main", "index": 0 }]] },
+    "Preparar confirmación": { "main": [[{ "node": "WhatsApp · Confirmación PV", "type": "main", "index": 0 }]] }
+  },
+  "active": false, "settings": { "executionOrder": "v1" }, "id": "sp-pv-booking-confirm-017",
+  "_nota": "POST /webhook/primera-visita con: { nombre, telefono, fechaStr, horaStr, doctor, edad?, nombreTutor?, telefonoTutor? }"
+}

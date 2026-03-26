@@ -1,0 +1,43 @@
+{
+  "name": "SP · 12 · Recomendaciones Post-Tratamiento",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST", "path": "post-recomendaciones",
+        "responseMode": "lastNode", "options": {}
+      },
+      "id": "sp12r-0001", "name": "Webhook · Sesión cerrada con tratamiento",
+      "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [240, 300],
+      "webhookId": "post-recomendaciones"
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "sp12r-0002", "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst recs = {\n  'empaste':        'Evita comer por esa zona 2h. Es normal algo de sensibilidad los primeros días.',\n  'composite':      'Evita comer por esa zona 2h. Es normal algo de sensibilidad los primeros días.',\n  'endodoncia':     'Toma antiinflamatorio si hay molestia. Evita mascar por ese lado hasta poner la corona definitiva.',\n  'blanqueamiento': 'Evita café, vino, tabaco y colorantes 48h. Usa pasta para dientes sensibles.',\n  'higiene':        'Sigue las instrucciones de cepillado. Usa seda dental o cepillos interproximales cada día.',\n  'extraccion':     'Morder la gasa 30 min. No enjuagarse hoy. Dieta blanda 24h. Frío externo si hay inflamación.',\n  'implante':       'No fumes las primeras semanas. Cepilla suave alrededor. Controla inflamación con frío externo.',\n  'corona':         'La corona puede tardar 24-48h en asentarse. Evita alimentos muy duros los primeros días.',\n  'ortodoncia':     'Porta los alineadores/retenedores según indicaciones. Limpia bien alrededor de los brackets.',\n};\nconst trat = (d.tratamiento||'').toLowerCase();\nconst key = Object.keys(recs).find(k => trat.includes(k)) || null;\nconst rec = key ? recs[key] : 'Sigue las indicaciones de tu doctor. Contáctanos si tienes alguna duda.';\nconst msg = `📋 Tras tu *${d.tratamiento||'tratamiento'}*, ${d.nombre}:\\n\\n${rec}\\n\\n¡Tu sonrisa te lo agradecerá! 🦷 Estamos aquí si necesitas algo.`;\nreturn [{ json: { ...d, mensaje: msg } }];"
+      },
+      "id": "sp12r-0003", "name": "Preparar recomendación según tratamiento",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp12r-0004", "name": "WhatsApp · Recomendaciones",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Webhook · Sesión cerrada con tratamiento": { "main": [[{ "node": "Preparar recomendación según tratamiento", "type": "main", "index": 0 }, { "node": "Responder OK", "type": "main", "index": 0 }]] },
+    "Preparar recomendación según tratamiento": { "main": [[{ "node": "WhatsApp · Recomendaciones", "type": "main", "index": 0 }]] }
+  },
+  "active": false, "settings": { "executionOrder": "v1" }, "id": "sp-post-recs-012",
+  "_nota": "POST /webhook/post-recomendaciones con: { nombre, telefono, tratamiento, fecha }"
+}

@@ -1,0 +1,42 @@
+{
+  "name": "SP · 24 · Notificación Consentimiento Firmado",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST", "path": "consentimiento-firmado",
+        "responseMode": "lastNode", "options": {}
+      },
+      "id": "sp24cr-0001", "name": "Webhook · Firma digital recibida",
+      "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [240, 300],
+      "webhookId": "consentimiento-firmado"
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "sp24cr-0002", "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$input.first().json;\nconst msgInterno=`✅ [CONSENTIMIENTO FIRMADO]\\nPaciente: ${d.nombre} — NumPac: ${d.numPac||'—'}\\nTratamiento: ${d.tratamiento||'—'}\\nCita: ${d.fechaStr||'—'} a las ${d.horaStr||'—'}h\\n\\n✔️ Guardado en ficha. Consentimiento OK.`;\nreturn [{ json: { ...d, mensajeInterno: msgInterno } }];"
+      },
+      "id": "sp24cr-0003", "name": "Preparar notificación interna",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $vars.CLINICA_TELEFONO.replace(/[^0-9]/g,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensajeInterno }}\"\n}"
+      },
+      "id": "sp24cr-0004", "name": "WhatsApp · Notificar recepción",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Webhook · Firma digital recibida": { "main": [[{ "node": "Preparar notificación interna", "type": "main", "index": 0 }, { "node": "Responder OK", "type": "main", "index": 0 }]] },
+    "Preparar notificación interna": { "main": [[{ "node": "WhatsApp · Notificar recepción", "type": "main", "index": 0 }]] }
+  },
+  "active": false, "settings": { "executionOrder": "v1" }, "id": "sp-consent-received-024"
+}

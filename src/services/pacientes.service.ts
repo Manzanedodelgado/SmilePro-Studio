@@ -8,7 +8,7 @@ import { authFetch, isDbConfigured } from './db';
 
 export interface ValidationError { field: string; message: string; }
 
-const API_BASE_URL = 'http://localhost:3000/api';
+const API_BASE_URL = '/api';
 
 /** Convierte fila de Prisma al tipo Paciente del frontend */
 const mapPrismaToPaciente = (row: any): Paciente => ({

@@ -1,0 +1,42 @@
+{
+  "name": "SP · 27 · Recibo WhatsApp Pago Efectivo",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST", "path": "pago-efectivo",
+        "responseMode": "lastNode", "options": {}
+      },
+      "id": "sp27rc-0001", "name": "Webhook · Pago efectivo registrado",
+      "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [240, 300],
+      "webhookId": "pago-efectivo"
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "sp27rc-0002", "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$input.first().json;\nconst imp=parseFloat(d.importe||0).toFixed(2);\nconst msg=`🧾 *RECIBO — ${$vars.CLINICA_NOMBRE}*\\n\\nPaciente: ${d.nombre}\\nConcepto: ${d.tratamiento||'Servicios dentales'}\\nImporte: *${imp}€* (efectivo)\\nFecha: ${d.fechaStr||new Date().toLocaleDateString('es-ES')}\\n\\n¡Gracias por tu confianza! 😊`;\nreturn [{ json: { ...d, mensaje: msg } }];"
+      },
+      "id": "sp27rc-0003", "name": "Preparar recibo",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp27rc-0004", "name": "WhatsApp · Recibo efectivo",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Webhook · Pago efectivo registrado": { "main": [[{ "node": "Preparar recibo", "type": "main", "index": 0 }, { "node": "Responder OK", "type": "main", "index": 0 }]] },
+    "Preparar recibo": { "main": [[{ "node": "WhatsApp · Recibo efectivo", "type": "main", "index": 0 }]] }
+  },
+  "active": false, "settings": { "executionOrder": "v1" }, "id": "sp-receipt-cash-027"
+}

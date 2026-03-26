@@ -1,0 +1,71 @@
+{
+  "name": "SP · 10 · Recaptación Paciente Inactivo +12 meses",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 10 1 * *" }] } },
+      "id": "sp10-0001",
+      "name": "Cron · Día 1 de cada mes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst d12m = new Date(now); d12m.setFullYear(now.getFullYear() - 1);\nconst fmt = d => parseInt(`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`);\nreturn [{ json: { fechaLimite: fmt(d12m) } }];"
+      },
+      "id": "sp10-0002",
+      "name": "Calcular hace 12 meses",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.\"IdPac\", p.\"Nombre\",\n  COALESCE(NULLIF(p.\"TelMovil\",''), p.\"Tel1\") AS telefono,\n  MAX(c.\"Fecha\") AS ultima_cita\nFROM \"Pacientes\" p\nINNER JOIN \"DCitas\" c ON c.\"IdPac\" = p.\"IdPac\" AND c.\"IdSitC\" = 5\nWHERE p.\"Inactivo\" IS NULL\n  AND (p.\"AceptaWhatsApp\" = true OR p.\"AceptaWhatsApp\" IS NULL)\n  AND COALESCE(NULLIF(p.\"TelMovil\",''), p.\"Tel1\") IS NOT NULL\nGROUP BY p.\"IdPac\", p.\"Nombre\", p.\"TelMovil\", p.\"Tel1\"\nHAVING MAX(c.\"Fecha\") < {{ $json.fechaLimite }}\nORDER BY MAX(c.\"Fecha\") DESC\nLIMIT 50",
+        "additionalFields": {}
+      },
+      "id": "sp10-0003",
+      "name": "BD · Pacientes inactivos +12m",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [680, 300],
+      "credentials": { "postgres": { "id": "1", "name": "SmilePro PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\nconst mensaje = `👋 Hola ${item.Nombre}, hace tiempo que no sabemos nada de ti en ${$vars.CLINICA_NOMBRE}.\\n\\n¿Qué tal si aprovechamos para tu *revisión anual*? Es gratis y solo dura 15 minutos 🦷\\n\\nResponde *CITA* y te buscamos un hueco.`;\nreturn [{ json: { ...item, mensaje } }];"
+      },
+      "id": "sp10-0004",
+      "name": "Preparar mensaje recaptación",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp10-0005",
+      "name": "WhatsApp · Reactivación",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Cron · Día 1 de cada mes": { "main": [[{ "node": "Calcular hace 12 meses", "type": "main", "index": 0 }]] },
+    "Calcular hace 12 meses": { "main": [[{ "node": "BD · Pacientes inactivos +12m", "type": "main", "index": 0 }]] },
+    "BD · Pacientes inactivos +12m": { "main": [[{ "node": "Preparar mensaje recaptación", "type": "main", "index": 0 }]] },
+    "Preparar mensaje recaptación": { "main": [[{ "node": "WhatsApp · Reactivación", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "id": "sp-recall-annual-010"
+}

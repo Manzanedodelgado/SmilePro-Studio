@@ -1,0 +1,48 @@
+{
+  "name": "SP · 25 · Factura Email tras Pago",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST", "path": "pago-registrado",
+        "responseMode": "lastNode", "options": {}
+      },
+      "id": "sp25inv-0001", "name": "Webhook · Pago registrado",
+      "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [240, 300],
+      "webhookId": "pago-registrado"
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "sp25inv-0002", "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "conditions": { "conditions": [{ "leftValue": "={{ $json.email }}", "rightValue": "", "operator": { "type": "string", "operation": "notEquals" } }] }
+      },
+      "id": "sp25inv-0003", "name": "¿Tiene email?",
+      "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$input.first().json;\nconst imp=parseFloat(d.importe||0).toFixed(2);\nreturn [{ json: { ...d,\n  asunto: `Factura ${d.numFactura||''} — ${$vars.CLINICA_NOMBRE}`,\n  cuerpo: `Estimado/a ${d.nombre},\\n\\nFactura por los servicios recibidos:\\n\\nNº Factura: ${d.numFactura||'Ver adjunto'}\\nConcepto: ${d.tratamiento||'Servicios dentales'}\\nImporte: ${imp}€\\nFecha: ${d.fechaStr||new Date().toLocaleDateString('es-ES')}\\nForma de pago: ${d.formaPago||'—'}\\n\\nGracias por su confianza.\\n${$vars.CLINICA_NOMBRE}\\n${$vars.CLINICA_TELEFONO}`\n} }];"
+      },
+      "id": "sp25inv-0004", "name": "Preparar email factura",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [680, 220]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.SMTP_USER }}", "toEmail": "={{ $json.email }}",
+        "subject": "={{ $json.asunto }}", "emailType": "text", "message": "={{ $json.cuerpo }}", "options": {}
+      },
+      "id": "sp25inv-0005", "name": "Email · Factura",
+      "type": "n8n-nodes-base.emailSend", "typeVersion": 2.1, "position": [900, 220],
+      "credentials": { "smtp": { "id": "2", "name": "SmilePro SMTP" } }
+    }
+  ],
+  "connections": {
+    "Webhook · Pago registrado": { "main": [[{ "node": "¿Tiene email?", "type": "main", "index": 0 }, { "node": "Responder OK", "type": "main", "index": 0 }]] },
+    "¿Tiene email?": { "main": [[{ "node": "Preparar email factura", "type": "main", "index": 0 }], []] },
+    "Preparar email factura": { "main": [[{ "node": "Email · Factura", "type": "main", "index": 0 }]] }
+  },
+  "active": false, "settings": { "executionOrder": "v1" }, "id": "sp-invoice-doctor-025"
+}

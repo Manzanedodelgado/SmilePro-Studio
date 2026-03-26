@@ -6,7 +6,7 @@ import { AIController } from './ai.controller.js';
 import fs from 'fs';
 import path from 'path';
 
-const IA_CTRL_FILE = path.join(__dirname, '../../../../data/ia-control.json');
+const IA_CTRL_FILE = path.join(process.cwd(), 'data', 'ia-control.json');
 const PAUSE_MINUTES = 5;
 
 function readCtrl(): Record<string, any> {

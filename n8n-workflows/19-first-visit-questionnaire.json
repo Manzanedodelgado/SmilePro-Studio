@@ -1,0 +1,57 @@
+{
+  "name": "SP · 19 · Primera Visita — Cuestionario Anamnesis (72h antes)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST", "path": "primera-visita-cuestionario",
+        "responseMode": "lastNode", "options": {}
+      },
+      "id": "sp19-0001", "name": "Webhook · PV — programar cuestionario",
+      "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [240, 300],
+      "webhookId": "primera-visita-cuestionario"
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "sp19-0002", "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst now = new Date();\nconst citaFecha = d.fechaTimestamp ? new Date(d.fechaTimestamp) : new Date();\nconst diffMs = citaFecha - now;\nconst diffHoras = diffMs / (1000 * 60 * 60);\n// Enviar 72h antes; si queda menos de 72h, enviar en 30 min\nconst esperarMs = diffHoras > 72\n  ? diffMs - 72 * 60 * 60 * 1000\n  : Math.max(30 * 60 * 1000, diffMs - 2 * 60 * 60 * 1000);\nreturn [{ json: { ...d, esperarMs: Math.max(0, esperarMs) } }];"
+      },
+      "id": "sp19-0003", "name": "Calcular 72h antes",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [460, 300]
+    },
+    {
+      "parameters": { "resume": "timeInterval", "unit": "milliseconds", "amount": "={{ $json.esperarMs }}" },
+      "id": "sp19-0004", "name": "Esperar hasta 72h antes",
+      "type": "n8n-nodes-base.wait", "typeVersion": 1.1, "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst esMenor = d.esMenor || false;\nconst telefonoDestino = esMenor && d.telefonoTutor ? d.telefonoTutor : d.telefono;\nconst linkCuestionario = `${$vars.CUESTIONARIO_BASE_URL}?token=${d.token || d.idPac}`;\nconst destinatario = esMenor ? (d.nombreTutor || d.nombre) : d.nombre;\nconst msg = `📋 ¡Bienvenido/a a ${$vars.CLINICA_NOMBRE}${esMenor ? ` — para ${d.nombre}` : ''}, ${destinatario}!\\n\\nAntes de tu primera cita el *${d.fechaStr}*, completa este cuestionario de salud en 3-5 minutos:\\n👉 ${linkCuestionario}\\n\\n⏰ El enlace expira 1h tras tu cita. ¿Dudas? 📞 ${$vars.CLINICA_TELEFONO}`;\nreturn [{ json: { ...d, mensaje: msg, telefonoDestino, linkCuestionario } }];"
+      },
+      "id": "sp19-0005", "name": "Preparar cuestionario anamnesis",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefonoDestino.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp19-0006", "name": "WhatsApp · Cuestionario anamnesis",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Webhook · PV — programar cuestionario": { "main": [[{ "node": "Calcular 72h antes", "type": "main", "index": 0 }, { "node": "Responder OK", "type": "main", "index": 0 }]] },
+    "Calcular 72h antes": { "main": [[{ "node": "Esperar hasta 72h antes", "type": "main", "index": 0 }]] },
+    "Esperar hasta 72h antes": { "main": [[{ "node": "Preparar cuestionario anamnesis", "type": "main", "index": 0 }]] },
+    "Preparar cuestionario anamnesis": { "main": [[{ "node": "WhatsApp · Cuestionario anamnesis", "type": "main", "index": 0 }]] }
+  },
+  "active": false, "settings": { "executionOrder": "v1" }, "id": "sp-first-visit-quest-019",
+  "_nota": "POST /webhook/primera-visita-cuestionario con: { nombre, telefono, fechaStr, fechaTimestamp (ISO), idPac/token, esMenor?, nombreTutor?, telefonoTutor? }"
+}

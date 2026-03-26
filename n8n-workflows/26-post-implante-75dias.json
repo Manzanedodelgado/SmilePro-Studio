@@ -1,0 +1,71 @@
+{
+  "name": "SP · 26 · Seguimiento Implante 75 días",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 10 * * *" }] } },
+      "id": "sp26-0001",
+      "name": "Cron · Diario 10:00h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst d75 = new Date(now); d75.setDate(now.getDate() - 75);\nconst fmt = d => parseInt(`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`);\nreturn [{ json: { fecha75: fmt(d75), rango: 2 } }];"
+      },
+      "id": "sp26-0002",
+      "name": "Calcular hace 75 días",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT DISTINCT p.\"IdPac\", p.\"Nombre\",\n  COALESCE(NULLIF(p.\"TelMovil\",''), p.\"Tel1\") AS telefono\nFROM \"Pacientes\" p\nINNER JOIN \"DCitas\" c ON c.\"IdPac\" = p.\"IdPac\"\nWHERE (c.\"Texto\" ILIKE '%implante%' OR c.\"Texto\" ILIKE '%cirugía%')\n  AND c.\"IdSitC\" = 5\n  AND c.\"Fecha\" BETWEEN {{ $json.fecha75 }} - {{ $json.rango }} AND {{ $json.fecha75 }} + {{ $json.rango }}\n  AND p.\"IdPac\" NOT IN (\n    SELECT c2.\"IdPac\" FROM \"DCitas\" c2\n    WHERE (c2.\"Texto\" ILIKE '%osteointeg%' OR c2.\"Texto\" ILIKE '%revisión implante%')\n      AND c2.\"Fecha\" > {{ $json.fecha75 }}\n  )\n  AND COALESCE(NULLIF(p.\"TelMovil\",''), p.\"Tel1\") IS NOT NULL\n  AND (p.\"AceptaWhatsApp\" = true OR p.\"AceptaWhatsApp\" IS NULL)\nLIMIT 20",
+        "additionalFields": {}
+      },
+      "id": "sp26-0003",
+      "name": "BD · Implantes hace ~75 días",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [680, 300],
+      "credentials": { "postgres": { "id": "1", "name": "SmilePro PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\nconst mensaje = `🦷 Hola ${item.Nombre}, han pasado unos 2-3 meses desde tu cirugía de implante.\\n\\nEs el momento ideal para la *revisión de osteointegración* y comprobar que todo va perfectamente. 😊\\n\\n¿Te buscamos un hueco esta semana?`;\nreturn [{ json: { ...item, mensaje } }];"
+      },
+      "id": "sp26-0004",
+      "name": "Preparar mensaje implante",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp26-0005",
+      "name": "WhatsApp · Seguimiento implante",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Cron · Diario 10:00h": { "main": [[{ "node": "Calcular hace 75 días", "type": "main", "index": 0 }]] },
+    "Calcular hace 75 días": { "main": [[{ "node": "BD · Implantes hace ~75 días", "type": "main", "index": 0 }]] },
+    "BD · Implantes hace ~75 días": { "main": [[{ "node": "Preparar mensaje implante", "type": "main", "index": 0 }]] },
+    "Preparar mensaje implante": { "main": [[{ "node": "WhatsApp · Seguimiento implante", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "id": "sp-post-implant-026"
+}

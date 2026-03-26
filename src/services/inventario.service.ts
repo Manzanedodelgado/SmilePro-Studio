@@ -7,7 +7,7 @@ import { type ItemInventario, type Lote, type EstadoLote } from '../types';
 import { logger } from './logger';
 import { authFetch } from './db';
 
-const API_BASE = 'http://localhost:3000/api/inventory';
+const API_BASE = '/api/inventory';
 
 const mapLote = (l: any): Lote => ({
     batchId: String(l.id ?? l.batchId ?? crypto.randomUUID()),

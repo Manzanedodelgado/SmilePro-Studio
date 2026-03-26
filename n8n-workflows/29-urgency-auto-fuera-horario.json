@@ -1,0 +1,61 @@
+{
+  "name": "SP · 29 · Respuesta Automática Urgencias (fuera horario)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST", "path": "evolution-incoming",
+        "responseMode": "responseNode", "options": {}
+      },
+      "id": "sp29u-0001", "name": "Webhook · Mensajes Evolution",
+      "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [240, 300],
+      "webhookId": "evolution-incoming"
+    },
+    {
+      "parameters": { "respondWith": "text", "responseBody": "OK" },
+      "id": "sp29u-0002", "name": "Responder 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body=$input.first().json.body||$input.first().json;\nconst data=body.data||body;\nconst msg=(data.message?.conversation||data.message?.extendedTextMessage?.text||'').toLowerCase();\nconst rem=data.key?.remoteJid?.replace('@s.whatsapp.net','')||'';\nconst palabras=['dolor','urgencia','urgente','me duele','sangrado','hinchado','accidente','roto','emergencia','necesito hoy'];\nconst esUrgencia=palabras.some(p=>msg.includes(p));\nconst h=new Date().getHours(), dia=new Date().getDay();\nconst esFuera=h<8||h>=20||dia===0||dia===6;\nreturn [{ json: { msg, remitente:rem, esUrgencia, esFuera, responder: esUrgencia&&esFuera } }];"
+      },
+      "id": "sp29u-0003", "name": "Detectar urgencia fuera de horario",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": { "conditions": [{ "leftValue": "={{ $json.responder }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equal" } }] }
+      },
+      "id": "sp29u-0004", "name": "¿Urgencia fuera horario?",
+      "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.remitente }}@s.whatsapp.net\",\n  \"text\": \"🚨 *Urgencias ${$vars.CLINICA_NOMBRE}*\\n\\nEstamos fuera de horario pero hemos recibido tu mensaje.\\n\\n📞 Llama al *${$vars.CLINICA_TELEFONO_URGENCIAS}*\\n\\n💊 Mientras tanto:\\n• Ibuprofeno 600mg con alimentos si hay dolor\\n• Frío externo 15 min si hay inflamación\\n• Sangrado abundante → urgencias del hospital\\n\\nTe atenderemos en cuanto abramos. 🙏\"\n}"
+      },
+      "id": "sp29u-0005", "name": "WhatsApp · Instrucciones urgencia",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [900, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $vars.CLINICA_TELEFONO_URGENCIAS.replace(/[^0-9]/g,'') }}@s.whatsapp.net\",\n  \"text\": \"🚨 [URGENCIA FUERA HORARIO]\\nDe: +{{ $json.remitente }}\\nMensaje: {{ $json.msg }}\"\n}"
+      },
+      "id": "sp29u-0006", "name": "WhatsApp · Avisar doctor guardia",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [900, 380]
+    }
+  ],
+  "connections": {
+    "Webhook · Mensajes Evolution": { "main": [[{ "node": "Detectar urgencia fuera de horario", "type": "main", "index": 0 }, { "node": "Responder 200 OK", "type": "main", "index": 0 }]] },
+    "Detectar urgencia fuera de horario": { "main": [[{ "node": "¿Urgencia fuera horario?", "type": "main", "index": 0 }]] },
+    "¿Urgencia fuera horario?": { "main": [[{ "node": "WhatsApp · Instrucciones urgencia", "type": "main", "index": 0 }, { "node": "WhatsApp · Avisar doctor guardia", "type": "main", "index": 0 }], []] }
+  },
+  "active": false, "settings": { "executionOrder": "v1" }, "id": "sp-urgency-auto-029"
+}

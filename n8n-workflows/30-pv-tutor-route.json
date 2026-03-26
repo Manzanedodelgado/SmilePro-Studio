@@ -1,0 +1,56 @@
+{
+  "name": "SP · 30 · Primera Visita — Redirección Tutor Menor",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST", "path": "pv-tutor-route",
+        "responseMode": "lastNode", "options": {}
+      },
+      "id": "sp30pvt-0001", "name": "Webhook · PV Menor",
+      "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [240, 300],
+      "webhookId": "pv-tutor-route"
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "sp30pvt-0002", "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{
+            "leftValue": "={{ $json.esMenor }}",
+            "rightValue": true,
+            "operator": { "type": "boolean", "operation": "equal" }
+          }]
+        }
+      },
+      "id": "sp30pvt-0003", "name": "¿Paciente menor de edad?",
+      "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$input.first().json;\nconst fechaStr=d.fechaStr||new Date().toLocaleDateString('es-ES');\nconst msg=`👶 Hola ${d.nombreTutor||d.nombre}, información sobre la primera cita de *${d.nombreMenor||d.nombre}* el *${fechaStr}* a las *${d.horaStr||'--'}h*.\n\nComo tutor/a legal, tu firma será necesaria en los documentos:\n📋 Cuestionario + LOPD: ${d.linkCuestionario||'(pendiente)'}\n\nEl día de la cita trae también el *libro de familia o DNI del menor*.\n\n📞 ¿Dudas? ${$vars.CLINICA_TELEFONO}`;\nreturn [{ json: { ...d, mensajeTutor: msg, telefonoDestino: d.telefonoTutor||d.telefono } }];"
+      },
+      "id": "sp30pvt-0004", "name": "Preparar mensaje tutor",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [680, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefonoDestino.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensajeTutor }}\"\n}"
+      },
+      "id": "sp30pvt-0005", "name": "WhatsApp · Tutor legal",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [900, 220]
+    }
+  ],
+  "connections": {
+    "Webhook · PV Menor": { "main": [[{ "node": "¿Paciente menor de edad?", "type": "main", "index": 0 }, { "node": "Responder OK", "type": "main", "index": 0 }]] },
+    "¿Paciente menor de edad?": { "main": [[{ "node": "Preparar mensaje tutor", "type": "main", "index": 0 }], []] },
+    "Preparar mensaje tutor": { "main": [[{ "node": "WhatsApp · Tutor legal", "type": "main", "index": 0 }]] }
+  },
+  "active": false, "settings": { "executionOrder": "v1" }, "id": "sp-pv-tutor-route-030"
+}

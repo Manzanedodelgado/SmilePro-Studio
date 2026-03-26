@@ -1,0 +1,134 @@
+{
+  "name": "SP · 08 · Protocolo Post-Quirúrgico (Día 0 / 2 / 7)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cirugia-cerrada",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "sp08-0001",
+      "name": "Webhook · Cirugía cerrada",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "cirugia-cerrada"
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "sp08-0002",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst msg = `🦷 *Post-operatorio ${d.nombre}:* Morder la gasa 30 min, no enjuagarse hoy. Si hay malestar, Ibuprofeno 600mg con alimentos.\\n\\n❄️ Aplica frío externo (paños fríos, no hielo directo) 15 min ON / 15 min OFF.\\n\\nLlámanos si lo necesitas: ${$vars.CLINICA_TELEFONO} 📞`;\nreturn [{ json: { ...d, mensaje: msg } }];"
+      },
+      "id": "sp08-0003",
+      "name": "Mensaje Día 0 (instrucciones)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp08-0004",
+      "name": "WhatsApp · Día 0",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 300]
+    },
+    {
+      "parameters": { "unit": "hours", "amount": 48 },
+      "id": "sp08-0005",
+      "name": "Esperar 48h (Día 2)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst msg = `😊 Hola ${d.nombre}, ¿cómo te encuentras a las 48h de la cirugía?\\n\\nEs normal algo de inflamación y molestia. Si tienes *fiebre, sangrado abundante o dolor intenso*, llámanos de inmediato al ${$vars.CLINICA_TELEFONO}.\\n\\n¿Cómo lo llevas?`;\nreturn [{ json: { ...d, mensaje: msg } }];"
+      },
+      "id": "sp08-0006",
+      "name": "Mensaje Día 2 (control dolor)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp08-0007",
+      "name": "WhatsApp · Día 2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": { "unit": "hours", "amount": 120 },
+      "id": "sp08-0008",
+      "name": "Esperar 5 días más (Día 7)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst msg = `🦷 Hola ${d.nombre}, ya han pasado 7 días desde tu cirugía. Toca la *revisión post-op* (sin coste) para comprobar que todo va perfectamente.\\n\\n¿Qué día te viene bien esta semana?`;\nreturn [{ json: { ...d, mensaje: msg } }];"
+      },
+      "id": "sp08-0009",
+      "name": "Mensaje Día 7 (revisión)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp08-0010",
+      "name": "WhatsApp · Día 7",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2000, 300]
+    }
+  ],
+  "connections": {
+    "Webhook · Cirugía cerrada": { "main": [[{ "node": "Mensaje Día 0 (instrucciones)", "type": "main", "index": 0 }, { "node": "Responder OK", "type": "main", "index": 0 }]] },
+    "Mensaje Día 0 (instrucciones)": { "main": [[{ "node": "WhatsApp · Día 0", "type": "main", "index": 0 }]] },
+    "WhatsApp · Día 0": { "main": [[{ "node": "Esperar 48h (Día 2)", "type": "main", "index": 0 }]] },
+    "Esperar 48h (Día 2)": { "main": [[{ "node": "Mensaje Día 2 (control dolor)", "type": "main", "index": 0 }]] },
+    "Mensaje Día 2 (control dolor)": { "main": [[{ "node": "WhatsApp · Día 2", "type": "main", "index": 0 }]] },
+    "WhatsApp · Día 2": { "main": [[{ "node": "Esperar 5 días más (Día 7)", "type": "main", "index": 0 }]] },
+    "Esperar 5 días más (Día 7)": { "main": [[{ "node": "Mensaje Día 7 (revisión)", "type": "main", "index": 0 }]] },
+    "Mensaje Día 7 (revisión)": { "main": [[{ "node": "WhatsApp · Día 7", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "id": "sp-post-surgery-008"
+}

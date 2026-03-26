@@ -1,0 +1,52 @@
+{
+  "name": "SP · 06 · Revisión Ortodoncia 6 meses",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 9 * * *" }] } },
+      "id": "sp06-0001", "name": "Cron · Diario 9:00h",
+      "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2, "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst d6m = new Date(now); d6m.setDate(now.getDate() - 180);\nconst fmt = d => parseInt(`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`);\nreturn [{ json: { fecha: fmt(d6m), rango: 3 } }];"
+      },
+      "id": "sp06-0002", "name": "Calcular hace 180 días",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.\"IdPac\", p.\"Nombre\", p.\"Apellidos\",\n  COALESCE(NULLIF(p.\"TelMovil\",''), p.\"Tel1\") AS telefono\nFROM \"Pacientes\" p\nWHERE p.\"IdPac\" IN (\n  SELECT DISTINCT c.\"IdPac\" FROM \"DCitas\" c\n  WHERE c.\"Texto\" ILIKE '%ortodoncia%' AND c.\"IdSitC\" = 5\n    AND c.\"Fecha\" BETWEEN {{ $json.fecha }} - {{ $json.rango }} AND {{ $json.fecha }} + {{ $json.rango }}\n)\nAND p.\"IdPac\" NOT IN (\n  SELECT DISTINCT c2.\"IdPac\" FROM \"DCitas\" c2\n  WHERE c2.\"Fecha\" > {{ $json.fecha }} AND c2.\"IdSitC\" NOT IN (3)\n)\nAND COALESCE(NULLIF(p.\"TelMovil\",''), p.\"Tel1\") IS NOT NULL\nAND (p.\"AceptaWhatsApp\" = true OR p.\"AceptaWhatsApp\" IS NULL)\nLIMIT 50",
+        "additionalFields": {}
+      },
+      "id": "sp06-0003", "name": "BD · Pacientes ortodoncia 6m",
+      "type": "n8n-nodes-base.postgres", "typeVersion": 2.4, "position": [680, 300],
+      "credentials": { "postgres": { "id": "1", "name": "SmilePro PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const i = $input.item.json;\nconst msg = `🦷 Hola ${i.Nombre}, han pasado 6 meses desde que terminaste tu ortodoncia.\\n\\n¡Revisemos que tu sonrisa sigue perfecta! ¿Te paso opciones de cita?`;\nreturn [{ json: { ...i, mensaje: msg } }];"
+      },
+      "id": "sp06-0004", "name": "Preparar mensaje 6m",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp06-0005", "name": "WhatsApp · Revisión 6m",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Cron · Diario 9:00h": { "main": [[{ "node": "Calcular hace 180 días", "type": "main", "index": 0 }]] },
+    "Calcular hace 180 días": { "main": [[{ "node": "BD · Pacientes ortodoncia 6m", "type": "main", "index": 0 }]] },
+    "BD · Pacientes ortodoncia 6m": { "main": [[{ "node": "Preparar mensaje 6m", "type": "main", "index": 0 }]] },
+    "Preparar mensaje 6m": { "main": [[{ "node": "WhatsApp · Revisión 6m", "type": "main", "index": 0 }]] }
+  },
+  "active": false, "settings": { "executionOrder": "v1" }, "id": "sp-ortho-6m-006"
+}

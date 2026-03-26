@@ -5,7 +5,7 @@
 import { logger } from './logger';
 import { authFetch } from './db';
 
-const API_BASE = 'http://localhost:3000/api/clinical';
+const API_BASE = '/api/clinical';
 
 export interface EntradaMedica {
     id: number;

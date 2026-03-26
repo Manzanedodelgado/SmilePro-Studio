@@ -1,0 +1,49 @@
+{
+  "name": "SP · SUB · Enviar WhatsApp",
+  "nodes": [
+    {
+      "parameters": { "workflowInputs": { "values": [
+        { "name": "telefono" },
+        { "name": "mensaje" }
+      ]}},
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "Entrada",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const tel = $input.first().json.telefono || '';\nconst clean = tel.replace(/[^0-9]/g, '');\nconst num = clean.startsWith('34') ? clean : '34' + clean;\nreturn [{ json: { numero: num + '@s.whatsapp.net', mensaje: $input.first().json.mensaje } }];"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000002",
+      "name": "Formatear número",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.numero }}\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000003",
+      "name": "Evolution API · Enviar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Entrada": { "main": [[{ "node": "Formatear número", "type": "main", "index": 0 }]] },
+    "Formatear número": { "main": [[{ "node": "Evolution API · Enviar", "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": { "executionOrder": "v1" },
+  "id": "sp-sub-whatsapp-001"
+}

@@ -1,0 +1,52 @@
+{
+  "name": "SP · 15 · Felicitación Cumpleaños",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 9 * * *" }] } },
+      "id": "sp15b-0001", "name": "Cron · Diario 9:00h",
+      "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2, "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const n=new Date();\nreturn [{ json: { mes: n.getMonth()+1, dia: n.getDate() } }];"
+      },
+      "id": "sp15b-0002", "name": "Día y mes de hoy",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.\"Nombre\", COALESCE(NULLIF(p.\"TelMovil\",''), p.\"Tel1\") AS telefono\nFROM \"Pacientes\" p\nWHERE EXTRACT(MONTH FROM p.\"FecNacim\") = {{ $json.mes }}\n  AND EXTRACT(DAY FROM p.\"FecNacim\") = {{ $json.dia }}\n  AND (p.\"AceptaWhatsApp\" = true OR p.\"AceptaWhatsApp\" IS NULL)\n  AND COALESCE(NULLIF(p.\"TelMovil\",''), p.\"Tel1\") IS NOT NULL\n  AND p.\"Inactivo\" IS NULL",
+        "additionalFields": {}
+      },
+      "id": "sp15b-0003", "name": "BD · Cumpleaños hoy",
+      "type": "n8n-nodes-base.postgres", "typeVersion": 2.4, "position": [680, 300],
+      "credentials": { "postgres": { "id": "1", "name": "SmilePro PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const i=$input.item.json;\nconst msg=`🎂 ¡Feliz cumpleaños, *${i.Nombre}*!\\n\\nTodo el equipo de ${$vars.CLINICA_NOMBRE} te desea un día muy especial. 🎉\\n\\nComo regalo, te reservamos una *revisión gratuita* cuando quieras. ¿La agendamos?`;\nreturn [{ json: { ...i, mensaje: msg } }];"
+      },
+      "id": "sp15b-0004", "name": "Preparar felicitación",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp15b-0005", "name": "WhatsApp · Felicitación",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Cron · Diario 9:00h": { "main": [[{ "node": "Día y mes de hoy", "type": "main", "index": 0 }]] },
+    "Día y mes de hoy": { "main": [[{ "node": "BD · Cumpleaños hoy", "type": "main", "index": 0 }]] },
+    "BD · Cumpleaños hoy": { "main": [[{ "node": "Preparar felicitación", "type": "main", "index": 0 }]] },
+    "Preparar felicitación": { "main": [[{ "node": "WhatsApp · Felicitación", "type": "main", "index": 0 }]] }
+  },
+  "active": false, "settings": { "executionOrder": "v1" }, "id": "sp-birthday-015"
+}

@@ -1,0 +1,47 @@
+{
+  "name": "SP · 14 · Solicitud Reseña Google (24h post-cita)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST", "path": "cita-finalizada",
+        "responseMode": "lastNode", "options": {}
+      },
+      "id": "sp14-0001", "name": "Webhook · Cita finalizada OK",
+      "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [240, 300],
+      "webhookId": "cita-finalizada"
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "sp14-0002", "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [460, 500]
+    },
+    { "parameters": { "unit": "hours", "amount": 24 },
+      "id": "sp14-0003", "name": "Esperar 24h",
+      "type": "n8n-nodes-base.wait", "typeVersion": 1.1, "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst msg = `⭐ Hola ${d.nombre}, esperamos que tu visita haya sido perfecta.\\n\\nSi quedaste satisfecho/a, nos ayudarías *muchísimo* con una reseña en Google (solo 1 minuto) 🙏\\n👉 ${$vars.CLINICA_GOOGLE_REVIEW_URL}\\n\\n¡Gracias de corazón! 😊`;\nreturn [{ json: { ...d, mensaje: msg } }];"
+      },
+      "id": "sp14-0004", "name": "Preparar solicitud reseña",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp14-0005", "name": "WhatsApp · Pedir reseña",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook · Cita finalizada OK": { "main": [[{ "node": "Esperar 24h", "type": "main", "index": 0 }, { "node": "Responder OK", "type": "main", "index": 0 }]] },
+    "Esperar 24h": { "main": [[{ "node": "Preparar solicitud reseña", "type": "main", "index": 0 }]] },
+    "Preparar solicitud reseña": { "main": [[{ "node": "WhatsApp · Pedir reseña", "type": "main", "index": 0 }]] }
+  },
+  "active": false, "settings": { "executionOrder": "v1" }, "id": "sp-review-request-014"
+}

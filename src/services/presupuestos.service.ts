@@ -5,7 +5,7 @@
 import { authFetch } from './db';
 
 const LS_KEY = 'smilepro:presupuestos';
-const API_BASE = 'http://localhost:3000/api/accounting';
+const API_BASE = '/api/accounting';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

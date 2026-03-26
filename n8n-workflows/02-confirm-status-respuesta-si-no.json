@@ -1,0 +1,159 @@
+{
+  "name": "SP · 02 · Actualización estado por respuesta SÍ/NO",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "evolution-incoming",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "sp02-0001",
+      "name": "Webhook · Mensajes Evolution API",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "evolution-incoming"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK"
+      },
+      "id": "sp02-0002",
+      "name": "Responder 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [460, 460]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst data = body.data || body;\nconst msg = (data.message?.conversation || data.message?.extendedTextMessage?.text || '').trim().toLowerCase();\nconst remitente = data.key?.remoteJid?.replace('@s.whatsapp.net','') || '';\nconst esSi = /^(si|sí|yes|confirmo|confirmar|1)$/i.test(msg);\nconst esNo = /^(no|cancel|cancelar|cancelo|2)$/i.test(msg);\nreturn [{ json: { mensaje: msg, remitente, esSi, esNo, esRespuestaValida: esSi || esNo } }];"
+      },
+      "id": "sp02-0003",
+      "name": "Parsear mensaje entrante",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "leftValue": "={{ $json.esRespuestaValida }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equal" } }]
+        }
+      },
+      "id": "sp02-0004",
+      "name": "¿Respuesta SÍ o NO?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT c.\"IdUsu\", c.\"IdOrden\", c.\"Fecha\", c.\"Hora\", p.\"Nombre\"\nFROM \"DCitas\" c\nLEFT JOIN \"Pacientes\" p ON p.\"IdPac\" = c.\"IdPac\"\nWHERE (REPLACE(REPLACE(COALESCE(c.\"Movil\", p.\"TelMovil\"),' ',''),'+','') LIKE '%{{ $json.remitente.slice(-9) }}%')\n  AND c.\"Fecha\" >= {{ (() => { const d=new Date(); return parseInt(d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')); })() }}\n  AND c.\"IdSitC\" NOT IN (3,4)\nORDER BY c.\"Fecha\" ASC, c.\"Hora\" ASC\nLIMIT 1",
+        "additionalFields": {}
+      },
+      "id": "sp02-0005",
+      "name": "BD · Buscar próxima cita del número",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [900, 300],
+      "credentials": { "postgres": { "id": "1", "name": "SmilePro PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "leftValue": "={{ $('Parsear mensaje entrante').item.json.esSi }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equal" } }]
+        }
+      },
+      "id": "sp02-0006",
+      "name": "¿Es SÍ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE \"DCitas\" SET \"Confirmada\" = 1, \"IdSitC\" = 2 WHERE \"IdUsu\" = {{ $json.IdUsu }} AND \"IdOrden\" = {{ $json.IdOrden }}",
+        "additionalFields": {}
+      },
+      "id": "sp02-0007",
+      "name": "BD · Confirmar cita",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1340, 220],
+      "credentials": { "postgres": { "id": "1", "name": "SmilePro PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE \"DCitas\" SET \"IdSitC\" = 3 WHERE \"IdUsu\" = {{ $json.IdUsu }} AND \"IdOrden\" = {{ $json.IdOrden }}",
+        "additionalFields": {}
+      },
+      "id": "sp02-0008",
+      "name": "BD · Cancelar cita",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1340, 400],
+      "credentials": { "postgres": { "id": "1", "name": "SmilePro PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Parsear mensaje entrante').item.json.remitente }}@s.whatsapp.net\",\n  \"text\": \"✅ ¡Perfecto, {{ $('BD · Buscar próxima cita del número').item.json.Nombre }}! Tu cita queda *confirmada*. Te esperamos 😊\"\n}"
+      },
+      "id": "sp02-0009",
+      "name": "WhatsApp · Confirmar al paciente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1560, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Parsear mensaje entrante').item.json.remitente }}@s.whatsapp.net\",\n  \"text\": \"De acuerdo, {{ $('BD · Buscar próxima cita del número').item.json.Nombre }}, hemos cancelado tu cita. 😊 Escríbenos cuando quieras buscar otro hueco.\"\n}"
+      },
+      "id": "sp02-0010",
+      "name": "WhatsApp · Confirmar cancelación",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1560, 400]
+    }
+  ],
+  "connections": {
+    "Webhook · Mensajes Evolution API": {
+      "main": [[{ "node": "Parsear mensaje entrante", "type": "main", "index": 0 }, { "node": "Responder 200 OK", "type": "main", "index": 0 }]]
+    },
+    "Parsear mensaje entrante": { "main": [[{ "node": "¿Respuesta SÍ o NO?", "type": "main", "index": 0 }]] },
+    "¿Respuesta SÍ o NO?": {
+      "main": [
+        [{ "node": "BD · Buscar próxima cita del número", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "BD · Buscar próxima cita del número": { "main": [[{ "node": "¿Es SÍ?", "type": "main", "index": 0 }]] },
+    "¿Es SÍ?": {
+      "main": [
+        [{ "node": "BD · Confirmar cita", "type": "main", "index": 0 }],
+        [{ "node": "BD · Cancelar cita", "type": "main", "index": 0 }]
+      ]
+    },
+    "BD · Confirmar cita": { "main": [[{ "node": "WhatsApp · Confirmar al paciente", "type": "main", "index": 0 }]] },
+    "BD · Cancelar cita": { "main": [[{ "node": "WhatsApp · Confirmar cancelación", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "id": "sp-confirm-status-002"
+}

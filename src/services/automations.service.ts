@@ -7,7 +7,7 @@ import { logger } from './logger';
 import { authFetch } from './db';
 import { INITIAL_AUTOMATIONS, type Automation } from '../views/ia/AutomationRules';
 
-const API_BASE = 'http://localhost:3000/api/ai';
+const API_BASE = '/api/ai';
 
 let _cache: Automation[] | null = null;
 export const invalidateAutomationsCache = () => { _cache = null; };

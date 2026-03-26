@@ -1,0 +1,57 @@
+{
+  "name": "SP · 18 · Primera Visita — Formularios 24h/2h antes",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST", "path": "primera-visita-forms",
+        "responseMode": "lastNode", "options": {}
+      },
+      "id": "sp18-0001", "name": "Webhook · PV — programar formularios",
+      "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [240, 300],
+      "webhookId": "primera-visita-forms"
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "sp18-0002", "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst now = new Date();\nconst citaFecha = d.fechaTimestamp ? new Date(d.fechaTimestamp) : new Date();\nconst diffMs = citaFecha - now;\nconst diffHoras = diffMs / (1000 * 60 * 60);\nconst esperarMs = diffHoras > 24\n  ? diffMs - 24 * 60 * 60 * 1000\n  : Math.max(0, diffMs - 2 * 60 * 60 * 1000);\nconst esMenos24h = diffHoras <= 24;\nreturn [{ json: { ...d, esperarMs: Math.max(0, esperarMs), esMenos24h } }];"
+      },
+      "id": "sp18-0003", "name": "Calcular cuándo enviar",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [460, 300]
+    },
+    {
+      "parameters": { "resume": "timeInterval", "unit": "milliseconds", "amount": "={{ $json.esperarMs }}" },
+      "id": "sp18-0004", "name": "Esperar hasta 24h antes (ó 2h si urgente)",
+      "type": "n8n-nodes-base.wait", "typeVersion": 1.1, "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst esMenor = d.esMenor || false;\nconst telefonoDestino = d.telefonoTutor || d.telefono;\nconst linkCuestionario = `${$vars.CUESTIONARIO_BASE_URL}?token=${d.token || d.idPac}`;\nconst cuando = d.esMenos24h ? 'hoy' : 'mañana';\nconst texto = esMenor\n  ? `👶 Hola ${d.nombreTutor || d.nombre}, ${cuando} es la primera cita de *${d.nombre}* a las ${d.horaStr}h.\\n\\nCompleta los documentos antes de la visita (5 min):\\n📋 Cuestionario de salud + LOPD: ${linkCuestionario}\\n\\n⏰ El enlace expira 1h después de la cita.`\n  : `👋 Hola ${d.nombre}, ${cuando} tienes tu primera cita en ${$vars.CLINICA_NOMBRE} a las *${d.horaStr}h*.\\n\\nPara prepararla completa estos documentos (3 min):\\n📋 Cuestionario de salud: ${linkCuestionario}\\n🔒 Incluye firma de privacidad (LOPD)\\n\\n⏰ El enlace expira 1h después de tu cita.`;\nreturn [{ json: { ...d, mensaje: texto, telefonoDestino, linkCuestionario } }];"
+      },
+      "id": "sp18-0005", "name": "Preparar mensaje formularios",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefonoDestino.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp18-0006", "name": "WhatsApp · Formularios PV",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Webhook · PV — programar formularios": { "main": [[{ "node": "Calcular cuándo enviar", "type": "main", "index": 0 }, { "node": "Responder OK", "type": "main", "index": 0 }]] },
+    "Calcular cuándo enviar": { "main": [[{ "node": "Esperar hasta 24h antes (ó 2h si urgente)", "type": "main", "index": 0 }]] },
+    "Esperar hasta 24h antes (ó 2h si urgente)": { "main": [[{ "node": "Preparar mensaje formularios", "type": "main", "index": 0 }]] },
+    "Preparar mensaje formularios": { "main": [[{ "node": "WhatsApp · Formularios PV", "type": "main", "index": 0 }]] }
+  },
+  "active": false, "settings": { "executionOrder": "v1" }, "id": "sp-pv-24h-forms-018",
+  "_nota": "POST /webhook/primera-visita-forms con: { nombre, telefono, horaStr, fechaTimestamp (ISO), idPac/token, esMenor?, nombreTutor?, telefonoTutor? }"
+}

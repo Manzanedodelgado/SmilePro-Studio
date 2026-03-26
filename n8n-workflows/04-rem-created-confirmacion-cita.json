@@ -1,0 +1,62 @@
+{
+  "name": "SP · 04 · Confirmación al crear/modificar cita",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cita-creada",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "sp04-0001",
+      "name": "Webhook · Cita creada/editada",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "cita-creada"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst fecha = String(d.fecha || '');\nconst fechaStr = fecha.length === 8 ? `${fecha.slice(6)}/${fecha.slice(4,6)}/${fecha.slice(0,4)}` : d.fecha;\nconst hora = d.hora || 0;\nconst hh = String(Math.floor(hora/100)).padStart(2,'0');\nconst mm = String(hora%100).padStart(2,'0');\nconst mensaje = `✅ *Cita confirmada* en ${$vars.CLINICA_NOMBRE}\\n\\n📅 ${fechaStr} a las *${hh}:${mm}h*\\n👨‍⚕️ ${d.doctor || 'nuestro equipo'}\\n\\n¿Necesitas cambiarla? Llámanos al ${$vars.CLINICA_TELEFONO} 😊`;\nreturn [{ json: { ...d, mensaje, fechaStr, horaStr: `${hh}:${mm}` } }];"
+      },
+      "id": "sp04-0002",
+      "name": "Preparar mensaje confirmación",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp04-0003",
+      "name": "WhatsApp · Enviar confirmación",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 300]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "sp04-0004",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook · Cita creada/editada": { "main": [[{ "node": "Preparar mensaje confirmación", "type": "main", "index": 0 }]] },
+    "Preparar mensaje confirmación": { "main": [[{ "node": "WhatsApp · Enviar confirmación", "type": "main", "index": 0 }]] },
+    "WhatsApp · Enviar confirmación": { "main": [[{ "node": "Responder OK", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "id": "sp-rem-created-004",
+  "_nota": "SmilePro debe hacer POST a /webhook/cita-creada con: { telefono, fecha (YYYYMMDD), hora (HHMM), doctor, nombre }"
+}

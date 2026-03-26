@@ -1,0 +1,61 @@
+{
+  "name": "SP · 16 · Alerta Doctor por Mensaje Preocupante",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST", "path": "evolution-incoming",
+        "responseMode": "responseNode", "options": {}
+      },
+      "id": "sp16a-0001", "name": "Webhook · Mensajes entrantes Evolution",
+      "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [240, 300],
+      "webhookId": "evolution-incoming"
+    },
+    {
+      "parameters": { "respondWith": "text", "responseBody": "OK" },
+      "id": "sp16a-0002", "name": "Responder 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body=$input.first().json.body||$input.first().json;\nconst data=body.data||body;\nconst msg=(data.message?.conversation||data.message?.extendedTextMessage?.text||'').toLowerCase();\nconst rem=data.key?.remoteJid?.replace('@s.whatsapp.net','')||'';\nconst alarmas=['mucho dolor','dolor intenso','no puedo dormir','se me ha caído','sangrado','mucha inflamación','alergia','reacción','fiebre','accidente','perdí el diente'];\nconst esAlarma=alarmas.some(a=>msg.includes(a));\nreturn [{ json: { msg, remitente: rem, esAlarma } }];"
+      },
+      "id": "sp16a-0003", "name": "Detectar palabras alarma",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": { "conditions": [{ "leftValue": "={{ $json.esAlarma }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equal" } }] }
+      },
+      "id": "sp16a-0004", "name": "¿Es alarma?",
+      "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.\"Nombre\", p.\"Apellidos\", p.\"NumPac\" FROM \"Pacientes\" p\nWHERE REPLACE(REPLACE(COALESCE(p.\"TelMovil\",p.\"Tel1\"),' ',''),'+','') LIKE '%{{ $json.remitente.slice(-9) }}%'\nLIMIT 1",
+        "additionalFields": {}
+      },
+      "id": "sp16a-0005", "name": "BD · Identificar paciente",
+      "type": "n8n-nodes-base.postgres", "typeVersion": 2.4, "position": [900, 220],
+      "credentials": { "postgres": { "id": "1", "name": "SmilePro PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $vars.CLINICA_TELEFONO_URGENCIAS.replace(/[^0-9]/g,'') }}@s.whatsapp.net\",\n  \"text\": \"🚨 *ALERTA CLÍNICA*\\nPaciente: {{ $json.Nombre }} {{ $json.Apellidos }} ({{ $json.NumPac }})\\nTel: +{{ $('Detectar palabras alarma').item.json.remitente }}\\n\\nMensaje: _{{ $('Detectar palabras alarma').item.json.msg }}_\\n\\n⚠️ Revisar urgente en SmilePro.\"\n}"
+      },
+      "id": "sp16a-0006", "name": "WhatsApp · Alerta al doctor",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [1120, 220]
+    }
+  ],
+  "connections": {
+    "Webhook · Mensajes entrantes Evolution": { "main": [[{ "node": "Detectar palabras alarma", "type": "main", "index": 0 }, { "node": "Responder 200 OK", "type": "main", "index": 0 }]] },
+    "Detectar palabras alarma": { "main": [[{ "node": "¿Es alarma?", "type": "main", "index": 0 }]] },
+    "¿Es alarma?": { "main": [[{ "node": "BD · Identificar paciente", "type": "main", "index": 0 }], []] },
+    "BD · Identificar paciente": { "main": [[{ "node": "WhatsApp · Alerta al doctor", "type": "main", "index": 0 }]] }
+  },
+  "active": false, "settings": { "executionOrder": "v1" }, "id": "sp-doctor-alert-016"
+}

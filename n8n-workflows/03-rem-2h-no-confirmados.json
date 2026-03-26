@@ -1,0 +1,85 @@
+{
+  "name": "SP · 03 · Recordatorio 2h (no confirmados)",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 30 }] } },
+      "id": "sp03-0001",
+      "name": "Cron · Cada 30 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst y = now.getFullYear();\nconst m = String(now.getMonth()+1).padStart(2,'0');\nconst d = String(now.getDate()).padStart(2,'0');\nconst fechaHoy = parseInt(`${y}${m}${d}`);\nconst h2 = now.getHours() + 2;\nconst min = now.getMinutes();\nconst horaDesdeInt = h2 * 100 + min;\nconst horaHastaInt = horaDesdeInt + 30;\nreturn [{ json: { fechaHoy, horaDesde: horaDesdeInt, horaHasta: horaHastaInt } }];"
+      },
+      "id": "sp03-0002",
+      "name": "Calcular ventana +2h",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  c.\"IdUsu\", c.\"IdOrden\", c.\"Hora\", c.\"Fecha\",\n  p.\"Nombre\",\n  COALESCE(NULLIF(c.\"Movil\",''), p.\"TelMovil\") AS telefono\nFROM \"DCitas\" c\nLEFT JOIN \"Pacientes\" p ON p.\"IdPac\" = c.\"IdPac\"\nWHERE c.\"Fecha\" = {{ $json.fechaHoy }}\n  AND c.\"Hora\" BETWEEN {{ $json.horaDesde }} AND {{ $json.horaHasta }}\n  AND c.\"Confirmada\" = 0\n  AND c.\"IdSitC\" NOT IN (3,4)\n  AND c.\"Recordada\" < 2\n  AND COALESCE(NULLIF(c.\"Movil\",''), p.\"TelMovil\") IS NOT NULL",
+        "additionalFields": {}
+      },
+      "id": "sp03-0003",
+      "name": "BD · Citas sin confirmar en 2h",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [680, 300],
+      "credentials": { "postgres": { "id": "1", "name": "SmilePro PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\nconst hora = item.Hora || 0;\nconst hh = String(Math.floor(hora/100)).padStart(2,'0');\nconst mm = String(hora%100).padStart(2,'0');\nconst mensaje = `⏰ Tu cita es HOY a las ${hh}:${mm}h en ${$vars.CLINICA_NOMBRE}. Si necesitas cancelar llámanos al ${$vars.CLINICA_TELEFONO}.`;\nreturn [{ json: { ...item, mensaje } }];"
+      },
+      "id": "sp03-0004",
+      "name": "Preparar SMS/WhatsApp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp03-0005",
+      "name": "WhatsApp · Aviso urgente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE \"DCitas\" SET \"Recordada\" = 2 WHERE \"IdUsu\" = {{ $json.IdUsu }} AND \"IdOrden\" = {{ $json.IdOrden }}",
+        "additionalFields": {}
+      },
+      "id": "sp03-0006",
+      "name": "BD · Marcar Recordada=2",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1340, 300],
+      "credentials": { "postgres": { "id": "1", "name": "SmilePro PostgreSQL" } }
+    }
+  ],
+  "connections": {
+    "Cron · Cada 30 min": { "main": [[{ "node": "Calcular ventana +2h", "type": "main", "index": 0 }]] },
+    "Calcular ventana +2h": { "main": [[{ "node": "BD · Citas sin confirmar en 2h", "type": "main", "index": 0 }]] },
+    "BD · Citas sin confirmar en 2h": { "main": [[{ "node": "Preparar SMS/WhatsApp", "type": "main", "index": 0 }]] },
+    "Preparar SMS/WhatsApp": { "main": [[{ "node": "WhatsApp · Aviso urgente", "type": "main", "index": 0 }]] },
+    "WhatsApp · Aviso urgente": { "main": [[{ "node": "BD · Marcar Recordada=2", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "id": "sp-rem-2h-003"
+}

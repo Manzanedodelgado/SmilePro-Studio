@@ -1,0 +1,107 @@
+{
+  "name": "SP · 01 · Recordatorio 24h antes de cita",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "hours", "hoursInterval": 1 }] },
+        "triggerAtHour": 9
+      },
+      "id": "sp01-0001",
+      "name": "Cron · Cada hora 8-20h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const hoy = new Date();\nconst manana = new Date(hoy);\nmanana.setDate(hoy.getDate() + 1);\nconst y = manana.getFullYear();\nconst m = String(manana.getMonth()+1).padStart(2,'0');\nconst d = String(manana.getDate()).padStart(2,'0');\nconst fechaInt = parseInt(`${y}${m}${d}`);\nreturn [{ json: { fechaManannaInt: fechaInt, fechaStr: `${d}/${m}/${y}` } }];"
+      },
+      "id": "sp01-0002",
+      "name": "Calcular fecha mañana",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  c.\"IdCita\",\n  c.\"IdUsu\",\n  c.\"IdOrden\",\n  c.\"Fecha\",\n  c.\"Hora\",\n  c.\"Texto\" AS motivo,\n  p.\"Nombre\",\n  p.\"Apellidos\",\n  COALESCE(NULLIF(c.\"Movil\",''), p.\"TelMovil\") AS telefono,\n  p.\"AceptaWhatsApp\"\nFROM \"DCitas\" c\nLEFT JOIN \"Pacientes\" p ON p.\"IdPac\" = c.\"IdPac\"\nWHERE c.\"Fecha\" = {{ $json.fechaManannaInt }}\n  AND c.\"IdSitC\" NOT IN (3,4)\n  AND c.\"Recordada\" = 0\n  AND c.\"IdPac\" IS NOT NULL\n  AND COALESCE(NULLIF(c.\"Movil\",''), p.\"TelMovil\") IS NOT NULL\n  AND (p.\"AceptaWhatsApp\" = true OR p.\"AceptaWhatsApp\" IS NULL)\nORDER BY c.\"Hora\"",
+        "additionalFields": {}
+      },
+      "id": "sp01-0003",
+      "name": "BD · Citas de mañana sin recordatorio",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [680, 300],
+      "credentials": { "postgres": { "id": "1", "name": "SmilePro PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [{ "id": "check-results", "leftValue": "={{ $items().length }}", "rightValue": 0, "operator": { "type": "number", "operation": "gt" } }]
+        }
+      },
+      "id": "sp01-0004",
+      "name": "¿Hay citas?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\nconst hora = item.Hora || 0;\nconst hh = String(Math.floor(hora / 100)).padStart(2,'0');\nconst mm = String(hora % 100).padStart(2,'0');\nconst fecha = String(item.Fecha);\nconst fechaStr = `${fecha.substring(6,8)}/${fecha.substring(4,6)}/${fecha.substring(0,4)}`;\nconst nombre = item.Nombre || 'paciente';\nconst doctor = 'la clínica';\nconst mensaje = `👋 Hola ${nombre}, recordamos tu cita *mañana ${fechaStr} a las ${hh}:${mm}h* en ${$vars.CLINICA_NOMBRE}.\\n\\nResponde *SÍ* para confirmar o *NO* si necesitas cancelar. 🦷`;\nreturn [{ json: { ...item, mensaje, horaStr: `${hh}:${mm}`, fechaStr } }];"
+      },
+      "id": "sp01-0005",
+      "name": "Preparar mensaje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp01-0006",
+      "name": "WhatsApp · Enviar recordatorio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1340, 220]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE \"DCitas\" SET \"Recordada\" = 1 WHERE \"IdUsu\" = {{ $json.IdUsu }} AND \"IdOrden\" = {{ $json.IdOrden }}",
+        "additionalFields": {}
+      },
+      "id": "sp01-0007",
+      "name": "BD · Marcar Recordada=1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1560, 220],
+      "credentials": { "postgres": { "id": "1", "name": "SmilePro PostgreSQL" } }
+    }
+  ],
+  "connections": {
+    "Cron · Cada hora 8-20h": { "main": [[{ "node": "Calcular fecha mañana", "type": "main", "index": 0 }]] },
+    "Calcular fecha mañana": { "main": [[{ "node": "BD · Citas de mañana sin recordatorio", "type": "main", "index": 0 }]] },
+    "BD · Citas de mañana sin recordatorio": { "main": [[{ "node": "¿Hay citas?", "type": "main", "index": 0 }]] },
+    "¿Hay citas?": {
+      "main": [
+        [{ "node": "Preparar mensaje", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Preparar mensaje": { "main": [[{ "node": "WhatsApp · Enviar recordatorio", "type": "main", "index": 0 }]] },
+    "WhatsApp · Enviar recordatorio": { "main": [[{ "node": "BD · Marcar Recordada=1", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "id": "sp-rem-24h-001"
+}

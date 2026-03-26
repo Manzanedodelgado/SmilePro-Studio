@@ -8,7 +8,7 @@ import { type Cita, type EstadoCita, type TratamientoCategoria } from '../types'
 import { logger } from './logger';
 import { authFetch } from './db';
 
-const API_BASE = 'http://localhost:3000/api/appointments';
+const API_BASE = '/api/appointments';
 
 // ── Estado: backend string → EstadoCita ──────────────────────────
 // El backend devuelve 'scheduled', 'confirmed', 'no_show', etc.
@@ -297,7 +297,7 @@ export const getColaboradorNombre = async (idCol?: number): Promise<string> => {
 //  ENTRADAS MÉDICAS (TtosMed GELITE via backend /api/clinical)
 // ─────────────────────────────────────────────────────────────────
 
-const CLINICAL_BASE = 'http://localhost:3000/api/clinical';
+const CLINICAL_BASE = '/api/clinical';
 
 export interface EntradaMedica {
     id: number;

@@ -1,0 +1,71 @@
+{
+  "name": "SP · 21 · Envío Mensual Documentación a Gestoría",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 8 1 * *" }] } },
+      "id": "sp21-0001",
+      "name": "Cron · Día 1 de cada mes 8:00h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst mesAnterior = new Date(now.getFullYear(), now.getMonth() - 1, 1);\nconst ultimoDia = new Date(now.getFullYear(), now.getMonth(), 0);\nconst mes = mesAnterior.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });\nconst desde = mesAnterior.toISOString().split('T')[0];\nconst hasta = ultimoDia.toISOString().split('T')[0];\nreturn [{ json: { mes, desde, hasta } }];"
+      },
+      "id": "sp21-0002",
+      "name": "Calcular mes anterior",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*) AS total_facturas, SUM(f.\"Importe\") AS total_importe\nFROM \"FactCli\" f\nWHERE f.\"FecAlta\" BETWEEN '{{ $json.desde }}' AND '{{ $json.hasta }}'\n  AND f.\"Importe\" > 0",
+        "additionalFields": {}
+      },
+      "id": "sp21-0003",
+      "name": "BD · Resumen facturas del mes",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [680, 300],
+      "credentials": { "postgres": { "id": "1", "name": "SmilePro PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const stats = $input.first().json;\nconst ctx = $('Calcular mes anterior').first().json;\nconst asunto = `Documentación ${ctx.mes} — ${$vars.CLINICA_NOMBRE}`;\nconst cuerpo = `Estimado/a gestor/a,\\n\\nAdjuntamos la documentación contable de ${ctx.mes} de ${$vars.CLINICA_NOMBRE}.\\n\\nResumen:\\n• Facturas emitidas: ${stats.total_facturas}\\n• Facturación total: ${(stats.total_importe || 0).toFixed(2)}€\\n\\nPara acceder a las facturas completas, consulte el sistema SmilePro o contacte con la clínica.\\n\\nSaludos,\\n${$vars.CLINICA_NOMBRE}`;\nreturn [{ json: { ...stats, asunto, cuerpo, mes: ctx.mes } }];"
+      },
+      "id": "sp21-0004",
+      "name": "Preparar email gestoría",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.SMTP_USER }}",
+        "toEmail": "={{ $vars.GESTORIA_EMAIL }}",
+        "subject": "={{ $json.asunto }}",
+        "emailType": "text",
+        "message": "={{ $json.cuerpo }}",
+        "options": {}
+      },
+      "id": "sp21-0005",
+      "name": "Email · Gestoría",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1120, 300],
+      "credentials": { "smtp": { "id": "2", "name": "SmilePro SMTP" } }
+    }
+  ],
+  "connections": {
+    "Cron · Día 1 de cada mes 8:00h": { "main": [[{ "node": "Calcular mes anterior", "type": "main", "index": 0 }]] },
+    "Calcular mes anterior": { "main": [[{ "node": "BD · Resumen facturas del mes", "type": "main", "index": 0 }]] },
+    "BD · Resumen facturas del mes": { "main": [[{ "node": "Preparar email gestoría", "type": "main", "index": 0 }]] },
+    "Preparar email gestoría": { "main": [[{ "node": "Email · Gestoría", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "id": "sp-gestor-docs-021"
+}

@@ -1,0 +1,71 @@
+{
+  "name": "SP · 09 · Recall Revisión Higiene 6 meses",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 10 * * 1" }] } },
+      "id": "sp09-0001",
+      "name": "Cron · Lunes 10:00h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst d6m = new Date(now); d6m.setDate(now.getDate() - 180);\nconst d7m = new Date(now); d7m.setDate(now.getDate() - 210);\nconst fmt = d => parseInt(`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`);\nreturn [{ json: { desde: fmt(d7m), hasta: fmt(d6m) } }];"
+      },
+      "id": "sp09-0002",
+      "name": "Calcular ventana 6-7 meses atrás",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT DISTINCT ON (p.\"IdPac\")\n  p.\"IdPac\", p.\"Nombre\", p.\"Apellidos\",\n  COALESCE(NULLIF(p.\"TelMovil\",''), p.\"Tel1\") AS telefono,\n  MAX(c.\"Fecha\") AS ultima_higiene\nFROM \"Pacientes\" p\nINNER JOIN \"DCitas\" c ON c.\"IdPac\" = p.\"IdPac\"\nWHERE c.\"Texto\" ILIKE '%higiene%'\n  AND c.\"IdSitC\" = 5\n  AND c.\"Fecha\" BETWEEN {{ $json.desde }} AND {{ $json.hasta }}\n  AND p.\"IdPac\" NOT IN (\n    SELECT DISTINCT c2.\"IdPac\" FROM \"DCitas\" c2\n    WHERE c2.\"Fecha\" > {{ $json.hasta }} AND c2.\"IdSitC\" NOT IN (3,4)\n  )\n  AND COALESCE(NULLIF(p.\"TelMovil\",''), p.\"Tel1\") IS NOT NULL\n  AND (p.\"AceptaWhatsApp\" = true OR p.\"AceptaWhatsApp\" IS NULL)\n  AND p.\"Inactivo\" IS NULL\nGROUP BY p.\"IdPac\", p.\"Nombre\", p.\"Apellidos\", p.\"TelMovil\", p.\"Tel1\"\nLIMIT 30",
+        "additionalFields": {}
+      },
+      "id": "sp09-0003",
+      "name": "BD · Pacientes sin higiene 6 meses",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [680, 300],
+      "credentials": { "postgres": { "id": "1", "name": "SmilePro PostgreSQL" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\nconst mensaje = `✨ Hola ${item.Nombre}, han pasado más de 6 meses desde tu última limpieza dental.\\n\\nTus dientes te lo agradecerán 😊 ¿Te buscamos un hueco esta semana para tu revisión e higiene?`;\nreturn [{ json: { ...item, mensaje } }];"
+      },
+      "id": "sp09-0004",
+      "name": "Preparar mensaje recall",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp09-0005",
+      "name": "WhatsApp · Recall higiene",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Cron · Lunes 10:00h": { "main": [[{ "node": "Calcular ventana 6-7 meses atrás", "type": "main", "index": 0 }]] },
+    "Calcular ventana 6-7 meses atrás": { "main": [[{ "node": "BD · Pacientes sin higiene 6 meses", "type": "main", "index": 0 }]] },
+    "BD · Pacientes sin higiene 6 meses": { "main": [[{ "node": "Preparar mensaje recall", "type": "main", "index": 0 }]] },
+    "Preparar mensaje recall": { "main": [[{ "node": "WhatsApp · Recall higiene", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "id": "sp-recall-6m-009"
+}

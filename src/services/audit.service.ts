@@ -6,7 +6,7 @@
 
 import { authFetch } from './db';
 
-const API_BASE = 'http://localhost:3000/api/admin';
+const API_BASE = '/api/admin';
 
 export type AuditAction =
     | 'LOGIN'

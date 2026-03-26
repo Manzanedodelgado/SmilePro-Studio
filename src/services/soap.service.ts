@@ -7,7 +7,7 @@ import { type SOAPNote } from '../types';
 import { logger } from './logger';
 import { authFetch } from './db';
 
-const API_BASE = 'http://localhost:3000/api/clinical';
+const API_BASE = '/api/clinical';
 
 const mapRecord = (r: any): SOAPNote => ({
     id: r.id,

@@ -1,0 +1,78 @@
+{
+  "name": "SP · 20 · Primera Visita — Formularios Completados",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "formulario-completado",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "sp20-0001",
+      "name": "Webhook · Formulario completado",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "formulario-completado"
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "sp20-0002",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst alertas = [];\nif (d.anticoagulantes) alertas.push('⚠️ Anticoagulantes');\nif (d.bisfosfonatos) alertas.push('⚠️ Bisfosfonatos');\nif (d.alergias) alertas.push(`⚠️ Alergias: ${d.alergias}`);\nif (d.embarazo) alertas.push('⚠️ Embarazada');\nif (d.marcapasos) alertas.push('⚠️ Marcapasos');\nconst hayAlertas = alertas.length > 0;\nconst mensajePaciente = `✅ ¡Gracias ${d.nombre}! Hemos recibido tu documentación correctamente.\\n\\nTe esperamos el ${d.fechaStr} a las ${d.horaStr}h.\\n\\nRecuerda traer tu DNI. 😊`;\nconst mensajeInterno = `📋 [FORMULARIO PV COMPLETADO]\\nPaciente: ${d.nombre} — NumPac: ${d.numPac || 'PENDIENTE'}\\nCita: ${d.fechaStr} a las ${d.horaStr}h${hayAlertas ? '\\n\\n🚨 ALERTAS CLÍNICAS:\\n' + alertas.join('\\n') : '\\n\\n✅ Sin alertas clínicas'}\\n\\nDatos guardados en ficha.`;\nreturn [{ json: { ...d, mensajePaciente, mensajeInterno, hayAlertas } }];"
+      },
+      "id": "sp20-0003",
+      "name": "Procesar formulario + detectar alertas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensajePaciente }}\"\n}"
+      },
+      "id": "sp20-0004",
+      "name": "WhatsApp · Confirmar al paciente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $vars.CLINICA_TELEFONO.replace(/[^0-9]/g,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensajeInterno }}\"\n}"
+      },
+      "id": "sp20-0005",
+      "name": "WhatsApp · Notificar recepción",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 380]
+    }
+  ],
+  "connections": {
+    "Webhook · Formulario completado": { "main": [[{ "node": "Procesar formulario + detectar alertas", "type": "main", "index": 0 }, { "node": "Responder OK", "type": "main", "index": 0 }]] },
+    "Procesar formulario + detectar alertas": {
+      "main": [[{ "node": "WhatsApp · Confirmar al paciente", "type": "main", "index": 0 }, { "node": "WhatsApp · Notificar recepción", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "id": "sp-pv-forms-done-020"
+}

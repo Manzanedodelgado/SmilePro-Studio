@@ -1,0 +1,61 @@
+{
+  "name": "SP · 13 · Gestión No Presentado",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "no-show",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "sp13-0001",
+      "name": "Webhook · Marcado No Presentado",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "no-show"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst mensaje = `😊 Hola ${d.nombre || 'paciente'}, vemos que hoy no has podido venir a tu cita. ¡No pasa nada! \\n\\n¿Buscamos otro hueco que te venga mejor? Escríbenos aquí o llámanos al ${$vars.CLINICA_TELEFONO} 🦷`;\nreturn [{ json: { ...d, mensaje } }];"
+      },
+      "id": "sp13-0002",
+      "name": "Preparar mensaje reagendamiento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp13-0003",
+      "name": "WhatsApp · No presentado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 300]
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "sp13-0004",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook · Marcado No Presentado": { "main": [[{ "node": "Preparar mensaje reagendamiento", "type": "main", "index": 0 }]] },
+    "Preparar mensaje reagendamiento": { "main": [[{ "node": "WhatsApp · No presentado", "type": "main", "index": 0 }]] },
+    "WhatsApp · No presentado": { "main": [[{ "node": "Responder OK", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "id": "sp-no-show-013"
+}

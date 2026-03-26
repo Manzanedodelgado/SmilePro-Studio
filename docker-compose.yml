@@ -1,52 +1,118 @@
-version: '3.8'
+version: '3.9'
+
+# ─── SmilePro Studio · Production Stack ────────────────────────────────────
+#
+#   Servicios:
+#     db        → PostgreSQL 15       (datos clínicos SmilePro)
+#     backend   → Node.js 20 API      (REST + Prisma ORM)
+#     frontend  → Nginx + React SPA   (interfaz web)
+#     orthanc   → Servidor DICOM      (imágenes radiológicas)
+#
+#   Requisitos previos:
+#     1. cp .env.example .env           (rellenar con valores reales)
+#     2. Verificar que backend/.env existe con las keys de APIs
+#
+#   Despliegue:
+#     ./deploy.sh
+#   O manualmente:
+#     docker compose up -d --build
+# ─────────────────────────────────────────────────────────────────────────────
 
 services:
+
+  # ── PostgreSQL 15 ──────────────────────────────────────────────────────────
   db:
     image: postgres:15-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-smilepro}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securepassword}
-      POSTGRES_DB: ${POSTGRES_DB:-smilepro}
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB:       ${POSTGRES_DB}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-smilepro} -d ${POSTGRES_DB:-smilepro}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
+    networks:
+      - smilepro
 
-
+  # ── Backend Node.js ───────────────────────────────────────────────────────
   backend:
-    image: smilepro-studio-backend:v1
-    # Use env_file to inject secrets if available locally
-    env_file: ./backend/.env
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
     restart: unless-stopped
+    env_file: ./backend/.env
     environment:
-      # Override the DATABASE_URL to automatically connect to the internal db container
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-smilepro}:${POSTGRES_PASSWORD:-securepassword}@db:5432/${POSTGRES_DB:-smilepro}?schema=public
+      NODE_ENV:     production
+      PORT:         3000
+      # Override DATABASE_URL del .env para apuntar al contenedor db
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+      # CORS apunta a la URL pública del frontend
+      CORS_ORIGIN:  ${FRONTEND_URL}
+    volumes:
+      - uploads:/app/uploads
+      - ia-data:/app/data
     depends_on:
       db:
         condition: service_healthy
-
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
-      interval: 10s
+      interval: 15s
       timeout: 5s
-      retries: 8
-    command: ["sh", "-c", "npx prisma migrate deploy && dumb-init node dist/server.js"]
+      retries: 6
+      start_period: 40s
+    # Ejecutar migraciones antes de arrancar el servidor
+    command: >
+      sh -c "npx prisma migrate deploy && dumb-init node dist/server.js"
+    networks:
+      - smilepro
 
+  # ── Frontend Nginx + React ────────────────────────────────────────────────
   frontend:
-    image: smilepro-studio-frontend:v1
+    build:
+      context: .
+      dockerfile: Dockerfile
     restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
     depends_on:
       backend:
         condition: service_healthy
+    networks:
+      - smilepro
+
+  # ── Orthanc — Servidor DICOM ──────────────────────────────────────────────
+  orthanc:
+    image: orthancteam/orthanc:24.11.3
+    restart: unless-stopped
+    volumes:
+      - orthanc-data:/var/lib/orthanc/db
+      - ./orthanc.json:/etc/orthanc/orthanc.json:ro
     ports:
-      - "8080:80"
+      - "4242:4242"   # DICOM C-STORE (envío desde equipos de la clínica)
+      # Puerto HTTP 8042 solo accesible internamente vía nginx /orthanc/
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8042/system || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - smilepro
 
+# ── Red interna ───────────────────────────────────────────────────────────────
+networks:
+  smilepro:
+    driver: bridge
 
-
-
+# ── Volúmenes persistentes ────────────────────────────────────────────────────
 volumes:
-  pgdata:
+  pgdata:        # Datos PostgreSQL (NO borrar en producción)
+  uploads:       # Archivos subidos al backend (fotos, documentos)
+  ia-data:        # Estado IA control (pausa/resume)
+  orthanc-data:  # Imágenes DICOM (NO borrar en producción)

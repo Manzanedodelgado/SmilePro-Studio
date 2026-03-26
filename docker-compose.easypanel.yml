@@ -1,0 +1,173 @@
+version: '3.9'
+
+# ─── SmilePro Studio · Easypanel Deploy ─────────────────────────────────────
+#
+#   Diferencias respecto a docker-compose.yml (local/CasaOS):
+#     - Sin env_file → todos los secrets van en Easypanel > Environment
+#     - Frontend sin ports → Easypanel asigna dominio y gestiona HTTPS con Traefik
+#     - Orthanc 4242 sigue expuesto (DICOM C-STORE lo necesita)
+#
+#   Variables a configurar en Easypanel > Environment:
+#
+#   ── PostgreSQL ──────────────────────────────────────
+#   POSTGRES_USER        smilepro
+#   POSTGRES_PASSWORD    (contraseña segura)
+#   POSTGRES_DB          smilepro
+#
+#   ── Frontend ────────────────────────────────────────
+#   FRONTEND_URL         https://TU_DOMINIO.easypanel.host
+#
+#   ── Auth ────────────────────────────────────────────
+#   JWT_SECRET           (mínimo 32 chars aleatorios)
+#   JWT_REFRESH_SECRET   (mínimo 32 chars aleatorios)
+#
+#   ── IA ──────────────────────────────────────────────
+#   GROQ_API_KEY         gsk_AxVuxzDHco9...
+#   GEMINI_API_KEY       AIzaSyBzOVLUnQ0h...
+#
+#   ── Evolution API (WhatsApp) ────────────────────────
+#   EVOLUTION_API_URL            https://comunicaciones-evolution-api.ayjla6.easypanel.host
+#   EVOLUTION_API_KEY            429683C4C977415CAAFCCE10F7D57E11
+#   EVOLUTION_INSTANCE           chatwoot_link
+#   EVOLUTION_INSTANCE_TOKEN     59A32FC2-036B-4BB1-9304-55444C25E05F
+#
+#   ── Chatwoot ────────────────────────────────────────
+#   CHATWOOT_URL         https://comunicaciones-chatwoot.ayjla6.easypanel.host
+#   CHATWOOT_TOKEN       J9GaJMe4sAXTfGgeBvmmLjsZ
+#   CHATWOOT_ACCOUNT_ID  1
+#   CHATWOOT_INBOX_ID    1
+#
+#   ── Google Drive ────────────────────────────────────
+#   GDRIVE_FOLDER_ID     1R0xewRUWYnLfakIMwhsdhl1R76kb-cno
+#   GDRIVE_SA_KEY_JSON   (base64 del JSON de service account)
+#   GMAIL_CLIENT_ID      603784757474-...
+#   GMAIL_CLIENT_SECRET  GOCSPX-...
+#   GMAIL_USER_EMAIL     info@rubiogarciandental.com
+#
+#   ── Romexis SQL Server ──────────────────────────────
+#   ROMEXIS_HOST         bbddsql.servemp3.com
+#   ROMEXIS_PORT         1433
+#   ROMEXIS_DB           romexis
+#   ROMEXIS_USER         romexis
+#   ROMEXIS_PASS         romexis
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── PostgreSQL 15 ──────────────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB:       ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - smilepro
+
+  # ── Backend Node.js ───────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    restart: unless-stopped
+    environment:
+      NODE_ENV:     production
+      PORT:         3000
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+      CORS_ORIGIN:  ${FRONTEND_URL}
+      # Auth
+      JWT_SECRET:          ${JWT_SECRET}
+      JWT_REFRESH_SECRET:  ${JWT_REFRESH_SECRET}
+      # IA
+      GROQ_API_KEY:        ${GROQ_API_KEY}
+      GEMINI_API_KEY:      ${GEMINI_API_KEY}
+      # Evolution API (WhatsApp)
+      EVOLUTION_API_URL:           ${EVOLUTION_API_URL}
+      EVOLUTION_API_KEY:           ${EVOLUTION_API_KEY}
+      EVOLUTION_INSTANCE:          ${EVOLUTION_INSTANCE}
+      EVOLUTION_INSTANCE_TOKEN:    ${EVOLUTION_INSTANCE_TOKEN}
+      EVOLUTION_WEBHOOK_SECRET:    ${EVOLUTION_WEBHOOK_SECRET:-}
+      # Chatwoot
+      CHATWOOT_URL:        ${CHATWOOT_URL}
+      CHATWOOT_TOKEN:      ${CHATWOOT_TOKEN}
+      CHATWOOT_ACCOUNT_ID: ${CHATWOOT_ACCOUNT_ID}
+      CHATWOOT_INBOX_ID:   ${CHATWOOT_INBOX_ID}
+      # Google Drive / Gmail
+      GDRIVE_FOLDER_ID:    ${GDRIVE_FOLDER_ID}
+      GDRIVE_SA_KEY_JSON:  ${GDRIVE_SA_KEY_JSON}
+      GMAIL_CLIENT_ID:     ${GMAIL_CLIENT_ID}
+      GMAIL_CLIENT_SECRET: ${GMAIL_CLIENT_SECRET}
+      GMAIL_USER_EMAIL:    ${GMAIL_USER_EMAIL}
+      # Romexis SQL Server
+      ROMEXIS_HOST: ${ROMEXIS_HOST}
+      ROMEXIS_PORT: ${ROMEXIS_PORT:-1433}
+      ROMEXIS_DB:   ${ROMEXIS_DB}
+      ROMEXIS_USER: ${ROMEXIS_USER}
+      ROMEXIS_PASS: ${ROMEXIS_PASS}
+    volumes:
+      - uploads:/app/uploads
+      - ia-data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+    command: >
+      sh -c "npx prisma migrate deploy && dumb-init node dist/server.js"
+    networks:
+      - smilepro
+
+  # ── Frontend Nginx + React ────────────────────────────────────────────────
+  # Easypanel asigna dominio y HTTPS automáticamente → sin ports
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - smilepro
+
+  # ── Orthanc — Servidor DICOM ──────────────────────────────────────────────
+  orthanc:
+    image: orthancteam/orthanc:24.11.3
+    restart: unless-stopped
+    volumes:
+      - orthanc-data:/var/lib/orthanc/db
+      - ./orthanc.json:/etc/orthanc/orthanc.json:ro
+    ports:
+      - "4242:4242"   # DICOM C-STORE — los equipos de la clínica envían aquí
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8042/system || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - smilepro
+
+networks:
+  smilepro:
+    driver: bridge
+
+volumes:
+  pgdata:
+  uploads:
+  ia-data:
+  orthanc-data:

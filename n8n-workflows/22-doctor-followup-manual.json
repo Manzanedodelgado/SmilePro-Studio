@@ -1,0 +1,43 @@
+{
+  "name": "SP · 22 · Seguimiento Manual por Doctor",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST", "path": "doctor-followup",
+        "responseMode": "lastNode", "options": {}
+      },
+      "id": "sp22df-0001", "name": "Webhook · Doctor activa seguimiento",
+      "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [240, 300],
+      "webhookId": "doctor-followup"
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "sp22df-0002", "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$input.first().json;\nconst msg=`👨‍⚕️ Hola ${d.nombre}, ${d.doctor||'nuestro equipo'} quiere saber cómo estás.\\n\\n¿Tienes alguna duda, molestia o pregunta sobre tu tratamiento? Escríbenos aquí, estaremos encantados de ayudarte. 😊`;\nreturn [{ json: { ...d, mensaje: msg } }];"
+      },
+      "id": "sp22df-0003", "name": "Preparar mensaje seguimiento",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "={{ $vars.EVOLUTION_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "apikey", "value": "={{ $vars.EVOLUTION_API_KEY }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"34{{ $json.telefono.replace(/[^0-9]/g,'').replace(/^34/,'') }}@s.whatsapp.net\",\n  \"text\": \"{{ $json.mensaje }}\"\n}"
+      },
+      "id": "sp22df-0004", "name": "WhatsApp · Seguimiento doctor",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Webhook · Doctor activa seguimiento": { "main": [[{ "node": "Preparar mensaje seguimiento", "type": "main", "index": 0 }, { "node": "Responder OK", "type": "main", "index": 0 }]] },
+    "Preparar mensaje seguimiento": { "main": [[{ "node": "WhatsApp · Seguimiento doctor", "type": "main", "index": 0 }]] }
+  },
+  "active": false, "settings": { "executionOrder": "v1" }, "id": "sp-doctor-followup-022",
+  "_nota": "POST /webhook/doctor-followup con: { nombre, telefono, doctor, tratamiento }"
+}
