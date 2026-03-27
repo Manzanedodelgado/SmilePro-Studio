@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import { ClinicalService } from './clinical.service.js';
 
 export class ClinicalController {
+    // ── Entradas médicas GELITE (TtosMed) ──────────────────
     static async getEntradasMedicas(req: Request, res: Response, next: NextFunction) {
         try {
             const { page, pageSize, order } = req.query as Record<string, string>;
@@ -15,12 +16,39 @@ export class ClinicalController {
         } catch (error) { next(error); }
     }
 
+    // ── Actualizar entrada médica GELITE ────────────────────
+    static async updateEntradaMedica(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { patientId, entradaId } = req.params;
+            const result = await ClinicalService.updateEntradaMedica(
+                patientId,
+                parseInt(entradaId, 10),
+                req.body
+            );
+            if (!result) {
+                res.status(404).json({ success: false, message: 'Entrada no encontrada' });
+                return;
+            }
+            res.json({ success: true, data: result });
+        } catch (error) { next(error); }
+    }
+
+    // ── Historia clínica (SOAP + TtosMed) ──────────────────
     static async getHistory(req: Request, res: Response, next: NextFunction) {
         try {
             res.json({ success: true, data: await ClinicalService.getPatientHistory(req.params.patientId) });
         } catch (error) { next(error); }
     }
 
+    // ── Notas SOAP propias de SmilePro ─────────────────────
+    static async getSoapNotes(req: Request, res: Response, next: NextFunction) {
+        try {
+            const notes = await ClinicalService.getSoapNotes(req.params.patientId);
+            res.json({ success: true, data: notes });
+        } catch (error) { next(error); }
+    }
+
+    // ── Crear nota SOAP (persiste en clinical_records) ─────
     static async createRecord(req: Request, res: Response, next: NextFunction) {
         try {
             const record = await ClinicalService.createRecord(req.body);
@@ -28,6 +56,15 @@ export class ClinicalController {
         } catch (error) { next(error); }
     }
 
+    // ── Editar nota SOAP existente ─────────────────────────
+    static async updateRecord(req: Request, res: Response, next: NextFunction) {
+        try {
+            const record = await ClinicalService.updateRecord(req.params.id, req.body);
+            res.json({ success: true, data: record });
+        } catch (error) { next(error); }
+    }
+
+    // ── Eliminar nota SOAP ─────────────────────────────────
     static async deleteRecord(req: Request, res: Response, next: NextFunction) {
         try {
             await ClinicalService.deleteRecord(req.params.id);
@@ -35,15 +72,23 @@ export class ClinicalController {
         } catch (error) { next(error); }
     }
 
+    // ── Odontograma — leer estado ──────────────────────────
     static async getOdontogram(req: Request, res: Response, next: NextFunction) {
         try {
             res.json({ success: true, data: await ClinicalService.getOdontogram(req.params.patientId) });
         } catch (error) { next(error); }
     }
 
+    // ── Odontograma — guardar estado completo ──────────────
     static async updateOdontogram(req: Request, res: Response, next: NextFunction) {
         try {
-            const entry = await ClinicalService.updateToothStatus(req.body);
+            // Frontend envía: { patientId: numPac, data: DienteData[] }
+            const { patientId, data } = req.body;
+            if (!patientId || !Array.isArray(data)) {
+                res.status(400).json({ success: false, message: 'patientId y data[] son requeridos' });
+                return;
+            }
+            const entry = await ClinicalService.saveOdontogramState({ patientId, data });
             res.json({ success: true, data: entry });
         } catch (error) { next(error); }
     }

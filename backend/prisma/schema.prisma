@@ -3036,22 +3036,34 @@ model Patient {
 model ClinicalRecord {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   patientId   String   @map("patient_id") @db.Uuid
+  numPac      String?  @map("num_pac")          // NumPac GELITE — clave de búsqueda principal
   userId      String?  @map("user_id") @db.Uuid
   date        DateTime @default(now()) @db.Timestamptz(6)
   type        String   @default("visit")
   title       String   @default("")
   content     String   @default("")
+  objetivo    String   @default("")              // Campo O del SOAP
+  analisis    String   @default("")              // Campo A del SOAP
+  plan        String   @default("")              // Campo P del SOAP
+  eva         Int      @default(0)               // Escala EVA dolor 0-10
+  especialidad String  @default("General / Libre") @map("especialidad")
+  tratamientoId   String? @map("tratamiento_id")
+  tratamientoNombre String? @map("tratamiento_nombre")
+  pieza       Int?
+  firmada     Boolean  @default(false)
   treatments  Json     @default("[]")
   attachments Json     @default("[]")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
 
+  @@index([numPac])
   @@map("clinical_records")
 }
 
 model OdontogramEntry {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   patientId   String   @map("patient_id") @db.Uuid
+  numPac      String?  @map("num_pac")          // NumPac GELITE — clave de búsqueda principal
   toothNumber Int      @map("tooth_number")
   status      String   @default("healthy")
   faces       Json     @default("{}")
@@ -3060,7 +3072,20 @@ model OdontogramEntry {
   updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   @@unique([patientId, toothNumber])
+  @@index([numPac])
   @@map("odontogram_entries")
+}
+
+// Odontograma completo serializado como JSON por NumPac GELITE
+// Guarda las 32 piezas con sus caras y estado (DienteData[])
+model OdontogramState {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  numPac    String   @unique @map("num_pac")    // NumPac GELITE — clave única
+  data      Json     @default("[]")             // Array DienteData[] serializado
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("odontogram_state")
 }
 
 model Treatment {
@@ -3192,3 +3217,33 @@ model GestModelosFiscales {
   @@map("gest_modelos_fiscales")
 }
 
+// ── Datos clínicos adicionales por paciente (NumPac GELITE) ─────────────────
+
+// Medicaciones del paciente
+model PatientMedication {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  numPac      String   @map("num_pac")            // NumPac GELITE
+  nombre      String
+  dosis       String?
+  frecuencia  String?
+  importante  Boolean  @default(false)
+  categoria   String?
+  nota        String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([numPac])
+  @@map("patient_medications")
+}
+
+// Alergias del paciente
+model PatientAllergy {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  numPac     String    @map("num_pac")            // NumPac GELITE
+  nombre     String
+  severidad  String    @default("moderada")       // leve | moderada | grave
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([numPac])
+  @@map("patient_allergies")
+}

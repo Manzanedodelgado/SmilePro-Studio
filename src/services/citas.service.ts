@@ -297,39 +297,6 @@ export const getColaboradorNombre = async (idCol?: number): Promise<string> => {
 //  ENTRADAS MÉDICAS (TtosMed GELITE via backend /api/clinical)
 // ─────────────────────────────────────────────────────────────────
 
-const CLINICAL_BASE = '/api/clinical';
-
-export interface EntradaMedica {
-    id: number;
-    fecha: string | null;
-    tratamiento: string;
-    notas: string;
-    piezas: number[];
-    importe: number;
-    estado: number;
-}
-
-export const getEntradasMedicas = async (
-    idPac: number,
-    opts: { page?: number; pageSize?: number; order?: 'asc' | 'desc' } = {}
-): Promise<EntradaMedica[]> => {
-    if (!idPac) return [];
-    try {
-        const params = new URLSearchParams({
-            page: String(opts.page ?? 1),
-            pageSize: String(opts.pageSize ?? 100),
-            order: opts.order ?? 'desc',
-        });
-        const res = await authFetch(`${CLINICAL_BASE}/patients/${idPac}/entradas?${params}`);
-        if (!res.ok) return [];
-        const json = await res.json();
-        return (json.data ?? []) as EntradaMedica[];
-    } catch (e) {
-        logger.warn('[ENTRADAS] Error cargando entradas médicas:', e);
-        return [];
-    }
-};
-
 export const getHistorialCitasPaciente = async (
     _apellidos: string,
     _nombre: string,

@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Zap, RotateCcw, Save, Loader2, Search, X } from 'lucide-react';
+import { Zap, RotateCcw, Save, Loader2, Search, X, BarChart3 } from 'lucide-react';
 import { getOdontograma, saveOdontograma } from '../../services/odontograma.service';
 import { getEntradasMedicas } from '../../services/clinical.service';
 import { analyzeOdontograma, isAIConfiguredSync } from '../../services/ia-dental.service';

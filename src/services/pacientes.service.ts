@@ -35,26 +35,22 @@ export const searchPacientes = async (query: string): Promise<Paciente[]> => {
         const q = query.trim();
         const url = `${API_BASE_URL}/patients?limit=50${q ? '&search=' + encodeURIComponent(q) : ''}`;
         
-        console.log('[PACIENTES] Fetching URL:', url);
         const res = await authFetch(url);
         if (!res.ok) throw new Error('Error buscando pacientes');
         const json = await res.json();
         
-        console.log('[PACIENTES] Response JSON:', json);
         if (json.success && Array.isArray(json.data)) {
             try {
-                const mapResult = json.data.map(mapPrismaToPaciente);
-                console.log('[PACIENTES] Mapped successfully:', mapResult.length);
-                return mapResult;
+                return json.data.map(mapPrismaToPaciente);
             } catch (mapErr) {
-                console.error('[PACIENTES] Error mapping patient data:', mapErr);
+                logger.error('[PACIENTES] Error mapping patient data:', mapErr);
                 return [];
             }
         }
-        console.warn('[PACIENTES] Invalid JSON format or not success:', json);
+        logger.warn('[PACIENTES] Invalid JSON format or not success:', json);
         return [];
     } catch (error) {
-        console.error('[PACIENTES] searchPacientes error:', error);
+        logger.error('[PACIENTES] searchPacientes error:', error);
         return [];
     }
 };

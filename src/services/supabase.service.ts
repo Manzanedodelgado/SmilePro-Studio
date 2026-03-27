@@ -1,24 +1,15 @@
-/// <reference types="vite/client" />
 // ─────────────────────────────────────────────────────────────────
 //  services/supabase.service.ts
-//  Integración con Supabase para medicaciones y alergias.
-//
-//  Configurar en .env.local:
-//    VITE_SUPABASE_URL=https://xxxx.supabase.co
-//    VITE_SUPABASE_ANON_KEY=eyJhbGci...
-//
-//  Sin credenciales → modo local (sin persistencia)
+//  Alergias y medicaciones → backend propio /api/patients/:numPac/
+//  (ya no usa Supabase externo — datos persisten en BD local)
 // ─────────────────────────────────────────────────────────────────
+import { authFetch } from './db';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const meta = import.meta as any;
-const SUPABASE_URL = meta.env?.VITE_SUPABASE_URL as string | undefined;
-const SUPABASE_ANON_KEY = meta.env?.VITE_SUPABASE_ANON_KEY as string | undefined;
+const API_BASE = '/api/patients';
 
-export const isSupabaseConfigured = (): boolean =>
-    Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+export const isSupabaseConfigured = (): boolean => true; // siempre disponible con backend propio
 
-// ── Tipos ──────────────────────────────────────────────────────
+// ── Tipos ──────────────────────────────────────────────────────────────────
 
 export interface PatientMedication {
     id: string;
@@ -38,112 +29,107 @@ export interface PatientAllergy {
     severidad: 'leve' | 'moderada' | 'grave';
 }
 
-// ── SQL de migración (copiar en Supabase SQL Editor) ──────────
-export const SUPABASE_MIGRATION_SQL = `
--- Medicaciones del paciente
-CREATE TABLE IF NOT EXISTS patient_medications (
-  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  paciente_id   text NOT NULL,
-  nombre        text NOT NULL,
-  dosis         text,
-  frecuencia    text,
-  importante    boolean DEFAULT false,
-  categoria     text,
-  nota          text,
-  created_at    timestamptz DEFAULT now(),
-  updated_at    timestamptz DEFAULT now()
-);
+// Adapta la respuesta del backend (numPac) al tipo legacy (paciente_id)
+const mapMed = (r: any): PatientMedication => ({
+    id: r.id,
+    paciente_id: r.numPac ?? r.num_pac ?? '',
+    nombre: r.nombre,
+    dosis: r.dosis ?? undefined,
+    frecuencia: r.frecuencia ?? undefined,
+    importante: r.importante ?? false,
+    categoria: r.categoria ?? undefined,
+    nota: r.nota ?? undefined,
+});
 
--- Alergias del paciente
-CREATE TABLE IF NOT EXISTS patient_allergies (
-  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  paciente_id   text NOT NULL,
-  nombre        text NOT NULL,
-  severidad     text DEFAULT 'moderada',
-  created_at    timestamptz DEFAULT now()
-);
+const mapAllergy = (r: any): PatientAllergy => ({
+    id: r.id,
+    paciente_id: r.numPac ?? r.num_pac ?? '',
+    nombre: r.nombre,
+    severidad: r.severidad ?? 'moderada',
+});
 
--- Row Level Security
-ALTER TABLE patient_medications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE patient_allergies   ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "clinic_full_access_medications" ON patient_medications FOR ALL USING (true);
-CREATE POLICY "clinic_full_access_allergies"   ON patient_allergies   FOR ALL USING (true);
-
--- Índices
-CREATE INDEX IF NOT EXISTS patient_medications_paciente_id ON patient_medications(paciente_id);
-CREATE INDEX IF NOT EXISTS patient_allergies_paciente_id   ON patient_allergies(paciente_id);
-`.trim();
-
-// ── Helper fetch ───────────────────────────────────────────────
-
-const sbFetch = async (path: string, options?: RequestInit) => {
-    if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
-    return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-        ...options,
-        headers: {
-            'apikey': SUPABASE_ANON_KEY!,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=representation',
-            ...(options?.headers ?? {}),
-        },
-    });
-};
-
-// ── MEDICACIONES ───────────────────────────────────────────────
+// ── MEDICACIONES ───────────────────────────────────────────────────────────
 
 export const getMedications = async (pacienteId: string): Promise<PatientMedication[]> => {
-    if (!isSupabaseConfigured()) return [];
-    const res = await sbFetch(`patient_medications?paciente_id=eq.${encodeURIComponent(pacienteId)}&order=importante.desc,nombre.asc`);
-    if (!res.ok) return [];
-    return res.json();
+    try {
+        const res = await authFetch(`${API_BASE}/${encodeURIComponent(pacienteId)}/medications`);
+        if (!res.ok) return [];
+        const json = await res.json();
+        return (json.data ?? []).map(mapMed);
+    } catch { return []; }
 };
 
-export const upsertMedication = async (med: Omit<PatientMedication, 'id'> & { id?: string }): Promise<PatientMedication | null> => {
-    if (!isSupabaseConfigured()) {
-        return { ...med, id: med.id ?? crypto.randomUUID() } as PatientMedication;
-    }
-    const res = await sbFetch('patient_medications', {
-        method: med.id ? 'PATCH' : 'POST',
-        headers: med.id ? { 'id': `eq.${med.id}` } : {},
-        body: JSON.stringify(med),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return Array.isArray(data) ? data[0] : data;
+export const upsertMedication = async (
+    med: Omit<PatientMedication, 'id'> & { id?: string }
+): Promise<PatientMedication | null> => {
+    try {
+        const numPac = med.paciente_id;
+        if (med.id) {
+            const res = await authFetch(`${API_BASE}/${encodeURIComponent(numPac)}/medications/${med.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nombre: med.nombre, dosis: med.dosis, frecuencia: med.frecuencia, importante: med.importante, categoria: med.categoria, nota: med.nota }),
+            });
+            if (!res.ok) return null;
+            const json = await res.json();
+            return mapMed(json.data);
+        } else {
+            const res = await authFetch(`${API_BASE}/${encodeURIComponent(numPac)}/medications`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nombre: med.nombre, dosis: med.dosis, frecuencia: med.frecuencia, importante: med.importante, categoria: med.categoria, nota: med.nota }),
+            });
+            if (!res.ok) return null;
+            const json = await res.json();
+            return mapMed(json.data);
+        }
+    } catch { return null; }
 };
 
-export const deleteMedication = async (id: string): Promise<boolean> => {
-    if (!isSupabaseConfigured()) return true;
-    const res = await sbFetch(`patient_medications?id=eq.${id}`, { method: 'DELETE' });
-    return res.ok;
+export const deleteMedication = async (id: string, pacienteId: string): Promise<boolean> => {
+    try {
+        const res = await authFetch(`${API_BASE}/${encodeURIComponent(pacienteId)}/medications/${id}`, { method: 'DELETE' });
+        return res.ok;
+    } catch { return false; }
 };
 
-// ── ALERGIAS ───────────────────────────────────────────────────
+// ── ALERGIAS ───────────────────────────────────────────────────────────────
 
 export const getAllergies = async (pacienteId: string): Promise<PatientAllergy[]> => {
-    if (!isSupabaseConfigured()) return [];
-    const res = await sbFetch(`patient_allergies?paciente_id=eq.${encodeURIComponent(pacienteId)}&order=severidad.asc`);
-    if (!res.ok) return [];
-    return res.json();
+    try {
+        const res = await authFetch(`${API_BASE}/${encodeURIComponent(pacienteId)}/allergies`);
+        if (!res.ok) return [];
+        const json = await res.json();
+        return (json.data ?? []).map(mapAllergy);
+    } catch { return []; }
 };
 
-export const upsertAllergy = async (alergy: Omit<PatientAllergy, 'id'> & { id?: string }): Promise<PatientAllergy | null> => {
-    if (!isSupabaseConfigured()) {
-        return { ...alergy, id: alergy.id ?? crypto.randomUUID() } as PatientAllergy;
-    }
-    const res = await sbFetch('patient_allergies', {
-        method: alergy.id ? 'PATCH' : 'POST',
-        body: JSON.stringify(alergy),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return Array.isArray(data) ? data[0] : data;
+export const upsertAllergy = async (
+    allergy: Omit<PatientAllergy, 'id'> & { id?: string }
+): Promise<PatientAllergy | null> => {
+    try {
+        const numPac = allergy.paciente_id;
+        if (allergy.id) {
+            // No hay PATCH de alergias — delete + create
+            await deleteMedication(allergy.id, numPac);
+        }
+        const res = await authFetch(`${API_BASE}/${encodeURIComponent(numPac)}/allergies`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombre: allergy.nombre, severidad: allergy.severidad }),
+        });
+        if (!res.ok) return null;
+        const json = await res.json();
+        return mapAllergy(json.data);
+    } catch { return null; }
 };
 
-export const deleteAllergy = async (id: string): Promise<boolean> => {
-    if (!isSupabaseConfigured()) return true;
-    const res = await sbFetch(`patient_allergies?id=eq.${id}`, { method: 'DELETE' });
-    return res.ok;
+export const deleteAllergy = async (id: string, pacienteId: string): Promise<boolean> => {
+    try {
+        const res = await authFetch(`${API_BASE}/${encodeURIComponent(pacienteId)}/allergies/${id}`, { method: 'DELETE' });
+        return res.ok;
+    } catch { return false; }
 };
+
+// ── Compatibilidad: migración SQL (ya no necesaria) ────────────────────────
+export const SUPABASE_MIGRATION_SQL = '-- Migrado al backend local (PostgreSQL / Prisma)';

@@ -209,6 +209,20 @@ export const getResumenEconomico = async (numPac: string, _idPac?: string) => {
 };
 
 export const createPresupuesto = async (data: Omit<Presupuesto, 'id'>): Promise<Presupuesto> => {
+    // Intentar guardar en backend primero
+    try {
+        const res = await authFetch(`${API_BASE}/budgets`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        if (res.ok) {
+            const json = await res.json();
+            if (json.success && json.data) return json.data as Presupuesto;
+        }
+    } catch { /* fallthrough a localStorage */ }
+
+    // Fallback: localStorage
     const all = loadAll();
     const maxId = all.reduce((m, p) => Math.max(m, p.id), 1000);
     const totals = computeTotals(data.lineas);
@@ -224,6 +238,20 @@ export const createPresupuesto = async (data: Omit<Presupuesto, 'id'>): Promise<
 };
 
 export const updatePresupuesto = async (id: number, updates: Partial<Presupuesto>): Promise<Presupuesto | null> => {
+    // Intentar backend primero
+    try {
+        const res = await authFetch(`${API_BASE}/budgets/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates),
+        });
+        if (res.ok) {
+            const json = await res.json();
+            if (json.success && json.data) return json.data as Presupuesto;
+        }
+    } catch { /* fallthrough a localStorage */ }
+
+    // Fallback: localStorage
     const all = loadAll();
     const idx = all.findIndex(p => p.id === id);
     if (idx === -1) return null;
@@ -238,6 +266,13 @@ export const updatePresupuesto = async (id: number, updates: Partial<Presupuesto
 };
 
 export const deletePresupuesto = async (id: number): Promise<boolean> => {
+    // Intentar backend primero
+    try {
+        const res = await authFetch(`${API_BASE}/budgets/${id}`, { method: 'DELETE' });
+        if (res.ok) return true;
+    } catch { /* fallthrough a localStorage */ }
+
+    // Fallback: localStorage
     const all = loadAll();
     const next = all.filter(p => p.id !== id);
     if (next.length === all.length) return false;
