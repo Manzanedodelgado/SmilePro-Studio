@@ -37,8 +37,9 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/prisma ./prisma
 
-# Create uploads directory
+# Create uploads directory and logs directory for winston
 RUN mkdir -p /app/uploads && chown node:node /app/uploads
+RUN mkdir -p /app/logs && chown node:node /app/logs
 
 USER node
 EXPOSE 3000
