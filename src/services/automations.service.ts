@@ -97,3 +97,30 @@ export const toggleAutomation = async (id: string, active: boolean): Promise<boo
         return false;
     }
 };
+
+export const deleteAutomation = async (id: string): Promise<boolean> => {
+    try {
+        const res = await authFetch(`${API_BASE}/automations/${id}`, { method: 'DELETE' });
+        if (res.ok && _cache) {
+            _cache = _cache.filter(a => a.id !== id);
+        }
+        return res.ok;
+    } catch (e) {
+        logger.error('[Automations] Error al eliminar:', e);
+        return false;
+    }
+};
+
+export const getAutomationById = (id: string): Automation | undefined =>
+    _cache?.find(a => a.id === id);
+
+export const getAutomationsByCategory = async (category: string): Promise<Automation[]> => {
+    const all = await getAutomations();
+    return all.filter(a => a.category === category);
+};
+
+export const getActiveAutomations = async (): Promise<Automation[]> => {
+    const all = await getAutomations();
+    return all.filter(a => a.active);
+};
+
