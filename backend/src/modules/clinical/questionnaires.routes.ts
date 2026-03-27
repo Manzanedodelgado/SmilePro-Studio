@@ -88,4 +88,20 @@ router.get('/paciente/:numPac', (req: Request, res: Response) => {
     res.json({ success: true, data: record });
 });
 
+// GET /api/clinical/questionnaires/paciente/:numPac/datos — datos completos del formulario
+// Devuelve el record con `datos` = respuestas camelCase del formulario (para AnamnesisPanel)
+router.get('/paciente/:numPac/datos', (req: Request, res: Response) => {
+    const record = readAll()
+        .filter((r: any) => r.num_pac === req.params.numPac && r.estado === 'completado')
+        .sort((a: any, b: any) => new Date(b.completado_at || 0).getTime() - new Date(a.completado_at || 0).getTime())[0];
+    if (!record) {
+        res.status(404).json({ success: false, error: { message: 'No hay cuestionario completado para este paciente' } });
+        return;
+    }
+    // El campo `data` del JSON file (snake_case del submit) se mapea a `datos` (camelCase del tipo QuestionnaireData)
+    const { data: rawData, ...meta } = record;
+    res.json({ success: true, data: { ...meta, datos: rawData } });
+});
+
 export default router;
+

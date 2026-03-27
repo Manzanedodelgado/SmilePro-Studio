@@ -89,6 +89,24 @@ app.use('/api/proxy', proxyRoutes);   // V-001 to V-004: API keys seguras en ser
 app.use('/api/gdrive', gdriveRoutes); // Fotos pacientes — Google Drive
 app.use('/rest/v1', legacyRoutes);
 
+// ─── Centinela Error Reporting ──────────────────────────
+// POST /api/centinela/report — recibe errores del motor Centinela frontend
+app.post('/api/centinela/report', (req, res) => {
+    const { message, severity = 'error', module = 'Unknown', fingerprint, count, url, stack, tags } = req.body;
+    if (!message) { res.status(400).json({ success: false }); return; }
+    const logMsg = `[CENTINELA] [${severity.toUpperCase()}] [${module}] ${message}${fingerprint ? ` (#${fingerprint})` : ''}${count > 1 ? ` x${count}` : ''}`;
+    if (severity === 'critical' || severity === 'error') logger.error(logMsg);
+    else if (severity === 'warning') logger.warn(logMsg);
+    else logger.info(logMsg);
+    if (stack) logger.debug(`[CENTINELA] stack: ${stack.slice(0, 500)}`);
+    res.json({ success: true });
+});
+// GET /api/centinela/status — resumen de salud para monitorización externa
+app.get('/api/centinela/status', (_req, res) => {
+    res.json({ success: true, data: { status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime() } });
+});
+
+
 // ─── Error Handling ─────────────────────────────────────
 app.use(notFoundHandler);
 app.use(errorHandler);

@@ -10,6 +10,8 @@ import { Plantillas } from './ia/Plantillas';
 import { IADashboard } from './ia/IADashboard';
 import { DocumentosClinica } from './ia/DocumentosClinica';
 import { MetricasComunicacion } from './ia/MetricasComunicacion';
+import CentinelaPanel from './ia/CentinelaPanel';
+
 
 interface IAAutomatizacionProps { activeSubArea?: string; onSubNavigate?: (area: string) => void; }
 
@@ -34,6 +36,7 @@ const IAAutomatizacion: React.FC<IAAutomatizacionProps> = ({ activeSubArea, onSu
             case 'Plantillas': return <Plantillas />;
             case 'Documentos Clínicos': return <DocumentosClinica />;
             case 'Métricas WA': return <MetricasComunicacion />;
+            case 'Centinela': return <CentinelaPanel />;
             default: return <IADashboard onNavigate={onSubNavigate ?? (() => { })} />;
         }
     };
