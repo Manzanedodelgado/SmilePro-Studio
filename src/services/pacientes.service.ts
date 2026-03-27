@@ -32,11 +32,10 @@ const mapPrismaToPaciente = (row: any): Paciente => ({
 
 export const searchPacientes = async (query: string): Promise<Paciente[]> => {
     try {
-        const url = new URL(`${API_BASE_URL}/patients`);
-        if (query.trim()) url.searchParams.append('search', query.trim());
-        url.searchParams.append('limit', '50');
+        const q = query.trim();
+        const url = `${API_BASE_URL}/patients?limit=50${q ? '&search=' + encodeURIComponent(q) : ''}`;
 
-        const res = await authFetch(url.toString());
+        const res = await authFetch(url);
         if (!res.ok) throw new Error('Error buscando pacientes');
         const json = await res.json();
         if (json.success && Array.isArray(json.data)) {
