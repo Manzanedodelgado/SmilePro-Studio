@@ -30,7 +30,7 @@ info "Actualizando imágenes base..."
 docker pull node:20-alpine     --quiet
 docker pull postgres:15-alpine --quiet
 docker pull nginx:alpine       --quiet
-docker pull orthancteam/orthanc:24.11.3 --quiet
+docker pull orthancteam/orthanc:latest --quiet
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 info "Construyendo imágenes de SmilePro..."

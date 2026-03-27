@@ -103,7 +103,7 @@ async function callWithFallback(
 
     // Fallback: OpenRouter (acepta cualquier modelo)
     if (config.OPENROUTER_API_KEY) {
-        const fallbackModel = useCase === 'whatsapp' ? 'meta-llama/llama-3.3-70b-instruct' : 'google/gemini-flash-1.5';
+        const fallbackModel = useCase === 'whatsapp' ? 'meta-llama/llama-3.3-70b-instruct:free' : 'deepseek/deepseek-r1:free';
         return await callOpenAICompat('https://openrouter.ai/api/v1', config.OPENROUTER_API_KEY, fallbackModel, messages, 512, 0.3);
     }
 

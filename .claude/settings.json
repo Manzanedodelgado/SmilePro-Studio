@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -n \"if \\(type === ''sagital''\\)\" src/components/radiologia/CbctViewer.tsx)"
+      "Bash(grep -n \"if \\(type === ''sagital''\\)\" src/components/radiologia/CbctViewer.tsx)",
+      "Bash(find /Users/juanantoniomanzanedodelgado/Documents -maxdepth 1 -type d -name *smilepro*)"
     ]
   }
 }
