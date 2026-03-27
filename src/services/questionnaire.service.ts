@@ -118,6 +118,17 @@ export const getQuestionnairePorPaciente = async (numPac: string): Promise<Quest
     }
 };
 
+export const getQuestionnaireDatosPorPaciente = async (numPac: string): Promise<(QuestionnaireRecord & { datos?: QuestionnaireData }) | null> => {
+    try {
+        const res = await authFetch(`${API}/paciente/${numPac}/datos`);
+        if (!res.ok) return null;
+        const json = await res.json();
+        return json.data ?? null;
+    } catch {
+        return null;
+    }
+};
+
 export const generarMensajeQuestionnaire = (nombrePaciente: string, url: string, fechaCita: string): string =>
     `📋 ¡Bienvenido/a a Rubio García Dental, ${nombrePaciente}!
 

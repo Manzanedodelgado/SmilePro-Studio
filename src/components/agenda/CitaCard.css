@@ -1,0 +1,185 @@
+/* ═══════════════════════════════════════════════════
+   CitaCard.css — Estilos del componente CitaCard
+   ═══════════════════════════════════════════════════ */
+
+.cita-card {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 6px;
+    border-left: 3px solid rgba(0, 0, 0, 0.2);
+    padding: 3px 6px;
+    overflow: hidden;
+    cursor: pointer;
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    transition: opacity 0.15s, filter 0.15s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.cita-card:hover {
+    opacity: 0.92;
+    filter: brightness(1.05);
+}
+
+/* ── Estado específico ── */
+.cita-card--finalizada { opacity: 0.6; }
+.cita-card--anulada    { opacity: 0.5; text-decoration: line-through; }
+.cita-card--cancelada  { opacity: 0.5; }
+.cita-card--bloqueo_bio {
+    background: repeating-linear-gradient(
+        45deg, #1e293b, #1e293b 4px, #0f172a 4px, #0f172a 8px
+    ) !important;
+}
+
+/* ── Info ── */
+.cita-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.cita-numpac {
+    font-size: 8px;
+    font-weight: 900;
+    color: rgba(255, 255, 255, 0.65);
+    letter-spacing: 0.05em;
+}
+
+.cita-nombre {
+    font-size: 10px;
+    font-weight: 800;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+}
+
+.cita-tratamiento {
+    font-size: 9px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.82);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cita-notas {
+    font-size: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cita-telefono {
+    font-size: 8px;
+    color: rgba(255, 255, 255, 0.65);
+}
+
+/* ── Estado icon ── */
+.cita-estado {
+    font-size: 9px;
+    flex-shrink: 0;
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1;
+    margin-top: 1px;
+}
+
+/* ── Alerta badge ── */
+.cita-alerta-badge {
+    font-size: 9px;
+    flex-shrink: 0;
+    cursor: default;
+}
+
+/* ── WhatsApp ── */
+.cita-whatsapp {
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    border-radius: 4px;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #fff;
+    flex-shrink: 0;
+    padding: 0;
+    transition: background 0.1s;
+}
+
+.cita-whatsapp:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.cita-whatsapp:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+/* ── Skeleton ── */
+.cita-skeleton {
+    height: 40px;
+    border-radius: 6px;
+    background: linear-gradient(
+        90deg,
+        #f1f5f9 25%,
+        #e2e8f0 50%,
+        #f1f5f9 75%
+    );
+    background-size: 200% 100%;
+    animation: cita-shimmer 1.5s infinite;
+}
+
+@keyframes cita-shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position:  200% 0; }
+}
+
+/* ── Colisión ── */
+.cita-collision-wrapper {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    height: 100%;
+}
+
+.cita-collision-badge {
+    font-size: 9px;
+    font-weight: 800;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    padding: 1px 4px;
+    cursor: pointer;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.cita-collision-badge:hover {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.cita-expand-panel {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+}

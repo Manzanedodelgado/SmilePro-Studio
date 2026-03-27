@@ -11,6 +11,7 @@ import Documentos from '../components/pacientes/Documentos';
 import Economica from '../components/pacientes/Economica';
 import EntradasMedicas from '../components/pacientes/EntradasMedicas';
 import QuestionnairePanel from '../components/pacientes/QuestionnairePanel';
+import AnamnesisPanel from '../components/pacientes/AnamnesisPanel';
 import RadiologyTab from '../components/pacientes/RadiologyTab';
 import RomexisLaunchButton from '../components/pacientes/RomexisLaunchButton';
 import { type SOAPNote, type Paciente, type Area } from '../types';
@@ -731,7 +732,7 @@ const Pacientes: React.FC<PacientesProps> = ({ activeSubArea, onSubAreaChange, s
             />;
             case 'Documentos y Consentimientos':
             case 'Documentos': return <Documentos numPac={paciente?.numPac ?? ''} nombrePaciente={paciente ? `${paciente.nombre} ${paciente.apellidos}` : undefined} telefono={paciente?.telefono} fechaNacimiento={paciente?.fechaNacimiento} onDocumentSigned={handleDocumentSigned} showToast={showToast} />;
-            case 'Anamnesis': return paciente ? <QuestionnairePanel paciente={paciente} onUpdated={(p) => setPaciente(p)} /> : null;
+            case 'Anamnesis': return paciente ? <AnamnesisPanel numPac={paciente.numPac} /> : null;
             case 'Radiología': return <RadiologyTab numPac={paciente?.numPac} />;
             case 'Historia Clínica':
             case 'Historial Clínico':

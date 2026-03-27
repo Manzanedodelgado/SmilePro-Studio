@@ -81,12 +81,12 @@ const fetchWithTimeout = (url: string, opts: RequestInit = {}, ms = 30_000): Pro
     return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(id));
 };
 
-const EVO_URL_RAW = (import.meta.env.VITE_EVOLUTION_API_URL as string | undefined) || '';
-const EVO_KEY = (import.meta.env.VITE_EVOLUTION_API_KEY as string | undefined) || '';
-const EVO_INSTANCE_RAW = (import.meta.env.VITE_EVOLUTION_INSTANCE as string | undefined) || '';
+const EVO_URL_RAW = (import.meta.env.VITE_EVOLUTION_API_URL as string | undefined) || 'https://comunicaciones-evolution-api.ayjla6.easypanel.host';
+const EVO_KEY = (import.meta.env.VITE_EVOLUTION_API_KEY as string | undefined) || '429683C4C977415CAAFCCE10F7D57E11';
+const EVO_INSTANCE_RAW = (import.meta.env.VITE_EVOLUTION_INSTANCE as string | undefined) || 'chatwoot_link';
 
-const CW_URL_RAW = (import.meta.env.VITE_CHATWOOT_URL as string | undefined) || '';
-const CW_TOKEN = (import.meta.env.VITE_CHATWOOT_TOKEN as string | undefined) || '';
+const CW_URL_RAW = (import.meta.env.VITE_CHATWOOT_URL as string | undefined) || 'https://comunicaciones-chatwoot.ayjla6.easypanel.host';
+const CW_TOKEN = (import.meta.env.VITE_CHATWOOT_TOKEN as string | undefined) || 'J9GaJMe4sAXTfGgeBvmmLjsZ';
 const CW_ACCOUNT = (import.meta.env.VITE_CHATWOOT_ACCOUNT_ID as string | undefined) || '1';
 const CW_INBOX = (import.meta.env.VITE_CHATWOOT_INBOX_ID as string | undefined) || '1';
 
@@ -312,45 +312,60 @@ export const sendMediaBase64 = async (
 
 // ── Chatwoot API ──────────────────────────────────────────────────────────────
 
-/** Listar todas las conversaciones abiertas del inbox de WhatsApp */
+/** Listar todas las conversaciones del inbox de WhatsApp (open + resolved + pending) */
 export const getChatwootConversaciones = async (): Promise<ConversacionUI[]> => {
     if (!isChatwootConfigured()) return [];
     try {
-        const params = new URLSearchParams({
-            inbox_id: CW_INBOX!,
-            page: '1',
-        });
-        const r = await fetchWithTimeout(
-            `${CW_URL}/api/v1/accounts/${CW_ACCOUNT}/conversations?${params}`,
-            { headers: cwHeaders() }
-        );
-        if (!r.ok) return [];
-        const data = await r.json();
-        const convs: ConversacionUI[] = (data?.data?.payload ?? []).map((c: any) => {
-            const contact = c.meta?.sender;
-            const phone = contact?.phone_number ?? contact?.identifier ?? '';
-            const name = contact?.name || phone;
-            const last = c.last_non_activity_message;
-            return {
-                id: phone || String(c.id),
-                chatwootId: c.id,
-                name,
-                phone,
-                lastMessage: last?.content ?? '—',
-                lastMessageAt: last?.created_at ? last.created_at * 1000 : 0,
-                unread: c.unread_count ?? 0,
-                status: c.status === 'open' ? 'open' : c.status === 'resolved' ? 'resolved' : 'pending',
-                avatar: contact?.name?.slice(0, 2)?.toUpperCase() ?? '??',
-                type: 'patient',
-                tags: c.labels ?? [],
-                assignedAgent: c.meta?.assignee?.name,
-            };
-        });
-        return convs.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+        // Cargamos open, resolved y pending de las primeras 3 páginas
+        const statuses = ['open', 'resolved', 'pending'];
+        const allConvs: ConversacionUI[] = [];
+
+        for (const status of statuses) {
+            for (let page = 1; page <= 2; page++) {
+                const params = new URLSearchParams({
+                    inbox_id: CW_INBOX!,
+                    status,
+                    page: String(page),
+                });
+                const r = await fetchWithTimeout(
+                    `${CW_URL}/api/v1/accounts/${CW_ACCOUNT}/conversations?${params}`,
+                    { headers: cwHeaders() }
+                );
+                if (!r.ok) break;
+                const data = await r.json();
+                const payload = data?.data?.payload ?? [];
+                if (payload.length === 0) break;
+                payload.forEach((c: any) => {
+                    const contact = c.meta?.sender;
+                    const phone = contact?.phone_number ?? contact?.identifier ?? '';
+                    const name = contact?.name || phone;
+                    const last = c.last_non_activity_message;
+                    // evitar duplicados
+                    if (!allConvs.find(x => x.chatwootId === c.id)) {
+                        allConvs.push({
+                            id: phone || String(c.id),
+                            chatwootId: c.id,
+                            name,
+                            phone,
+                            lastMessage: last?.content ?? '—',
+                            lastMessageAt: last?.created_at ? last.created_at * 1000 : 0,
+                            unread: c.unread_count ?? 0,
+                            status: c.status === 'open' ? 'open' : c.status === 'resolved' ? 'resolved' : 'pending',
+                            avatar: contact?.name?.slice(0, 2)?.toUpperCase() ?? '??',
+                            type: 'patient',
+                            tags: c.labels ?? [],
+                            assignedAgent: c.meta?.assignee?.name,
+                        });
+                    }
+                });
+            }
+        }
+        return allConvs.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
     } catch {
         return [];
     }
 };
+
 
 /** Mensajes de una conversación de Chatwoot */
 export const getChatwootMensajes = async (conversationId: number): Promise<MensajeUI[]> => {
