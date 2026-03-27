@@ -53,6 +53,8 @@ export const navigationItems: MenuItem[] = [
             { name: 'Plantillas', icon: 'fact_check' },
             { name: 'Documentos Clínicos', icon: 'description' },
             { name: 'Métricas WA', icon: 'bar_chart' },
+            { name: 'Centinela', icon: 'shield' },
+
         ]
     },
     {
