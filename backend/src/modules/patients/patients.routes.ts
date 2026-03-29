@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { PatientsController } from './patients.controller.js';
-import { optionalAuth } from '../../middleware/auth.js';
+import { authenticate } from '../../middleware/auth.js';
 import prisma from '../../config/database.js';
 import { logger } from '../../config/logger.js';
 
 const router = Router();
 
-// V-005: se usa optionalAuth hasta que el frontend implemente login obligatorio.
-router.use(optionalAuth);
+// V-005 RESUELTO: autenticación obligatoria activada
+router.use(authenticate);
 
 router.get('/', PatientsController.list);
 router.get('/:id', PatientsController.getById);

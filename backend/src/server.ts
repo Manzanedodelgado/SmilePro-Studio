@@ -12,7 +12,8 @@ import { initSocket } from './config/socket.js';
 import { startAutomationEngine } from './modules/ai/automation.engine.js';
 
 // ─── Module Routes ──────────────────────────────────────
-import authRoutes from './modules/auth/auth.routes';
+import authRoutes from "./modules/auth/auth.routes";
+import { authenticate } from "./middleware/auth.js";
 import patientsRoutes from './modules/patients/patients.routes';
 import leadsRoutes from './modules/patients/leads.routes';
 import appointmentsRoutes from './modules/appointments/appointments.routes';
@@ -78,7 +79,7 @@ app.use('/api/patients', patientsRoutes);
 app.use('/api/appointments', appointmentsRoutes);
 app.use('/api/treatments', treatmentsRoutes);
 app.use('/api/clinical/questionnaires', questionnairesRoutes);
-app.use('/api/clinical', clinicalRoutes);
+app.use("/api/clinical", authenticate, clinicalRoutes);
 app.use('/api/accounting', accountingRoutes);
 app.use('/api/communication', communicationRoutes);
 app.use('/api/ai', aiRoutes);

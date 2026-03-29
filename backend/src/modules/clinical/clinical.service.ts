@@ -51,8 +51,6 @@ function extraerPiezasTexto(texto: string): number[] {
         .filter(n => n >= 11 && n <= 48);
 }
 
-// UUID nulo para compatibilidad con campos NOT NULL legacy (se eliminará en futura migración)
-const NULL_UUID = '00000000-0000-0000-0000-000000000000';
 
 export class ClinicalService {
     // ── Historial de entradas médicas desde TtosMed (GELITE) ─────────────────
@@ -234,7 +232,6 @@ export class ClinicalService {
     static async createRecord(input: CreateRecordInput) {
         const record = await prisma.clinicalRecord.create({
             data: {
-                patientId: NULL_UUID,                       // legacy UUID placeholder
                 numPac:    input.patientId,                 // NumPac GELITE — clave real
                 userId:    input.userId ?? null,
                 date:      input.date ? new Date(input.date) : new Date(),

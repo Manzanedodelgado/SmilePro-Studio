@@ -3035,7 +3035,7 @@ model Patient {
 
 model ClinicalRecord {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  patientId   String   @map("patient_id") @db.Uuid
+  patientId   String?  @map("patient_id") @db.Uuid
   numPac      String?  @map("num_pac")          // NumPac GELITE — clave de búsqueda principal
   userId      String?  @map("user_id") @db.Uuid
   date        DateTime @default(now()) @db.Timestamptz(6)
@@ -3062,7 +3062,7 @@ model ClinicalRecord {
 
 model OdontogramEntry {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  patientId   String   @map("patient_id") @db.Uuid
+  patientId   String?  @map("patient_id") @db.Uuid
   numPac      String?  @map("num_pac")          // NumPac GELITE — clave de búsqueda principal
   toothNumber Int      @map("tooth_number")
   status      String   @default("healthy")

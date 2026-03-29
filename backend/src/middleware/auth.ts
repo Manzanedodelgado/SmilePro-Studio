@@ -32,7 +32,7 @@ export class AuthError extends Error {
 // ── T-001: Importación lazy de la blacklist para evitar circular dependency ──
 // La blacklist vive en auth.controller.ts (mismo proceso Node).
 // Se importa dinámicamente para no crear dependencia circular.
-let _isRevoked: ((token: string) => boolean) | null = null;
+let _isRevoked: ((token: string) => Promise<boolean>) | null = null;
 const isRevoked = async (token: string): Promise<boolean> => {
     if (!_isRevoked) {
         try {

@@ -7,13 +7,13 @@
 //  GET  /api/gdrive/photos/:numPac   → lista fotos de un paciente
 // ─────────────────────────────────────────────────────────────────────
 import { Router, Request, Response, NextFunction } from 'express';
-import { optionalAuth } from '../../middleware/auth';
+import { authenticate } from '../../middleware/auth.js';
 import { createPatientFolder, getPatientPhotos, getSAAccessToken } from './gdrive.service';
 import { logger } from '../../config/logger.js';
 import prisma from '../../config/database.js';
 
 const router = Router();
-router.use(optionalAuth);
+router.use(authenticate);
 
 // ── POST /api/gdrive/patient-folder ───────────────────────────────────
 // Body: { numPac, apellidos, nombre, userToken? }
