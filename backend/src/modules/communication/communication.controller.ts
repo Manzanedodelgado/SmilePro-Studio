@@ -2,7 +2,6 @@
 import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { EvolutionService, ChatwootService, isEvolutionConfigured, isChatwootConfigured } from './communication.service';
-import { AIService } from '../ai/ai.service';
 import { logger } from '../../config/logger.js';
 import { config } from '../../config/index.js';
 import { emitWA } from '../../config/socket.js';
@@ -405,7 +404,52 @@ export class CommunicationController {
         } catch (err) { next(err); }
     }
 
-    // ── Webhook Evolution — Agente IA ─────────────────────
+    // ── Webhooks Evolution & Chatwoot — Agente IA & Sincronización ─────────────────────
+
+    /** POST /api/communication/webhook/chatwoot (sin auth — lo llama Chatwoot para sincronizar la UI) */
+    static async webhookChatwoot(req: Request, res: Response) {
+        // Responder rápido para que Chatwoot no cierre por timeout
+        res.json({ success: true });
+
+        try {
+            const event = req.body?.event;
+            // Solo procesamos cuando hay un nuevo mensaje
+            if (event !== 'message_created') return;
+
+            const message = req.body;
+
+            // En Chatwoot: message_type === 1 es incoming, 0 es outgoing (o 'incoming'/'outgoing')
+            const isOutgoing = message.message_type === 'outgoing' || message.message_type === 0 || message.message_type === 2;
+            
+            // Extraer el teléfono
+            let phoneStr = message.conversation?.meta?.sender?.phone_number || message.sender?.phone_number || '';
+            let phone = phoneStr.replace(/\D/g, '');
+            // Si el numero tiene prefijo lo limpiamos a local o lo dejamos si lo necesita tu frontend
+            if (phone.length > 9 && phone.startsWith('34')) {
+                phone = phone.slice(2);
+            }
+
+            const text = message.content;
+
+            if (!phone || !text || text.trim() === '') return;
+
+            logger.info(`[Chatwoot:Webhook] Sincronizando socket para ${phone} -> ${text.slice(0, 50)}`);
+
+            // ── Emitir evento en tiempo real al frontend ──────────────────────
+            const now = new Date();
+            emitWA('whatsapp:message', {
+                phone,
+                text,
+                fromMe: isOutgoing,
+                time: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+                id: String(message.id ?? Date.now()),
+            });
+            emitWA('whatsapp:conversation_updated', { phone });
+
+        } catch (err) {
+            logger.error('[Chatwoot webhook] Error procesando mensaje:', err);
+        }
+    }
 
     /** POST /api/communication/webhook/evolution  (sin auth — lo llama Evolution) */
     static async webhookEvolution(req: Request, res: Response) {
@@ -478,27 +522,6 @@ export class CommunicationController {
 
             if (patient) {
                 logger.info(`[WhatsApp] Paciente identificado: ${patient.firstName} ${patient.lastName}`);
-            }
-
-            // Recuperar historial de conversación para contexto
-            const history = await AIService.getConversationHistory(phone);
-
-            // Llamar al agente IA
-            const agentReply = await AIService.whatsappAgent(phone, text, history);
-
-            // Enviar respuesta por WhatsApp
-            if (agentReply) {
-                const sent = await EvolutionService.sendText(phone, agentReply);
-                logger.info(`[WhatsApp:OUT] ${phone}: ${sent ? 'OK' : 'FAILED'} — "${agentReply.slice(0, 80)}"`);
-                if (sent) {
-                    emitWA('whatsapp:message', {
-                        phone,
-                        text: agentReply,
-                        fromMe: true,
-                        time: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-                        id: String(Date.now()),
-                    });
-                }
             }
 
         } catch (err) {

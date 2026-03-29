@@ -9,6 +9,9 @@ const router = Router();
 // ── Webhook (NO requiere auth — lo llama Evolution API) ──
 router.post('/webhook/evolution', CommunicationController.webhookEvolution);
 
+// ── Webhook Chatwoot (Sincronización frontend en tiempo real) ──
+router.post('/webhook/chatwoot', CommunicationController.webhookChatwoot);
+
 // ── Rutas autenticadas ────────────────────────────────────
 router.use(authenticate);
 

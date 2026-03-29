@@ -26,13 +26,13 @@ version: '3.9'
 #   GEMINI_API_KEY       AIzaSyBzOVLUnQ0h...
 #
 #   ── Evolution API (WhatsApp) ────────────────────────
-#   EVOLUTION_API_URL            https://comunicaciones-evolution-api.ayjla6.easypanel.host
+#   EVOLUTION_API_URL            https://smileprostudio-evolution-api.9idlgv.easypanel.host
 #   EVOLUTION_API_KEY            429683C4C977415CAAFCCE10F7D57E11
 #   EVOLUTION_INSTANCE           chatwoot_link
 #   EVOLUTION_INSTANCE_TOKEN     59A32FC2-036B-4BB1-9304-55444C25E05F
 #
 #   ── Chatwoot ────────────────────────────────────────
-#   CHATWOOT_URL         https://comunicaciones-chatwoot.ayjla6.easypanel.host
+#   CHATWOOT_URL         https://smileprostudio-chatwoot.9idlgv.easypanel.host
 #   CHATWOOT_TOKEN       J9GaJMe4sAXTfGgeBvmmLjsZ
 #   CHATWOOT_ACCOUNT_ID  1
 #   CHATWOOT_INBOX_ID    1
@@ -143,6 +143,7 @@ services:
         condition: service_healthy
     networks:
       - smilepro
+      - easypanel
 
   # ── Orthanc — Servidor DICOM ──────────────────────────────────────────────
   orthanc:
@@ -165,6 +166,8 @@ services:
 networks:
   smilepro:
     driver: bridge
+  easypanel:
+    external: true
 
 volumes:
   pgdata:
