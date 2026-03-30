@@ -49,13 +49,14 @@ app.use(morgan('short', {
     stream: { write: (message: string) => logger.info(message.trim()) },
 }));
 
-// Rate limiting
+// Rate limiting — excluir webhooks (que pueden llegar en ráfagas)
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 1000, // desarrollo: 1000 per window (producción: bajar a 100)
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, error: { message: 'Demasiadas peticiones, inténtalo más tarde', code: 'RATE_LIMIT' } },
+    skip: (req) => req.path.includes('/webhook/'), // Skip rate limit for webhooks
 });
 app.use('/api/', limiter);
 
