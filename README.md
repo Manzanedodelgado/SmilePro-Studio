@@ -111,7 +111,7 @@ Construida con React 19 · TypeScript 5.8 · Vite 6 · Tailwind CSS, conectada a
 | Imagen médica DICOM | Orthanc (`orthancteam/orthanc`) | Puerto 4242 DICOM C-STORE |
 | Tiempo real | Socket.io | 4.8.3 — backend ↔ frontend |
 | Automatización | n8n | 30 workflows JSON |
-| Infra | Docker Compose + Nginx + EasyPanel | Producción en `82.29.172.172` |
+| Infra | Docker Compose + Nginx | Producción en `192.168.1.46` (LAN clínica) |
 | Facturación | TBAI (Ticket BAI Vasco) | — |
 
 ---
@@ -688,15 +688,18 @@ interface ItemInventario {
 
 ### Servidor
 
+**Ubicación:** Servidor local en la clínica Rubio García Dental (Madrid)
+
 | Campo | Valor |
 |---|---|
-| **IP** | `82.29.172.172` |
-| **OS** | Ubuntu 24.04.4 LTS |
-| **Kernel** | 6.8.0-101-generic x86_64 |
-| **Disco** | 95.82 GB |
-| **Acceso** | `ssh root@82.29.172.172` |
-| **Panel** | EasyPanel (`easypanel/easypanel:latest`) en puerto 3000 |
-| **Reverse Proxy** | Traefik 3.6.7 (puertos 80/443, SSL automático) |
+| **IP (LAN local)** | `192.168.1.46` |
+| **Dominio dinámico** | `smileprostudio.ddns.net` |
+| **URL producción** | `https://gestion.rubiogarciadental.com` |
+| **OS** | Por determinar |
+| **Puerto HTTP** | 8080 (frontend), 3000 (backend) |
+| **Acceso SSH** | Usuario y credenciales en servidor local |
+| **Contenedores** | Docker Compose (ver docker-compose.yml) |
+| **Base de datos** | PostgreSQL 15 en red Docker interna |
 
 ### Contenedores Docker (Docker Swarm)
 

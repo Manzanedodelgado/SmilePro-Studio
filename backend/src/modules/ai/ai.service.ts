@@ -103,7 +103,18 @@ async function callWithFallback(
 
     // Fallback: OpenRouter (acepta cualquier modelo)
     if (config.OPENROUTER_API_KEY) {
-        const fallbackModel = useCase === 'whatsapp' ? 'meta-llama/llama-3.3-70b-instruct:free' : 'deepseek/deepseek-r1:free';
+        // Seleccionar modelo fallback según caso de uso
+        let fallbackModel: string;
+        if (useCase === 'whatsapp') {
+            fallbackModel = 'meta-llama/llama-3.3-70b-instruct:free';
+        } else if (useCase === 'vision') {
+            // Vision requiere modelo multimodal — llava-1.5-7b es gratis en OpenRouter
+            fallbackModel = 'liuhaotian/llava-1.5-7b';
+            logger.warn(`[AI] Gemini vision failed, falling back to llava (lower quality but cheaper)`);
+        } else {
+            // copilot — deepseek es más económico que llama
+            fallbackModel = 'deepseek/deepseek-r1:free';
+        }
         return await callOpenAICompat('https://openrouter.ai/api/v1', config.OPENROUTER_API_KEY, fallbackModel, messages, 512, 0.3);
     }
 

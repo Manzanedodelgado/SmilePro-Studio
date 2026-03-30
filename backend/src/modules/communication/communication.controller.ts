@@ -469,28 +469,29 @@ export class CommunicationController {
 
         try {
             const event = req.body?.event as string | undefined;
-            const data  = req.body?.data;
+            const data = req.body?.data;
 
             logger.info(`[Evolution webhook] event=${event}`);
 
-            // Solo procesar mensajes entrantes de usuarios (no nuestros propios)
-            if (event !== 'messages.upsert' || data?.key?.fromMe !== false) return;
+            // Procesar mensajes tanto entrantes como salientes para dibujarlos en frontend
+            if (event !== 'messages.upsert') return;
+            const isFromMe = data?.key?.fromMe === true;
 
             const phone = (data?.key?.remoteJid as string)?.replace('@s.whatsapp.net', '') ?? '';
-            const text  = (data?.message?.conversation as string)
+            const text = (data?.message?.conversation as string)
                 ?? (data?.message?.extendedTextMessage?.text as string)
                 ?? '';
 
             if (!phone || !text.trim()) return;
 
-            logger.info(`[WhatsApp:IN] ${phone}: ${text.slice(0, 100)}`);
+            logger.info(`[WhatsApp:${isFromMe ? 'OUT' : 'IN'}] ${phone}: ${text.slice(0, 100)}`);
 
             // ── Emitir evento en tiempo real al frontend ──────────────────────
             const now = new Date();
             emitWA('whatsapp:message', {
                 phone,
                 text,
-                fromMe: false,
+                fromMe: isFromMe,
                 time: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
                 id: data?.key?.id ?? String(Date.now()),
             });

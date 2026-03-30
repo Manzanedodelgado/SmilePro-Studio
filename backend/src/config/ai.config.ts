@@ -60,10 +60,11 @@ export const AI_CONFIG = {
     /**
      * Fallback universal — si cualquier proveedor cae o sube precios
      * OpenRouter: una API key, acceso a todos los modelos, cambias el modelo sin tocar código
+     * NOTA: Este config no se usa directamente. Ver ai.service.ts callWithFallback() para lógica específica.
      */
     fallback: {
         provider: 'openrouter' as AIProvider,
-        model: 'auto', // OpenRouter selecciona el mejor disponible automáticamente
+        model: 'meta-llama/llama-3.3-70b-instruct:free', // Fallback por defecto (sobrescrito según caso de uso en ai.service.ts)
         maxTokens: 1024,
         temperature: 0.3,
     },

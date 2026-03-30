@@ -368,36 +368,73 @@ const Whatsapp: React.FC<WhatsappProps> = ({ initialPhone, initialName, onNaviga
 
     // ── Socket.io — real-time WhatsApp events ─────────────────────────────────
     useEffect(() => {
-        connectWhatsAppSocket();
+        if (isMock) return; // No conectar si está en modo mock
+
+        const socket = connectWhatsAppSocket();
+        console.log('[WhatsApp] Socket.io connecting...', socket?.connected);
 
         // Incoming / outgoing message from webhook
         const offMsg = onWhatsAppMessage((payload) => {
-            setActive(prev => {
-                if (!prev) return prev;
-                const phone9 = prev.phone?.replace(/\D/g, '').slice(-9);
-                const incomingPhone9 = payload.phone?.replace(/\D/g, '').slice(-9);
-                if (phone9 !== incomingPhone9) return prev;
-                // Append message to current conversation
-                const msg: MensajeUI = {
-                    id: payload.id,
-                    sender: payload.fromMe ? 'me' : 'them',
-                    text: payload.text,
-                    time: payload.time,
-                    status: 'delivered',
-                };
-                setMsgs(p => {
-                    // Avoid duplicates
-                    if (p.find(m => m.id === payload.id)) return p;
-                    return [...p, msg];
-                });
-                return prev;
+            console.log('[WhatsApp:Socket] Mensaje recibido:', payload);
+
+            // Verificar si el mensaje es para la conversación actual
+            if (!active) {
+                console.warn('[WhatsApp:Socket] No hay conversación activa');
+                return;
+            }
+
+            const phone9 = active.phone?.replace(/\D/g, '').slice(-9);
+            const incomingPhone9 = payload.phone?.replace(/\D/g, '').slice(-9);
+
+            console.log(`[WhatsApp:Socket] Comparando: ${phone9} vs ${incomingPhone9}`);
+
+            if (phone9 !== incomingPhone9) {
+                console.log('[WhatsApp:Socket] Mensaje para otra conversación, ignorando');
+                return; // No es para esta conversación
+            }
+
+            // Crear mensaje UI
+            const msg: MensajeUI = {
+                id: payload.id,
+                sender: payload.fromMe ? 'me' : 'them',
+                text: payload.text,
+                time: payload.time,
+                status: 'delivered',
+            };
+
+            console.log('[WhatsApp:Socket] Añadiendo mensaje:', msg);
+
+            // Agregar mensaje evitando duplicados
+            setMsgs(p => {
+                // Evitar duplicados por ID
+                if (p.find(m => m.id === payload.id)) {
+                    console.log('[WhatsApp:Socket] Mensaje duplicado, ignorando');
+                    return p;
+                }
+                return [...p, msg];
             });
+
+            // Actualizar conversación en la lista (último mensaje)
+            setConvs(prev => prev.map(c => {
+                if (c.phone?.replace(/\D/g, '').slice(-9) === incomingPhone9) {
+                    console.log('[WhatsApp:Socket] Actualizando conversación:', c.name);
+                    return {
+                        ...c,
+                        lastMessage: payload.text,
+                        lastMessageAt: Date.now(),
+                        unread: payload.fromMe ? c.unread : (c.unread + 1),
+                    };
+                }
+                return c;
+            }));
         });
 
         // Conversation list refresh
-        const offConv = onConversationUpdated(() => {
+        const offConv = onConversationUpdated((payload) => {
+            console.log('[WhatsApp:Socket] Conversación actualizada:', payload);
             if (isChatwootConfigured()) {
                 getChatwootConversaciones().then(data => {
+                    console.log('[WhatsApp:Socket] Recargar conversaciones:', data.length);
                     setConvs(prev => {
                         const byId = new Map(prev.map(c => [String(c.chatwootId ?? c.id), c]));
                         data.forEach(d => byId.set(String(d.chatwootId ?? d.id), d));
@@ -409,6 +446,7 @@ const Whatsapp: React.FC<WhatsappProps> = ({ initialPhone, initialName, onNaviga
 
         // Urgency alerts from server
         const offUrgency = onWhatsAppUrgency((payload) => {
+            console.log('[WhatsApp:Socket] URGENCIA DETECTADA:', payload);
             setUrgencyAlert(payload);
             // Auto-dismiss after 30 seconds
             setTimeout(() => setUrgencyAlert(prev => prev?.phone === payload.phone ? null : prev), 30_000);
@@ -420,7 +458,7 @@ const Whatsapp: React.FC<WhatsappProps> = ({ initialPhone, initialName, onNaviga
             offUrgency();
             disconnectWhatsAppSocket();
         };
-    }, []);
+    }, [active]);
 
     // Seleccionar conversación: resetea badge unread al instante
     const handleSelectConv = (conv: ConversacionUI) => {
