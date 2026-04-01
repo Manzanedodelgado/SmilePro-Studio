@@ -355,7 +355,7 @@ interface PeriodontogramaProps {
 const Periodontograma: React.FC<PeriodontogramaProps> = ({ numPac }) => {
     const [data, setData] = useState<PerioRecord>(buildDemo);
     const [odontograma, setOdontograma] = useState<DienteData[] | null>(null);
-    const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<{ text: string; isFallback: boolean } | null>(null);
     const [aiLoading, setAiLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

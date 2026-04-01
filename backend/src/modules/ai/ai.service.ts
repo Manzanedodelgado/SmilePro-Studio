@@ -128,26 +128,210 @@ async function callWithFallback(
     };
 }
 
-// ─── Slots disponibles (agenda conectada) ─────────────────────────────────────
+// ─── Slots disponibles (conectados a PostgreSQL) ─────────────────────────────
 
-function getAvailableSlots(): string {
-    // Appointments live in GELITE SQL Server (DCitas) — read-only access not wired yet.
-    // We generate the next 5 working days with static morning/afternoon slots so the
-    // AI can offer real-looking options while the full GELITE integration is pending.
-    const slots: string[] = [];
-    const now = new Date();
-    let day = new Date(now);
-    let added = 0;
-    while (added < 5) {
-        day = new Date(day.getTime() + 86_400_000);
-        const wd = day.getDay(); // 0=Sun, 6=Sat
-        if (wd === 0) continue; // no domingo
-        const label = day.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
-        const times = wd === 6 ? ['9:00', '10:00', '11:00'] : ['9:00', '10:30', '12:00', '16:00', '17:30', '19:00'];
-        slots.push(`${label}: ${times.join(', ')}`);
-        added++;
+// GELITE date/time conversion helpers (from appointments.service.ts)
+const OLE_EPOCH = new Date(Date.UTC(1899, 11, 30)); // 1899-12-30
+
+const geliteDateToISO = (d: number | null | undefined): Date | null => {
+    if (!d) return null;
+    const ms = OLE_EPOCH.getTime() + d * 86400000;
+    return new Date(ms);
+};
+
+const geliteTimeToMinutes = (secs: number | null | undefined): number => {
+    if (secs == null) return 0;
+    return Math.floor(secs / 60);
+};
+
+async function getAvailableSlots(): Promise<{ slots: string; history: string }> {
+    try {
+        // Definir intervalos de trabajo (en minutos desde medianoche)
+        const WORK_INTERVALS = [
+            { start: 9 * 60, end: 12 * 60 },      // 09:00 - 12:00
+            { start: 16 * 60, end: 20 * 60 },     // 16:00 - 20:00
+        ];
+        const SATURDAY_INTERVALS = [
+            { start: 9 * 60, end: 14 * 60 },      // 09:00 - 14:00 (sábado)
+        ];
+        const SLOT_DURATION = 30; // minutos
+
+        const now = new Date();
+        const today = Math.round((now.getTime() - OLE_EPOCH.getTime()) / 86400000);
+        const sevenDaysAhead = today + 7;
+        const thirtyDaysBack = today - 30;
+
+        // ────────────────────────────────────────────────────────────────────
+        // QUERY 1: CITAS ACTIVAS (próximos 7 días)
+        // Excluye canceladas/no-show porque NO ocupan espacio en agenda
+        // ────────────────────────────────────────────────────────────────────
+        const activeCitas = await prisma.dCitas.findMany({
+            where: {
+                Fecha: {
+                    gte: today,
+                    lte: sevenDaysAhead,
+                },
+                // IdSitC: 0=scheduled, 1=confirmed, 2=waiting, 3=in_progress, 4=completed
+                // EXCLUYE: 5=no_show, 6/7=cancelled
+                IdSitC: { notIn: [5, 6, 7] },
+            },
+            select: {
+                Fecha: true,
+                Hora: true,
+                Duracion: true,
+                IdSitC: true,
+            },
+        });
+
+        // ────────────────────────────────────────────────────────────────────
+        // QUERY 2: HISTORIAL RECIENTE (últimos 30 días INCLUYE canceladas)
+        // Para que IA sepa QUÉ PASÓ (cancelaciones, no-shows)
+        // ────────────────────────────────────────────────────────────────────
+        const recentHistory = await prisma.dCitas.findMany({
+            where: {
+                Fecha: {
+                    gte: thirtyDaysBack,
+                    lte: sevenDaysAhead,
+                },
+            },
+            select: {
+                Fecha: true,
+                Hora: true,
+                IdSitC: true,
+                Contacto: true,
+                NOTAS: true,
+            },
+            orderBy: [{ Fecha: 'desc' }, { Hora: 'desc' }],
+            take: 10, // últimas 10 citas del historial
+        });
+
+        // Mapeo de estados para mostrar en IA
+        const STATUS_LABELS: Record<number, string> = {
+            0: '📅 Planificada',
+            1: '✓ Confirmada',
+            2: '👥 En la sala',
+            3: '👨‍⚕️ En consulta',
+            4: '✅ Finalizada',
+            5: '❌ No se presentó',
+            6: '❌ Cancelada',
+            7: '❌ Cancelada',
+        };
+
+        // Construir resumen de historial para IA
+        let historyText = '';
+        if (recentHistory.length > 0) {
+            const historyItems = recentHistory
+                .map((c) => {
+                    const dateObj = geliteDateToISO(c.Fecha);
+                    const dateFmt = dateObj?.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' }) ?? '?';
+                    const timeFmt = `${String(Math.floor((c.Hora ?? 0) / 3600)).padStart(2, '0')}:${String(Math.floor(((c.Hora ?? 0) % 3600) / 60)).padStart(2, '0')}`;
+                    const status = STATUS_LABELS[c.IdSitC ?? 0] || 'Desconocida';
+                    return `${dateFmt} ${timeFmt}: ${status}`;
+                })
+                .join('\n');
+            historyText = `HISTORIAL RECIENTE (últimos 30 días):\n${historyItems}`;
+        }
+
+        // Usar citasData para calcular slots LIBRES
+        const citasData = activeCitas;
+
+        // Agrupar citas por fecha para calcular ocupación
+        const citasByDate = new Map<number, Array<{ start: number; end: number }>>();
+        for (const cita of citasData) {
+            if (!cita.Fecha || cita.Hora == null) continue;
+
+            const dateKey = cita.Fecha;
+            const startMin = geliteTimeToMinutes(cita.Hora);
+            const durationMin = cita.Duracion ? Math.round(cita.Duracion / 60) : 30;
+            const endMin = startMin + durationMin;
+
+            if (!citasByDate.has(dateKey)) {
+                citasByDate.set(dateKey, []);
+            }
+            citasByDate.get(dateKey)!.push({ start: startMin, end: endMin });
+        }
+
+        // Generar slots disponibles para próximos 7 días hábiles
+        const slots: string[] = [];
+        let dayOffset = 1; // comenzar desde mañana
+        let daysAdded = 0;
+
+        while (daysAdded < 7) {
+            const checkDate = new Date(now.getTime() + dayOffset * 86400000);
+            const dayOfWeek = checkDate.getDay(); // 0=Dom, 6=Sab
+
+            // Saltar domingos
+            if (dayOfWeek === 0) {
+                dayOffset++;
+                continue;
+            }
+
+            const label = checkDate.toLocaleDateString('es-ES', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+            });
+
+            // Seleccionar intervalos según día
+            const intervals = dayOfWeek === 6 ? SATURDAY_INTERVALS : WORK_INTERVALS;
+            const occupiedSlots = citasByDate.get(Math.round((checkDate.getTime() - OLE_EPOCH.getTime()) / 86400000)) ?? [];
+
+            // Encontrar slots libres dentro de los intervalos
+            const availableSlots: string[] = [];
+            for (const interval of intervals) {
+                for (let min = interval.start; min + SLOT_DURATION <= interval.end; min += SLOT_DURATION) {
+                    // Verificar si hay solapamiento con citas existentes
+                    const isOccupied = occupiedSlots.some(
+                        (c) => !(min + SLOT_DURATION <= c.start || min >= c.end),
+                    );
+
+                    if (!isOccupied) {
+                        const h = Math.floor(min / 60);
+                        const m = min % 60;
+                        availableSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+                    }
+                }
+            }
+
+            // Limitar a 3 horarios por día máximo (para no saturar el AI prompt)
+            if (availableSlots.length > 0) {
+                slots.push(`${label}: ${availableSlots.slice(0, 3).join(', ')}`);
+            }
+
+            dayOffset++;
+            daysAdded++;
+        }
+
+        // Si no hay slots, retornar mensaje informativo
+        const slotsText = slots.length > 0
+            ? slots.join('\n')
+            : '(Agenda llena — contacta directamente para consultar disponibilidad)';
+
+        return {
+            slots: slotsText,
+            history: historyText,
+        };
+    } catch (err) {
+        logger.error('[AI] Error fetching available slots:', err);
+        // ⚠️ Fallback: retornar slots ESTÁTICOS si hay error de BD
+        const slots: string[] = [];
+        const now = new Date();
+        let day = new Date(now);
+        let added = 0;
+        while (added < 5) {
+            day = new Date(day.getTime() + 86_400_000);
+            const wd = day.getDay();
+            if (wd === 0) continue;
+            const label = day.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+            const times = wd === 6 ? ['9:00', '10:00', '11:00'] : ['9:00', '10:30', '12:00', '16:00', '17:30', '19:00'];
+            slots.push(`${label}: ${times.join(', ')}`);
+            added++;
+        }
+        return {
+            slots: slots.join('\n'),
+            history: '(No se pudo cargar historial — intentando de nuevo en próxima consulta)',
+        };
     }
-    return slots.join('\n');
 }
 
 // ─── Prompt del sistema dental ────────────────────────────────────────────────
@@ -157,9 +341,16 @@ async function getDentalSystemPrompt(includeSlots = false): Promise<string> {
     const cfg = await AIService.getAIConfig();
     const knowledge = cfg?.knowledge ?? [];
 
-    const slotsSection = includeSlots
-        ? `\nAGENDA — PRÓXIMOS HUECOS DISPONIBLES:\n${getAvailableSlots()}\n(Confirma siempre que el equipo verificará disponibilidad final antes de fijar la cita.)`
-        : '';
+    let agendaSection = '';
+    if (includeSlots) {
+        const { slots, history } = await getAvailableSlots();
+        agendaSection = `
+HISTORIAL Y DISPONIBILIDAD:
+${history ? history + '\n' : ''}
+PRÓXIMOS HUECOS DISPONIBLES:
+${slots}
+(Confirma siempre que el equipo verificará disponibilidad final antes de fijar la cita.)`;
+    }
 
     return `Eres ${cfg?.agentName ?? 'el asistente virtual'} de Rubio García Dental, una clínica dental especializada en Madrid.
 
@@ -174,10 +365,11 @@ ${knowledge.length > 0 ? knowledge.join('\n') : `
 - Horario: Lunes a Viernes 9:00-20:00, Sábados 9:00-14:00
 - Dirección: [Configurar en Panel IA]
 - Teléfono emergencias: [Configurar en Panel IA]
-`}${slotsSection}
+`}${agendaSection}
 
 REGLAS:
 - Si el paciente pide cita: recoge nombre, servicio y preferencia horaria. Si hay huecos disponibles en la agenda, ofrece 2-3 opciones concretas.
+- Si observas cancelaciones recientes en el historial: aborda con construcción ("El [FECHA] vemos que cancelaste tu cita. ¿Te gustaría agendarla nuevamente? Tenemos disponibilidad...").
 - Si es urgencia/dolor: prioriza siempre, ofrece llamar directamente al teléfono de emergencias.
 - Si es queja o problema grave: escala a personal humano con "Voy a pasar su mensaje a nuestro equipo ahora mismo".
 - Si no sabes algo: di "No tengo esa información exacta, pero nuestro equipo te responderá enseguida".

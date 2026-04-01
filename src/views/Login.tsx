@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { signIn } from '../services/auth.service';
+import { signIn, enableDemoMode } from '../services/auth.service';
 import { LogIn, Mail, Lock, AlertCircle, Volume2, VolumeX } from 'lucide-react';
 
 // Fases de la animación:
@@ -13,6 +13,7 @@ const Login: React.FC = () => {
     const [password, setPassword] = useState('');
     const [error, setError]       = useState<string | null>(null);
     const [loading, setLoading]   = useState(false);
+    const [backendUnavailable, setBackendUnavailable] = useState(false);
     const [muted, setMuted]       = useState(true);
     const [phase, setPhase]       = useState<0 | 1 | 2>(0);
     const [showLogo, setShowLogo]       = useState(false);
@@ -22,10 +23,10 @@ const Login: React.FC = () => {
     const { login } = useAuth();
 
     useEffect(() => {
-        const tLogo    = setTimeout(() => setShowLogo(true),     100);   // fondo → blanco
-        const tLogoImg = setTimeout(() => setShowLogoImg(true),  300);   // logo aparece rápido
-        const t1    = setTimeout(() => setPhase(1), 3500);        // empieza a bajar
-        const t2    = setTimeout(() => setPhase(2), 5500);        // formulario aparece
+        const tLogo    = setTimeout(() => setShowLogo(true),     100);
+        const tLogoImg = setTimeout(() => setShowLogoImg(true),  300);
+        const t1    = setTimeout(() => setPhase(1), 3500);
+        const t2    = setTimeout(() => setPhase(2), 5500);
         return () => { clearTimeout(tLogo); clearTimeout(tLogoImg); clearTimeout(t1); clearTimeout(t2); };
     }, []);
 
@@ -34,7 +35,6 @@ const Login: React.FC = () => {
         if (audioRef.current) audioRef.current.muted = muted;
     }, [muted]);
 
-    // Al llegar a fase 2: 1s de reproducción en posición fija, luego congela y pasa audio
     useEffect(() => {
         if (phase !== 2) return;
         const timer = setTimeout(() => {
@@ -53,18 +53,28 @@ const Login: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
+        setBackendUnavailable(false);
         setLoading(true);
         try {
             const session = await signIn(email, password);
             if (session) {
                 login(session.access_token, session.user, session.refresh_token);
             } else {
-                setError('Credenciales inválidas. Comprueba usuario y contraseña.');
+                // Backend no responde o credenciales inválidas
+                setBackendUnavailable(true);
+                setError('⚠️ Backend no responde. Verifica que el servidor está activo. Si estás en desarrollo, usa "Modo Demo" abajo.');
             }
         } catch (err: any) {
-            setError(err.message || 'Error al iniciar sesión');
+            setError(err.message || 'Error desconocido al iniciar sesión');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDemoMode = () => {
+        const demoSession = enableDemoMode(true);
+        if (demoSession) {
+            login(demoSession.access_token, demoSession.user, demoSession.refresh_token);
         }
     };
 
@@ -197,6 +207,17 @@ const Login: React.FC = () => {
                             </>
                         )}
                     </button>
+
+                    {/* Botón Modo Demo — SOLO visible cuando backend no responde */}
+                    {backendUnavailable && (
+                        <button
+                            type="button"
+                            onClick={handleDemoMode}
+                            className="w-full py-2.5 rounded-xl text-amber-300 font-semibold text-sm active:scale-[0.98] transition-all border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10"
+                        >
+                            📱 Modo Demo (sin backend)
+                        </button>
+                    )}
                     </div>
                 </form>
 

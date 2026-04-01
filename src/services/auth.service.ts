@@ -1,6 +1,10 @@
 // ─────────────────────────────────────────────────────────────────
 //  services/auth.service.ts
 //  Login contra Node.js Backend 
+//
+//  ⚠️ SEGURIDAD: Esta versión FALLA si el backend no responde.
+//  NO hay fallback ADMIN "indestructible".
+//  Para habilitar modo demo explícitamente, usar DEMO_MODE flag.
 // ─────────────────────────────────────────────────────────────────
 
 // URL del backend Node.js Express. Lee VITE_API_URL (nombre correcto).
@@ -11,7 +15,6 @@ const _rawUrl: string =
     'http://localhost:3000';
 
 const API_BASE_URL: string = _rawUrl.endsWith('/api') ? _rawUrl : `${_rawUrl}/api`;
-
 
 const headers = {
     'Content-Type': 'application/json',
@@ -31,11 +34,13 @@ export interface AuthSession {
     user: AuthUser;
 }
 
-const FALLBACK_USER = {
-    id: '1',
-    email: 'info@rubiogarciadental.com',
-    nombre: 'Juan Antonio',
-    rol: 'ADMIN',
+// DEMO CREDENTIALS — Solo se usan si explícitamente habilitados en UI
+// NO hay "fallback silencioso" a ADMIN
+const DEMO_USER = {
+    id: 'demo_001',
+    email: 'demo@rubiogarciadental.com',
+    nombre: 'Demo User',
+    rol: 'dentista',  // No admin — datos limitados para demo
 };
 
 export const signIn = async (email: string, password: string): Promise<AuthSession | null> => {
@@ -62,23 +67,23 @@ export const signIn = async (email: string, password: string): Promise<AuthSessi
                 };
             }
         }
-    } catch {
-        // Silently catch fetch errors
-    }
 
-    // Indestructible Fallback: Always allow login if API fails or credentials rejected
-    return {
-        access_token: 'dummy_access_token',
-        refresh_token: 'dummy_refresh_token',
-        user: FALLBACK_USER
-    };
+        // Si response.ok es false, devolver null (credenciales inválidas o error del servidor)
+        return null;
+    } catch (error) {
+        // Network error — backend no responde
+        // IMPORTANTE: No devolvemos fallback ADMIN
+        // Esto es INTENCIONAL para seguridad
+        console.error('[Auth] Network error during signIn:', error);
+        return null;
+    }
 };
 
 export const getUser = async (token: string): Promise<AuthUser | null> => {
     if (!token) return null;
     
-    // Always return fallback if we are using the dummy token to prevent logouts
-    if (token === 'dummy_access_token') return FALLBACK_USER;
+    // No hay fallback a ADMIN — si el token falla, es null
+    if (token === 'demo_token_001') return DEMO_USER;
 
     try {
         const response = await fetch(`${API_BASE_URL}/auth/me`, {
@@ -101,16 +106,16 @@ export const getUser = async (token: string): Promise<AuthUser | null> => {
                 };
             }
         }
-    } catch {
-        // Silently catch fetch errors
+    } catch (error) {
+        console.error('[Auth] Network error during getUser:', error);
     }
 
-    // Indestructible Fallback: prevent random logouts if server dies
-    return FALLBACK_USER;
+    // No hay fallback ADMIN — token inválido, error de red, etc. = null
+    return null;
 };
 
 export const signOut = async (token: string): Promise<boolean> => {
-    if (!token || token === 'dummy_access_token') return true;
+    if (!token || token === 'demo_token_001') return true;
     try {
         await fetch(`${API_BASE_URL}/auth/logout`, {
             method: 'POST',
@@ -119,8 +124,37 @@ export const signOut = async (token: string): Promise<boolean> => {
                 Authorization: `Bearer ${token}`
             },
         });
-    } catch {
-        // Silent — si falla la red el localStorage se limpia igual
+    } catch (error) {
+        console.warn('[Auth] Error during logout:', error);
     }
     return true;
+};
+
+/**
+ * DEMO MODE EXPLÍCITO (para desarrollo sin backend)
+ * 
+ * ⚠️ IMPORTANTE: Solo llamar explícitamente desde UI (botón "Modo Demo")
+ * NUNCA como fallback automático
+ * 
+ * @param forceEnable - If true, habilita modo demo. If false, lo desactiva.
+ * @returns Demo session si se habilita
+ */
+export const enableDemoMode = (forceEnable: boolean = true): AuthSession | null => {
+    if (!forceEnable) return null;
+    
+    // Guardar flag en sessionStorage para que otros servicios lo vean
+    sessionStorage.setItem('DEMO_MODE_EXPLICIT', 'true');
+    
+    return {
+        access_token: 'demo_token_001',
+        refresh_token: 'demo_refresh_001',
+        user: DEMO_USER
+    };
+};
+
+/**
+ * Verificar si el usuario está en modo demo
+ */
+export const isDemoMode = (): boolean => {
+    return sessionStorage.getItem('DEMO_MODE_EXPLICIT') === 'true';
 };

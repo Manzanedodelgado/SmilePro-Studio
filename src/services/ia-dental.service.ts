@@ -294,11 +294,16 @@ export const saveAIConfig = async (config: AIAgentConfig): Promise<boolean> => {
 
 // ── Análisis de odontograma ───────────────────────────────────────
 
+export interface OdontogramaAnalysis {
+    text: string;
+    isFallback: boolean;
+}
+
 export const analyzeOdontograma = async (
     toothData: { numero: string; caras: Record<string, string> }[]
-): Promise<string> => {
+): Promise<OdontogramaAnalysis> => {
     if (!await isAIConfigured()) {
-        return 'Conecta la API de IA para obtener análisis automático del odontograma.';
+        return { text: 'Conecta la API de IA para obtener análisis automático del odontograma.', isFallback: true };
     }
 
     const hallazgos = toothData
@@ -312,17 +317,17 @@ export const analyzeOdontograma = async (
         });
 
     if (hallazgos.length === 0) {
-        return 'Odontograma sin hallazgos patológicos. Todas las piezas en estado normal. ✅';
+        return { text: 'Odontograma sin hallazgos patológicos. Todas las piezas en estado normal. ✅', isFallback: false };
     }
 
-    const { text } = await askIA(
+    const { text, isFallback } = await askIA(
         `Analiza estos hallazgos del odontograma:\n${hallazgos.join('\n')}`,
         [],
         ['Eres un asistente dental clínico. Analiza el odontograma y genera un resumen breve (máximo 5 puntos) con recomendaciones de tratamiento. Usa formato de lista con "»" al inicio. Responde en español. NO diagnostiques, solo sugiere posibles tratamientos a evaluar por el odontólogo.'],
         'odontograma',
     );
 
-    return text || hallazgos.map(h => `» ${h}`).join('\n');
+    return { text: text || hallazgos.map(h => `» ${h}`).join('\n'), isFallback };
 };
 
 // ── Análisis de periodontograma ───────────────────────────────────
@@ -336,9 +341,14 @@ export interface PerioSummary {
     teethWithFurcation: string[];
 }
 
-export const analyzePerioData = async (summary: PerioSummary): Promise<string> => {
+export interface PerioAnalysis {
+    text: string;
+    isFallback: boolean;
+}
+
+export const analyzePerioData = async (summary: PerioSummary): Promise<PerioAnalysis> => {
     if (!await isAIConfigured()) {
-        return 'Conecta la API de IA para obtener análisis periodontal automático.';
+        return { text: 'Conecta la API de IA para obtener análisis periodontal automático.', isFallback: true };
     }
 
     const lines = [
@@ -350,7 +360,7 @@ export const analyzePerioData = async (summary: PerioSummary): Promise<string> =
         summary.teethWithFurcation.length > 0 ? `Afectación de furcación: piezas ${summary.teethWithFurcation.join(', ')}` : 'Sin afectación de furcación',
     ];
 
-    const { text } = await askIA(
+    const { text, isFallback } = await askIA(
         `Analiza estos datos del periodontograma clínico:\n${lines.join('\n')}`,
         [],
         [
@@ -363,7 +373,7 @@ export const analyzePerioData = async (summary: PerioSummary): Promise<string> =
         'periodontograma',
     );
 
-    return text || lines.map(l => `» ${l}`).join('\n');
+    return { text: text || lines.map(l => `» ${l}`).join('\n'), isFallback };
 };
 
 // ── Análisis del historial clínico (EntradasMedicas) ─────────────
@@ -375,12 +385,17 @@ export interface EntradaResumen {
     importe?: number | null;
 }
 
-export const analyzeClinicalHistory = async (entradas: EntradaResumen[]): Promise<string> => {
+export interface ClinicalHistoryAnalysis {
+    text: string;
+    isFallback: boolean;
+}
+
+export const analyzeClinicalHistory = async (entradas: EntradaResumen[]): Promise<ClinicalHistoryAnalysis> => {
     if (!await isAIConfigured()) {
-        return 'Conecta la API de IA para obtener un resumen del historial clínico.';
+        return { text: 'Conecta la API de IA para obtener un resumen del historial clínico.', isFallback: true };
     }
 
-    if (entradas.length === 0) return 'Sin entradas clínicas registradas para analizar.';
+    if (entradas.length === 0) return { text: 'Sin entradas clínicas registradas para analizar.', isFallback: false };
 
     const lines = entradas.slice(0, 40).map(e => {
         const fecha = e.fecha ? e.fecha.slice(0, 10) : 'sin fecha';
@@ -389,7 +404,7 @@ export const analyzeClinicalHistory = async (entradas: EntradaResumen[]): Promis
         return `${fecha} — ${e.descripcion.slice(0, 80)} [${est}]${e.importe ? ` (${e.importe}€)` : ''}`;
     });
 
-    const { text } = await askIA(
+    const { text, isFallback } = await askIA(
         `Analiza este historial clínico dental:\n${lines.join('\n')}`,
         [],
         [
@@ -402,20 +417,27 @@ export const analyzeClinicalHistory = async (entradas: EntradaResumen[]): Promis
         'historial-clinico',
     );
 
-    return text || lines.slice(0, 5).map(l => `» ${l}`).join('\n');
+    return { text: text || lines.slice(0, 5).map(l => `» ${l}`).join('\n'), isFallback };
 };
 
 // ── Análisis de nota SOAP desde transcript de voz ─────────────────
 
-export const analyzeTranscriptWithAI = async (transcript: string): Promise<{
-    subjetivo: string; objetivo: string; analisis: string; plan: string; eva: number;
-}> => {
-    const fallback = { subjetivo: '', objetivo: '', analisis: '', plan: '', eva: 0 };
+export interface SOAPAnalysis {
+    subjetivo: string;
+    objetivo: string;
+    analisis: string;
+    plan: string;
+    eva: number;
+    isFallback: boolean;
+}
+
+export const analyzeTranscriptWithAI = async (transcript: string): Promise<SOAPAnalysis> => {
+    const fallback: SOAPAnalysis = { subjetivo: '', objetivo: '', analisis: '', plan: '', eva: 0, isFallback: false };
     if (!transcript.trim()) return fallback;
 
-    if (!await isAIConfigured()) return fallback;
+    if (!await isAIConfigured()) return { ...fallback, isFallback: true };
 
-    const { text } = await askIA(
+    const { text, isFallback } = await askIA(
         `Transcripción de voz de consulta dental:\n"${transcript}"\n\nEstructura en formato JSON SOAP.`,
         [],
         [
@@ -437,10 +459,11 @@ export const analyzeTranscriptWithAI = async (transcript: string): Promise<{
                 analisis: parsed.analisis ?? '',
                 plan: parsed.plan ?? '',
                 eva: typeof parsed.eva === 'number' ? Math.min(10, Math.max(0, parsed.eva)) : 0,
+                isFallback,
             };
         }
     } catch { /* ignore */ }
-    return fallback;
+    return { ...fallback, isFallback };
 };
 
 // ── Sugerencias de presupuesto desde odontograma ──────────────────

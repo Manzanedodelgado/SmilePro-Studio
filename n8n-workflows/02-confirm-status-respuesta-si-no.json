@@ -89,11 +89,11 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "UPDATE \"DCitas\" SET \"IdSitC\" = 3 WHERE \"IdUsu\" = {{ $json.IdUsu }} AND \"IdOrden\" = {{ $json.IdOrden }}",
+        "query": "UPDATE \"DCitas\" SET \"IdSitC\" = 6, \"MotivoAnulacion\" = 'Cancelada por paciente (WhatsApp: {{ $('Parsear mensaje entrante').item.json.mensaje }})' WHERE \"IdUsu\" = {{ $json.IdUsu }} AND \"IdOrden\" = {{ $json.IdOrden }}",
         "additionalFields": {}
       },
       "id": "sp02-0008",
-      "name": "BD · Cancelar cita",
+      "name": "BD · Cancelar cita (guardando motivo)",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
       "position": [1340, 400],
@@ -153,7 +153,7 @@
     "BD · Confirmar cita": { "main": [[{ "node": "WhatsApp · Confirmar al paciente", "type": "main", "index": 0 }]] },
     "BD · Cancelar cita": { "main": [[{ "node": "WhatsApp · Confirmar cancelación", "type": "main", "index": 0 }]] }
   },
-  "active": false,
+  "active": true,
   "settings": { "executionOrder": "v1" },
   "id": "sp-confirm-status-002"
 }
