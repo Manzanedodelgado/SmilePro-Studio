@@ -1,0 +1,11 @@
+CREATE DATABASE chatwoot_production;
+CREATE DATABASE evolution_api;
+CREATE DATABASE n8n;
+DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'smilestudio') THEN CREATE ROLE smilestudio WITH LOGIN PASSWORD 'smilepro2026!'; END IF; END \$\$;
+GRANT ALL PRIVILEGES ON DATABASE smilestudio TO smilestudio;
+DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'chatwoot') THEN CREATE ROLE chatwoot WITH LOGIN PASSWORD 'chatwoot2026!'; END IF; END \$\$;
+GRANT ALL PRIVILEGES ON DATABASE chatwoot_production TO chatwoot;
+DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'evolution') THEN CREATE ROLE evolution WITH LOGIN PASSWORD 'evolution2026!'; END IF; END \$\$;
+GRANT ALL PRIVILEGES ON DATABASE evolution_api TO evolution;
+DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'n8n') THEN CREATE ROLE n8n WITH LOGIN PASSWORD 'n8n2026!'; END IF; END \$\$;
+GRANT ALL PRIVILEGES ON DATABASE n8n TO n8n;

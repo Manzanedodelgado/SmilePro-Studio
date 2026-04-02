@@ -1,0 +1,134 @@
+# version: '3.9'  # removed obsolete field
+
+# ─── SmilePro Studio · Production Stack ────────────────────────────────────
+#
+#   Servicios:
+#     db        → PostgreSQL 16       (datos clínicos SmilePro — volumen docker_pgdata)
+#     backend   → Node.js 20 API      (REST + Prisma ORM)
+#     frontend  → Nginx + React SPA   (interfaz web)
+#     orthanc   → Servidor DICOM      (imágenes radiológicas)
+#
+#   Requisitos previos:
+#     1. cp .env.example .env           (rellenar con valores reales)
+#     2. Verificar que backend/.env existe con las keys de APIs
+#
+#   Despliegue:
+#     ./deploy.sh
+#   O manualmente:
+#     docker compose up -d --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── PostgreSQL 16 (volumen docker_pgdata con 6,117 pacientes reales) ───────
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     smilestudio
+      POSTGRES_PASSWORD: '751ec9815be7bbc02e027c3e1bbe2078'
+      POSTGRES_DB:       smilestudio
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smilestudio -d smilestudio"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - smilepro
+
+  # ── Backend Node.js ───────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    restart: unless-stopped
+    image: smilepro-studio-backend:local
+    pull_policy: never
+
+    env_file: ./backend/.env
+    environment:
+      NODE_ENV:     production
+      PORT:         3000
+      # Override DATABASE_URL del .env para apuntar al contenedor db
+      DATABASE_URL: postgresql://smilestudio:751ec9815be7bbc02e027c3e1bbe2078@db:5432/smilestudio?schema=public
+      # CORS apunta a la URL pública del frontend
+      CORS_ORIGIN:  ${FRONTEND_URL}
+    volumes:
+      - uploads:/app/uploads
+      - ia-data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+    # Ejecutar migraciones SQL manuales + arrancar servidor
+    command: >
+      sh -c "
+        echo 'Applying manual migrations...' &&
+        for f in prisma/migrations/*.sql; do
+          echo \"  → $$f\" &&
+          npx prisma db execute --file $$f --schema prisma/schema.prisma 2>/dev/null || true;
+        done &&
+        echo 'Migrations done. Starting server...' &&
+        dumb-init node dist/server.js
+      "
+    networks:
+      - smilepro
+
+  # ── Frontend Nginx + React ────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    image: smilepro-studio-frontend:local
+    pull_policy: never
+
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - smilepro
+
+  # ── Orthanc — Servidor DICOM ──────────────────────────────────────────────
+  orthanc:
+    image: orthancteam/orthanc:latest
+    restart: unless-stopped
+    volumes:
+      - orthanc-data:/var/lib/orthanc/db
+      - ./orthanc.json:/etc/orthanc/orthanc.json:ro
+    ports:
+      - "127.0.0.1:4242:4242"   # DICOM C-STORE (envío desde equipos de la clínica)
+      # Puerto HTTP 8042 solo accesible internamente vía nginx /orthanc/
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8042/system || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - smilepro
+
+# ── Red interna ───────────────────────────────────────────────────────────────
+networks:
+  smilepro:
+    driver: bridge
+
+# ── Volúmenes persistentes ────────────────────────────────────────────────────
+volumes:
+  pgdata:                          # Volumen con datos reales de pacientes (PG16)
+    external: true
+    name: docker_pgdata
+  uploads:                         # Archivos subidos al backend
+  ia-data:                         # Estado IA control
+  orthanc-data:                    # Imágenes DICOM

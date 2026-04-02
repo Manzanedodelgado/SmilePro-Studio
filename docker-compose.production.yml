@@ -1,0 +1,342 @@
+# ─── SmilePro Studio · Production Stack (Consolidado) ─────────────────────────
+#
+#   TODOS los servicios en UNA sola red Docker (smilepro-network).
+#   PostgreSQL consolidado: 1 instancia, 4 databases.
+#   Redis consolidado: 1 instancia, 4 databases.
+#
+#   Deploy:  docker compose -f docker-compose.production.yml up -d --build
+#   Logs:    docker compose -f docker-compose.production.yml logs -f backend
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  #  TIER 1 — INFRAESTRUCTURA (arrancan primero)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  # ── PostgreSQL 16 (ÚNICO — 4 databases) ────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: smilepro-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PG_MASTER_PASSWORD}
+      POSTGRES_DB: smilestudio
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+    networks:
+      - smilepro
+
+  # ── Redis 7 (ÚNICO — 4 databases lógicas) ─────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: smilepro-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+        --maxmemory 256mb
+        --maxmemory-policy allkeys-lru
+        --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks:
+      - smilepro
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  #  TIER 2 — APLICACIÓN PRINCIPAL
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  # ── Backend Node.js ────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    container_name: smilepro-backend
+    restart: unless-stopped
+    image: smilepro-studio-backend:local
+    pull_policy: never
+    env_file: ./backend/.env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: postgresql://smilestudio:${PG_SMILESTUDIO_PASSWORD}@postgres:5432/smilestudio?schema=public
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGIN: ${FRONTEND_URL}
+      # Evolution API (acceso directo por red interna)
+      EVOLUTION_API_URL: http://evolution-api:8080
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+      EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE}
+      # Chatwoot (acceso directo por red interna)
+      CHATWOOT_URL: http://chatwoot:3000
+      CHATWOOT_TOKEN: ${CHATWOOT_TOKEN}
+      CHATWOOT_ACCOUNT_ID: ${CHATWOOT_ACCOUNT_ID}
+      CHATWOOT_INBOX_ID: ${CHATWOOT_INBOX_ID}
+    volumes:
+      - uploads:/app/uploads
+      - ia-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+    command: >
+      sh -c "npx prisma migrate deploy && dumb-init node dist/server.js"
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+    networks:
+      - smilepro
+
+  # ── Frontend Nginx + React SPA ─────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smilepro-frontend
+    restart: unless-stopped
+    image: smilepro-studio-frontend:local
+    pull_policy: never
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - smilepro
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  #  TIER 3 — COMUNICACIÓN (WhatsApp + CRM)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  # ── Evolution API (WhatsApp Business) ──────────────────────────────────────
+  evolution-api:
+    image: atendai/evolution-api:v2.3.7
+    container_name: smilepro-evolution
+    restart: unless-stopped
+    environment:
+      SERVER_URL: https://${EVOLUTION_DOMAIN}
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:${PG_EVOLUTION_PASSWORD}@postgres:5432/evolution_api
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "true"
+      DATABASE_SAVE_MESSAGE_UPDATE: "true"
+      DATABASE_SAVE_DATA_CONTACTS: "true"
+      DATABASE_SAVE_DATA_CHATS: "true"
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379/2
+      CACHE_LOCAL_ENABLED: "false"
+      CHATWOOT_ENABLED: "true"
+      CHATWOOT_ACCOUNT_ID: ${CHATWOOT_ACCOUNT_ID}
+      CHATWOOT_TOKEN: ${CW_BOT_TOKEN}
+      CHATWOOT_URL: http://chatwoot:3000
+      CHATWOOT_SIGN_MSG: "true"
+      CHATWOOT_REOPEN_CONVERSATION: "true"
+      CHATWOOT_CONVERSATION_PENDING: "true"
+      CHATWOOT_IMPORT_CONTACTS: "true"
+      CHATWOOT_IMPORT_MESSAGES: "true"
+    volumes:
+      - evolution-instances:/evolution/instances
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - smilepro
+
+  # ── Chatwoot (CRM WhatsApp) ────────────────────────────────────────────────
+  chatwoot:
+    image: chatwoot/chatwoot:v4.11.0
+    container_name: smilepro-chatwoot
+    restart: unless-stopped
+    environment:
+      RAILS_ENV: production
+      SECRET_KEY_BASE: ${CW_SECRET_KEY}
+      FRONTEND_URL: https://${CW_DOMAIN}
+      DATABASE_URL: postgresql://chatwoot:${PG_CHATWOOT_PASSWORD}@postgres:5432/chatwoot_production
+      REDIS_URL: redis://redis:6379/1
+      RAILS_LOG_TO_STDOUT: "true"
+      DEFAULT_LOCALE: es
+      ACTIVE_STORAGE_SERVICE: local
+    volumes:
+      - chatwoot-storage:/app/storage
+    entrypoint: docker/entrypoints/rails.sh
+    command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    networks:
+      - smilepro
+
+  # ── Chatwoot Sidekiq (workers async) ───────────────────────────────────────
+  chatwoot-sidekiq:
+    image: chatwoot/chatwoot:v4.11.0
+    container_name: smilepro-chatwoot-sidekiq
+    restart: unless-stopped
+    environment:
+      RAILS_ENV: production
+      SECRET_KEY_BASE: ${CW_SECRET_KEY}
+      FRONTEND_URL: https://${CW_DOMAIN}
+      DATABASE_URL: postgresql://chatwoot:${PG_CHATWOOT_PASSWORD}@postgres:5432/chatwoot_production
+      REDIS_URL: redis://redis:6379/1
+      ACTIVE_STORAGE_SERVICE: local
+    volumes:
+      - chatwoot-storage:/app/storage
+    command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - smilepro
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  #  TIER 4 — SERVICIOS AUXILIARES
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  # ── n8n (Automatizaciones) ─────────────────────────────────────────────────
+  n8n:
+    image: n8nio/n8n:1.123.21
+    container_name: smilepro-n8n
+    restart: unless-stopped
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: "5432"
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: ${PG_N8N_PASSWORD}
+      N8N_HOST: ${N8N_DOMAIN}
+      N8N_PROTOCOL: https
+      WEBHOOK_URL: https://${N8N_DOMAIN}
+    volumes:
+      - n8n-data:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - smilepro
+
+  # ── Orthanc (PACS DICOM — Radiología) ──────────────────────────────────────
+  orthanc:
+    image: orthancteam/orthanc:latest
+    container_name: smilepro-orthanc
+    restart: unless-stopped
+    volumes:
+      - orthanc-data:/var/lib/orthanc/db
+      - ./orthanc.json:/etc/orthanc/orthanc.json:ro
+    ports:
+      - "127.0.0.1:4242:4242"   # DICOM C-STORE (equipos clínica)
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8042/system || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks:
+      - smilepro
+
+  # ── Backups automáticos (diarios) ──────────────────────────────────────────
+  pgbackup:
+    image: prodrigestivill/postgres-backup-local
+    container_name: smilepro-pgbackup
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: smilestudio,chatwoot_production,evolution_api,n8n
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PG_MASTER_PASSWORD}
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 6
+      HEALTHCHECK_PORT: 8080
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - smilepro
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  RED UNIFICADA — Todos los servicios se ven entre sí
+# ═══════════════════════════════════════════════════════════════════════════════
+networks:
+  smilepro:
+    driver: bridge
+    name: smilepro-network
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  VOLÚMENES PERSISTENTES
+# ═══════════════════════════════════════════════════════════════════════════════
+volumes:
+  pgdata:                  # PostgreSQL data (TODAS las DBs)
+  redis-data:              # Redis persistence
+  uploads:                 # Backend uploads (fotos, documentos)
+  ia-data:                 # Estado IA control
+  orthanc-data:            # Imágenes DICOM
+  evolution-instances:     # Sesiones WhatsApp
+  chatwoot-storage:        # Archivos Chatwoot (adjuntos)
+  n8n-data:                # Workflows n8n

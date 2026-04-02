@@ -43,12 +43,12 @@ Construida con React 19 · TypeScript 5.8 · Vite 6 · Tailwind CSS, conectada a
 ### 🔴 NUNCA hacer (infraestructura)
 
 - **NO ejecutar `DROP`, `DELETE`, `TRUNCATE` ni `UPDATE` en producción** sin autorización explícita del usuario. La BBDD `smilestudio` contiene datos reales de 15.000+ pacientes y 47.000+ citas.
-- **NO reiniciar contenedores Docker** (`docker restart`, `docker stop`, `docker rm`) sin permiso del usuario. Hay 12 contenedores en producción serviendo a la clínica.
+- **NO reiniciar contenedores Docker** (`docker restart`, `docker stop`, `docker rm`) sin permiso del usuario. Hay 11 contenedores en producción serviendo a la clínica.
 - **NO modificar las tablas de GELITE** (`TtosMed`, `Pacientes`, `AgCitas`, `Facturas`, etc.) directamente. Todo cambio debe ir a través del backend Node.js.
 - **NO exponer credenciales de BBDD en el frontend**. Las API keys (Groq, Evolution, Chatwoot, SMTP) van **exclusivamente** en el backend.
 - **NO hacer `apt upgrade` ni `reboot` del servidor** sin autorización. El servidor tiene clientes en producción.
-- **NO modificar la configuración de Traefik ni EasyPanel** sin entender la cadena de proxying.
-- **NO crear bases de datos nuevas** en los contenedores PostgreSQL sin permiso.
+- **NO modificar la configuración de Traefik** sin entender la cadena de proxying. Traefik gestiona SSL automático (LetsEncrypt) para todos los dominios.
+- **NO crear bases de datos nuevas** en PostgreSQL sin permiso. Hay 4 DBs consolidadas (smilestudio, chatwoot, evolution_api, n8n).
 
 ### 🟡 NUNCA hacer (código)
 
@@ -103,20 +103,20 @@ Construida con React 19 · TypeScript 5.8 · Vite 6 · Tailwind CSS, conectada a
 | Visor médico alternativo | DWV | 0.33.0 |
 | Parser DICOM | dicom-parser | 1.8.21 |
 | Backend | Node.js 20 + Express 4 + TypeScript | ESM nativo, `tsx` en dev |
-| ORM | Prisma | 6.4.0 → PostgreSQL 15 |
+| ORM | Prisma | 6.4.0 → PostgreSQL 16 |
 | Schema DB | 3.195 líneas, 100+ modelos | Herencia Gesden/GELITE + modelos nuevos |
 | IA — WhatsApp | Groq `llama-3.3-70b-versatile` | Fallback: OpenRouter |
 | IA — Copiloto clínico | Gemini `gemini-2.5-flash-lite` | Fallback: OpenRouter |
 | IA — Visión (Rx) | Gemini `gemini-2.5-flash` | Análisis de radiografías |
 | Fallback IA universal | OpenRouter | `meta-llama` / `deepseek-r1` (free) |
-| WhatsApp | Evolution API v2.3.7 + Chatwoot v4.9.1 | Instancia `chatwoot_link` |
+| WhatsApp | Evolution API v2.3.7 + Chatwoot v4.11.0 | Instancia `chatwoot_link` |
 | Email | Gmail OAuth2 | `info@rubiogarciandental.com` |
 | Storage fotos | Google Drive (Service Account) | Carpeta por paciente |
 | PACS legacy | Romexis SQL Server | `bbddsql.servemp3.com:1433` |
 | Imagen médica DICOM | Orthanc (`orthancteam/orthanc`) | Puerto 4242 DICOM C-STORE |
 | Tiempo real | Socket.io | 4.8.3 — backend ↔ frontend |
 | Automatización | n8n | 30 workflows JSON |
-| Infra | Docker Compose + Nginx | Producción en `192.168.1.46` (LAN clínica) |
+| Infra | Docker Compose + Traefik v3 | Producción en `192.168.1.46` (LAN clínica) |
 | Facturación | TBAI (Ticket BAI Vasco) | — |
 
 ---
@@ -125,8 +125,8 @@ Construida con React 19 · TypeScript 5.8 · Vite 6 · Tailwind CSS, conectada a
 
 - Node.js ≥ 18
 - npm ≥ 9
-- Docker & Docker Compose (para producción con EasyPanel)
-- PostgreSQL 15+ (con FDW configurado hacia GELITE en producción)
+- Docker & Docker Compose (producción — stack consolidado de 11 containers)
+- PostgreSQL 16+ con pgvector (con FDW configurado hacia GELITE en producción)
 - (Opcional) Instancia Evolution API, cuenta Chatwoot, Supabase project
 
 ---
@@ -343,15 +343,23 @@ Frontend React (localhost:5176 / :8080 en Docker)
 ### Docker (producción)
 
 ```
-Internet → Nginx (:8080)
-             └── /api/* → Backend Node.js (:3000)
-                              ├── PostgreSQL 15 (:5432)
-                              ├── Orthanc DICOM (:8042 interno / :4242 DICOM)
-                              ├── Volumen uploads (docs, fotos)
-                              └── Volumen ia-data (estado motor IA)
+Internet → Traefik (:80/:443 SSL LetsEncrypt)
+             ├── gestion.rubiogarciadental.com → Frontend Nginx (:80)
+             │                                    └── /api/* → Backend Node.js (:3000)
+             │                                                  ├── PostgreSQL 16 pgvector (:5432)
+             │                                                  │   ├── smilestudio (6,117 pacientes)
+             │                                                  │   ├── chatwoot
+             │                                                  │   ├── evolution_api
+             │                                                  │   └── n8n
+             │                                                  ├── Redis 7 (:6379, DB 0-3)
+             │                                                  ├── Orthanc DICOM (:4242)
+             │                                                  ├── Volumen uploads
+             │                                                  └── Volumen ia-data
+             ├── chatwoot.easypanel.host → Chatwoot (:3000)
+             └── evolution.easypanel.host → Evolution API (:8080)
 ```
 
-El backend ejecuta `npx prisma migrate deploy` antes de arrancar.
+El backend aplica migraciones SQL manualmente antes de arrancar (`prisma db execute`).
 
 ### Flujo de navegación
 
@@ -788,6 +796,8 @@ interface ItemInventario {
 
 ## Infraestructura de producción
 
+> **Arquitectura consolidada (2 abril 2026):** Toda la infraestructura corre en un único `docker-compose.yml` con proyecto `-p smilepro`. Se eliminaron Docker Swarm, EasyPanel y Paperless-ngx.
+
 ### Servidor
 
 **Ubicación:** Servidor local en la clínica Rubio García Dental (Madrid)
@@ -795,117 +805,112 @@ interface ItemInventario {
 | Campo | Valor |
 |---|---|
 | **IP (LAN local)** | `192.168.1.46` |
-| **Dominio dinámico** | `smileprostudio.ddns.net` |
+| **Dominio dinámico** | `smileprostudio.ddns.net` (NoIP) |
+| **IP pública** | `213.99.219.104` |
 | **URL producción** | `https://gestion.rubiogarciadental.com` |
-| **OS** | Por determinar |
-| **Puerto HTTP** | 8080 (frontend), 3000 (backend) |
-| **Acceso SSH** | Usuario y credenciales en servidor local |
-| **Contenedores** | Docker Compose (ver docker-compose.yml) |
-| **Base de datos** | PostgreSQL 15 en red Docker interna |
+| **OS** | Ubuntu 24.04.4 LTS |
+| **Puertos** | 80/443 (Traefik), 8080 (frontend directo), 4242 (DICOM) |
+| **Acceso SSH** | `ssh jmd@192.168.1.46` |
+| **Proyecto Docker** | `docker compose -p smilepro` |
+| **Compose file** | `/home/jmd/SmilePro-Studio/docker-compose.yml` |
 
-### Contenedores Docker (Docker Swarm)
+### Contenedores Docker (Docker Compose unificado)
 
-| Contenedor | Imagen | Puerto | Función |
+| Container | Imagen | Puerto | Función |
 |---|---|---|---|
-| `smilestudio-db` | `postgres:16-alpine` | 5432 | **BBDD principal SmileStudio** (GELITE) |
-| `smilestudio-redis` | `redis:7-alpine` | 6379 | Caché SmileStudio |
-| `comunicaciones_chatwoot` | `chatwoot/chatwoot:v4.9.1` | 3000 | Chatwoot (WhatsApp CRM) |
-| `comunicaciones_chatwoot-sidekiq` | `chatwoot/chatwoot:v4.9.1` | — | Workers Chatwoot |
-| `comunicaciones_chatwoot-db` | `pgvector/pgvector:pg17` | 5432 | BBDD Chatwoot (con pgvector) |
-| `comunicaciones_chatwoot-redis` | `redis:7` | 6379 | Caché Chatwoot |
-| `comunicaciones_evolution-api` | `evolution-api:v2.3.7` | 8080 | Evolution API (WhatsApp Business) |
-| `comunicaciones_evolution-api-db` | `postgres:17` | 5432 | BBDD Evolution API |
-| `comunicaciones_evolution-api-redis` | `redis:7` | 6379 | Caché Evolution API |
-| `comunicaciones_dental-bot` | `chatwoot-bot:latest` | 3001 | Bot IA Dental para Chatwoot |
-| `easypanel` | `easypanel/easypanel:latest` | 3000 → host | Panel de gestión del servidor |
-| `traefik` | `traefik:3.6.7` | 80, 443 → host | Reverse proxy + SSL |
+| `smilepro-db-1` | `pgvector/pgvector:pg16` | 5432 (interno) | **PostgreSQL 16 + pgvector** — 4 DBs consolidadas |
+| `smilepro-redis-1` | `redis:7` | 6379 (interno) | **Redis 7** — 4 DBs lógicas (0-3) con password |
+| `smilepro-backend-1` | `smilepro-studio-backend:local` | 3000 (interno) | Backend Node.js (healthcheck activo) |
+| `smilepro-frontend-1` | `smilepro-studio-frontend:local` | 8080 → host | Frontend React (Nginx) + Traefik SSL |
+| `smilepro-evolution-api-1` | `evoapicloud/evolution-api:v2.3.7` | 8080 (interno) | Evolution API (WhatsApp Business) |
+| `smilepro-chatwoot-1` | `chatwoot/chatwoot:v4.11.0` | 3000 (interno) | Chatwoot (bandeja WhatsApp) |
+| `smilepro-chatwoot-sidekiq-1` | `chatwoot/chatwoot:v4.11.0` | — | Workers Sidekiq de Chatwoot |
+| `smilepro-n8n-1` | `n8nio/n8n:1.123.21` | 5678 (interno) | n8n (30+ workflows) |
+| `smilepro-traefik-1` | `traefik:3.6.7` | 80, 443 → host | Reverse proxy + SSL LetsEncrypt automático |
+| `smilepro-orthanc-1` | `orthancteam/orthanc:latest` | 4242 (localhost) | PACS DICOM |
+| `smilepro-pgbackup-1` | `prodrigestivill/postgres-backup-local` | — | Backups automáticos diarios |
 
-### Bases de datos PostgreSQL
-
-#### SmileStudio (`smilestudio-db`)
+### PostgreSQL consolidado (1 instancia, 4 bases de datos)
 
 ```
-Host:     smilestudio-db (red Docker interna)
-DB:       smilestudio
-User:     smilestudio
-Password: 751ec9815be7bbc02e027c3e1bbe2078
+Imagen:    pgvector/pgvector:pg16
+Volumen:   docker_pgdata (externo, 457 MB)
+User:      smilestudio
+Password:  751ec9815be7bbc02e027c3e1bbe2078
 ```
 
-**154 tablas** — datos reales de GELITE. Las principales:
+| Base de datos | Tamaño | Contenido |
+|---|---|---|
+| `smilestudio` | 180 MB | **DB principal** — 6,117 pacientes, 154 tablas GELITE |
+| `chatwoot` | 16 MB | Chatwoot — 4,823 mensajes, 23 conversaciones, 17 contactos |
+| `evolution_api` | 9.6 MB | Evolution API — sesiones WhatsApp, 46 mensajes, 33 contactos |
+| `n8n` | — | n8n workflows |
+
+**Extensiones habilitadas (chatwoot):** plpgsql, pg_stat_statements, pg_trgm, pgcrypto, **vector 0.8.2**
+
+**Tablas principales (smilestudio):**
 
 | Tabla | Tamaño | Contenido |
 |---|---|---|
 | `TtosMed` | 17 MB | Tratamientos médicos realizados |
 | `TtosMedFases` | 6.2 MB | Fases de los tratamientos |
 | `TICD9` | 2.5 MB | Códigos CIE-9 (diagnósticos) |
-| `TTratamientos` | 240 KB | Catálogo de tratamientos |
-| `TDocumentosPac` | 224 KB | Documentos del paciente |
-| `Tratamientos` | 192 KB | Catálogo alternativo |
+| `Pacientes` | — | 6,117 pacientes |
 | `AgCitas` / `AgCit` | — | Citas de agenda (47k+) |
-| `Pacientes` | — | Datos de pacientes (15k+) |
 | `Facturas` / `FacturasLineas` | — | Facturación |
-| `Cobros` | — | Cobros y pagos |
-| `PacOdonto` | — | Odontograma por paciente |
-| `PacEntMed` | — | Entradas médicas |
-| `users` / `_prisma_migrations` | — | Usuarios SmileStudio (Prisma) |
-
-> **Nota de migración:** La base de datos se inicializa y se hidrata desde SQL Server (GELITE) usando el script `backend/prisma/extract.ts` o alternativamente `seed.ts`. Esto permite asegurar que PostgreSQL tiene una copia íntegra y reciente de los 15.000 pacientes.
 
 **Acceso rápido:**
 
 ```bash
 # Listar tablas
-docker exec -i smilestudio-db psql -U smilestudio -d smilestudio -c "\dt+"
+docker compose -p smilepro exec -T db psql -U smilestudio -d smilestudio -c "\dt+"
 
-# Query directa
-docker exec -i smilestudio-db psql -U smilestudio -d smilestudio -c "SELECT count(*) FROM \"Pacientes\""
+# Contar pacientes
+docker compose -p smilepro exec -T db psql -U smilestudio -d smilestudio -c 'SELECT count(*) FROM "Pacientes"'
+
+# Acceder a Chatwoot DB
+docker compose -p smilepro exec -T db psql -U smilestudio -d chatwoot -c 'SELECT count(*) FROM messages'
 ```
 
 **Conexión desde local:**
-
-Hay dos escenarios dependiendo de si estás en la misma red o fuera:
 
 | Escenario | Host a usar |
 |---|---|
 | **En la red local** (WiFi/LAN de la clínica) | `192.168.1.46` |
 | **Fuera de la red** (casa, móvil, VPN) | `smileprostudio.ddns.net` |
 
-```env
-# Red local:
-DATABASE_URL="postgresql://smilestudio:751ec9815be7bbc02e027c3e1bbe2078@192.168.1.46:5432/smilestudio?schema=public"
+> ⚠️ El puerto 5432 no está expuesto al exterior por defecto. Acceder vía SSH tunnel o VPN.
 
-# Acceso externo:
-DATABASE_URL="postgresql://smilestudio:751ec9815be7bbc02e027c3e1bbe2078@smileprostudio.ddns.net:5432/smilestudio?schema=public"
+### Redis consolidado (1 instancia, 4 DBs lógicas)
+
+| DB | Servicio | Uso |
+|---|---|---|
+| DB 0 | Backend | Caché de sesiones, tokens, estado IA |
+| DB 1 | Chatwoot | Sidekiq + caché conversaciones |
+| DB 2 | Evolution API | Sesiones WhatsApp |
+| DB 3 | n8n | Ejecución de workflows |
+
+**Password:** `smilepro2026redis`
+
+### Backups automáticos
+
+```
+Servicio:   pgbackup (prodrigestivill/postgres-backup-local)
+Schedule:   @daily
+Retención:  7 días + 4 semanas + 6 meses
+Ubicación:  /home/jmd/SmilePro-Studio/backups/
+DBs:        smilestudio, chatwoot, evolution_api, n8n
 ```
 
-```bash
-# Reiniciar el backend tras modificar .env
-cd backend && npm run dev
-```
+### SSL / HTTPS
 
-> ⚠️ El puerto 5432 debe estar abierto en el router para acceso externo.
+Traefik gestiona los certificados SSL automáticamente vía LetsEncrypt HTTP Challenge.
 
-#### Chatwoot (`comunicaciones_chatwoot-db`)
-
-PostgreSQL 17 con extensión **pgvector** — BBDD de producción de Chatwoot.
-
-#### Evolution API (`comunicaciones_evolution-api-db`)
-
-PostgreSQL 17 — almacena sesiones, mensajes y configuración de Evolution API.
-
-#### PostgreSQL del host (local, no Docker)
-
-PostgreSQL 16 en `localhost:5432` — contiene `chatwoot_production` (legacy, gestionada por Chatwoot instalado en el host).
-
-### Redis (3 instancias)
-
-| Instancia | Función |
+| Dominio | Servicio |
 |---|---|
-| `smilestudio-redis` | Caché de SmileStudio (sesiones, tokens) |
-| `comunicaciones_chatwoot-redis` | Caché + Sidekiq de Chatwoot |
-| `comunicaciones_evolution-api-redis` | Sesiones WhatsApp de Evolution API |
-
-Redis del host (`localhost:6379`) — usado por el Chatwoot legacy.
+| `gestion.rubiogarciadental.com` | Frontend |
+| `smileprostudio-chatwoot.9idlgv.easypanel.host` | Chatwoot |
+| `smileprostudio-evolution-api.9idlgv.easypanel.host` | Evolution API |
 
 ---
 
@@ -1089,7 +1094,7 @@ npm run db:migrate:deploy
 - GMAIL_CLIENT_SECRET
 - POSTGRES_PASSWORD
 
-**Gestión:** `.env` en .gitignore, encriptado en EasyPanel
+**Gestión:** `.env` en .gitignore, variables en `docker-compose.yml` y `backend/.env`
 
 ### SQL Injection Prevention
 
@@ -1106,54 +1111,81 @@ const user = await db.query(`SELECT * FROM users WHERE id = ${id}`);
 
 ## Deployment & Infra
 
-### Producción (EasyPanel)
+### Producción (Docker Compose consolidado)
 
-**Stack:**
-- Traefik 3.6.7 (load balancer + HTTPS)
+**Stack (11 containers, proyecto `smilepro`):**
+- Traefik 3.6.7 (reverse proxy + HTTPS LetsEncrypt)
 - Backend Node.js + Frontend React (Nginx)
-- PostgreSQL 15 / pgvector
+- PostgreSQL 16 / pgvector (4 DBs consolidadas)
 - Evolution API v2.3.7 (WhatsApp)
 - Chatwoot v4.11.0 (bandeja unificada)
 - n8n v1.123.21 (30+ workflows)
-- Redis 7 (cache)
+- Redis 7 (caché consolidada, 4 DBs lógicas)
 - Orthanc (DICOM PACS)
+- pgbackup (backups automáticos diarios)
 
 **URLs:**
 - Frontend: https://gestion.rubiogarciadental.com
-- Admin: https://9idlgv.easypanel.host
+- Chatwoot: https://smileprostudio-chatwoot.9idlgv.easypanel.host
+- Evolution: https://smileprostudio-evolution-api.9idlgv.easypanel.host
 
 ### Deploy
 
 ```bash
 # SSH al servidor
 ssh jmd@192.168.1.46
-
 cd /home/jmd/SmilePro-Studio
-bash deploy.sh
 
-# Componentes:
-#   1. git pull
-#   2. npm install
-#   3. npm run build
-#   4. docker compose build --no-cache --parallel
-#   5. docker compose down && docker compose up -d
-#   6. Espera healthchecks (30-120 seg)
+# Opción A: deploy manual
+git pull
+cd backend && npm install && npm run build && cd ..
+npm install && npm run build
+docker compose -p smilepro build --no-cache --parallel
+docker compose -p smilepro up -d
+# Esperar healthchecks (30-120 seg)
+
+# Opción B: solo reiniciar (sin rebuild)
+docker compose -p smilepro restart
+
+# Opción C: reiniciar un servicio
+docker compose -p smilepro restart backend
+```
+
+### Comandos útiles
+
+```bash
+# Estado de todos los containers
+docker compose -p smilepro ps
+
+# Logs de un servicio
+docker compose -p smilepro logs backend --tail 50 -f
+
+# Health del backend
+curl -sf http://localhost:3000/api/health
+
+# DB: contar pacientes
+docker compose -p smilepro exec -T db psql -U smilestudio -d smilestudio -c 'SELECT count(*) FROM "Pacientes"'
 ```
 
 ### Healthchecks
 
 ```
-backend:     GET /api/health → 200 OK
-db:          pg_isready
-orthanc:     wget http://localhost:8042/system
-frontend:    HTTP 200 /index.html
+backend:     GET /api/health → 200 OK (interval 15s)
+db:          pg_isready -U smilestudio (interval 10s)
+redis:       redis-cli ping (interval 10s)
+orthanc:     wget http://localhost:8042/system (interval 20s)
 ```
 
 ### Backups
 
 ```bash
-# PostgreSQL manual
-docker exec smileprostudio-db pg_dump -U smilepro smilestudio > backup.sql
+# Automáticos (pgbackup container)
+# Schedule: @daily | Retención: 7d + 4w + 6m
+# Ubicación: /home/jmd/SmilePro-Studio/backups/
+# DBs: smilestudio, chatwoot, evolution_api, n8n
+
+# Backup manual
+docker compose -p smilepro exec -T db pg_dump -U smilestudio smilestudio > backup_manual.sql
 
 # Google Drive: automático (Service Account)
 # n8n workflows: JSON en n8n-workflows/ + export UI
@@ -1336,7 +1368,17 @@ Sí, en `tailwind.config.js` — sección tema colors.
 
 ## Changelog
 
-### v2.0.0 (2 abr 2026) — Current
+### v2.1.0 (2 abr 2026) — Current
+- ✅ **Infraestructura consolidada** — 11 containers en 1 docker-compose (eliminados Swarm, EasyPanel, Paperless)
+- ✅ **PostgreSQL 16 + pgvector** — 4 DBs consolidadas (smilestudio, chatwoot, evolution_api, n8n)
+- ✅ **Redis 7 consolidado** — 4 DBs lógicas con password
+- ✅ **Traefik propio** — SSL LetsEncrypt automático (sin EasyPanel)
+- ✅ **Backups automáticos** — diarios, retención 7d+4w+6m
+- ✅ **6,117 pacientes** recuperados del volumen huérfano
+- ✅ **Chatwoot migrado** — 4,823 mensajes, 23 conversaciones
+- ✅ **Evolution API migrada** — 46 mensajes, 33 contactos
+
+### v2.0.0 (mar 2026)
 - ✅ Arquitectura completa frontend + backend
 - ✅ 100+ modelos Prisma
 - ✅ 30+ workflows n8n
@@ -1366,6 +1408,6 @@ Privado © 2026 Rubio García Dental. Derechos reservados.
 ---
 
 **Última actualización:** 2 de abril de 2026  
-**Versión README:** 2.3  
-**Estado:** Production-ready con observaciones críticas (ver Seguridad)  
-**Análisis exhaustivo:** Disponible en análisis-2026-04-02.md
+**Versión README:** 3.0  
+**Estado:** Production-ready — Infraestructura consolidada (11 containers, 1 PostgreSQL, 1 Redis)  
+**Migración:** Completada Swarm+EasyPanel → Docker Compose unificado (2 abr 2026)
