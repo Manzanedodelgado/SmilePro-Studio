@@ -134,6 +134,22 @@ const shutdown = (signal: string) => {
     }, 10000);
 };
 
+// ── Catch unhandled errors to prevent silent crashes ──
+process.on('unhandledRejection', (reason: unknown) => {
+    logger.error('UNHANDLED REJECTION', {
+        error: reason instanceof Error ? reason.message : String(reason),
+        stack: reason instanceof Error ? reason.stack : undefined,
+    });
+});
+
+process.on('uncaughtException', (err: Error) => {
+    logger.error('UNCAUGHT EXCEPTION — shutting down', {
+        error: err.message,
+        stack: err.stack,
+    });
+    process.exit(1);
+});
+
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 

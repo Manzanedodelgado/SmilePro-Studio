@@ -53,6 +53,7 @@ services:
     volumes:
       - uploads:/app/uploads
       - ia-data:/app/data
+      - backend-logs:/app/logs
     depends_on:
       db:
         condition: service_healthy
@@ -296,6 +297,17 @@ services:
     networks:
       - smilepro
 
+  # ── Uptime Kuma (Monitoring Dashboard) ──
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    volumes:
+      - uptime-kuma-data:/app/data
+    ports:
+      - "3001:3001"
+    networks:
+      - smilepro
+
 networks:
   smilepro:
     driver: bridge
@@ -312,3 +324,5 @@ volumes:
   evolution-store:
   n8n-data:
   letsencrypt:
+  backend-logs:
+  uptime-kuma-data:
