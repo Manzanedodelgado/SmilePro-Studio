@@ -12,22 +12,27 @@ Construida con React 19 · TypeScript 5.8 · Vite 6 · Tailwind CSS, conectada a
 1. [Módulos](#módulos)
 2. [Stack tecnológico](#stack-tecnológico)
 3. [Requisitos](#requisitos)
-4. [Instalación](#instalación)
+4. [Instalación & Guía de Desarrollo](#instalación--guía-de-desarrollo)
 5. [Variables de entorno](#variables-de-entorno)
 6. [Comandos](#comandos)
 7. [Arquitectura](#arquitectura)
-8. [Motor de IA](#motor-de-ia)
-9. [Módulo de Comunicación](#módulo-de-comunicación)
-10. [Estructura del proyecto](#estructura-del-proyecto)
-11. [Módulos en detalle](#módulos-en-detalle)
-12. [Control de acceso (RBAC)](#control-de-acceso-rbac)
-13. [IA & Automatizaciones](#ia--automatizaciones)
-14. [Radiología clínica](#radiología-clínica)
-15. [Flujos de negocio](#flujos-de-negocio)
-16. [Tipos de datos globales](#tipos-de-datos-globales)
-17. [Infraestructura de producción](#infraestructura-de-producción)
-18. [Notas del desarrollador](#notas-del-desarrollador)
-19. [Modo demo](#modo-demo)
+8. [API Endpoints](#api-endpoints)
+9. [Base de Datos](#base-de-datos)
+10. [Motor de IA](#motor-de-ia)
+11. [Módulo de Comunicación](#módulo-de-comunicación)
+12. [Estructura del proyecto](#estructura-del-proyecto)
+13. [Módulos en detalle](#módulos-en-detalle)
+14. [Control de acceso (RBAC)](#control-de-acceso-rbac)
+15. [IA & Automatizaciones](#ia--automatizaciones)
+16. [Radiología clínica](#radiología-clínica)
+17. [Flujos de negocio](#flujos-de-negocio)
+18. [Seguridad](#seguridad)
+19. [Deployment & Infra](#deployment--infra)
+20. [Troubleshooting](#troubleshooting)
+21. [Performance & Monitoring](#performance--monitoring)
+22. [Known Issues & Roadmap](#known-issues--roadmap)
+23. [Contributing](#contributing)
+24. [FAQs](#faqs)
 
 ---
 
@@ -113,6 +118,103 @@ Construida con React 19 · TypeScript 5.8 · Vite 6 · Tailwind CSS, conectada a
 | Automatización | n8n | 30 workflows JSON |
 | Infra | Docker Compose + Nginx | Producción en `192.168.1.46` (LAN clínica) |
 | Facturación | TBAI (Ticket BAI Vasco) | — |
+
+---
+
+## Requisitos
+
+- Node.js ≥ 18
+- npm ≥ 9
+- Docker & Docker Compose (para producción con EasyPanel)
+- PostgreSQL 15+ (con FDW configurado hacia GELITE en producción)
+- (Opcional) Instancia Evolution API, cuenta Chatwoot, Supabase project
+
+---
+
+## Instalación & Guía de Desarrollo
+
+### Setup local (desarrollo)
+
+```bash
+# Clonar repositorio
+git clone https://github.com/Manzanedodelgado/SmilePro-Studio.git
+cd SmilePro-Studio
+
+# Instalar dependencias
+npm install
+cd backend && npm install && cd ..
+
+# Copiar y rellenar variables de entorno
+cp .env.example .env
+cp backend/.env.example backend/.env
+
+# Compilar backend (TypeScript → JavaScript)
+cd backend && npm run build && cd ..
+
+# Iniciar servidor de desarrollo
+npm run dev          # Frontend en http://localhost:5176
+# En otra terminal:
+cd backend && npm run dev  # Backend en http://localhost:3000
+```
+
+### Desarrollo sin backend (fallback mode)
+
+Si no tienes el backend activo, la app funciona en modo demo:
+- Login automático con usuario dummy
+- Datos de demostración cargados en memoria
+- Perfectas para UI/UX y testing frontend
+
+```bash
+# Desactivar proxy de API
+# En vite.config.ts, comentar la sección de proxy
+npm run dev
+```
+
+### Database setup (local)
+
+```bash
+# Crear contenedor PostgreSQL para desarrollo
+docker run --name smilepro-dev \
+  -e POSTGRES_USER=smilepro \
+  -e POSTGRES_PASSWORD=dev123 \
+  -e POSTGRES_DB=smilestudio \
+  -p 5432:5432 \
+  -d postgres:15-alpine
+
+# Aplicar migraciones Prisma
+cd backend
+DATABASE_URL="postgresql://smilepro:dev123@localhost:5432/smilestudio" \
+  npx prisma migrate deploy
+
+# (Opcional) Seed de datos de demo
+npx ts-node prisma/seed.ts
+```
+
+### Tests (⚠️ Actualmente 0% coverage, ver Roadmap)
+
+```bash
+# Tests unitarios (sin correr actualmente — planned)
+npm run test
+
+# Tests e2e (Playwright)
+npm run test:e2e
+
+# Cobertura
+npm run test:coverage
+```
+
+### Build para producción
+
+```bash
+# Frontend
+npm run build           # dist/ ready para Nginx
+npm run preview         # previsualizar build
+
+# Backend (en Docker, automático — pero manual si necesario)
+cd backend
+npm run build           # dist/
+npm run db:migrate      # Prisma migrations
+```
 
 ---
 
@@ -866,7 +968,404 @@ Sin backend activo, la aplicación funciona con datos de muestra:
 
 ---
 
+## API Endpoints
+
+### Authentication
+- `POST /api/auth/login` — Login con email/contraseña, devuelve {accessToken, refreshToken, user}
+- `POST /api/auth/refresh` — Refresh token (rotación automática)
+- `POST /api/auth/logout` — Logout (agrega token a blacklist)
+
+### Patients
+- `GET /api/patients` — Lista de pacientes (paginada, searchable)
+- `GET /api/patients/:id` — Ficha individual del paciente
+- `POST /api/patients` — Crear nuevo paciente (admin/recepcion)
+- `PUT /api/patients/:id` — Actualizar datos paciente
+- `GET /api/patients/:id/medications` — Medicaciones y alergias
+
+### Appointments
+- `GET /api/appointments` — Lista de citas (filtros: fecha, gabinete, estado)
+- `POST /api/appointments` — Crear cita
+- `PUT /api/appointments/:id` — Editar cita
+- `POST /api/appointments/:id/confirm` — Confirmar cita
+- `POST /api/appointments/:id/cancel` — Cancelar cita
+
+### Clinical
+- `GET /api/clinical/soap/:patientId` — Historial SOAP
+- `POST /api/clinical/soap` — Crear nota SOAP
+- `GET /api/clinical/odontograma/:patientId` — Estado odontograma
+
+### IA
+- `POST /api/ai/chat` — Chat copiloto clínico
+- `POST /api/ai/whatsapp-agent` — IA agente WhatsApp
+- `POST /api/ai/analyze-image` — Análisis radiografías (Gemini Vision)
+- `GET /api/ai/metrics` — Métricas de uso IA (tokens, latencia, éxito)
+
+### Communication
+- `POST /api/communication/sendWhatsapp` — Enviar mensaje WhatsApp
+- `GET /api/communication/conversations` — Listar conversaciones
+- `GET /api/communication/messages/:conversationId` — Historial de mensajes
+- `POST /api/communication/webhook/evolution` — Webhook incoming Evolution API (sin auth)
+
+### Admin
+- `GET /api/admin/users` — Listar usuarios (admin only)
+- `POST /api/admin/users` — Crear usuario
+- `PUT /api/admin/users/:id` — Actualizar usuario
+
+### Health
+- `GET /api/health` — Health check (endpoint para Docker healthcheck)
+
+---
+
+## Base de Datos
+
+### Schema Prisma (100+ modelos)
+
+**Usuarios:** users, roles, permissions, audit_logs
+**Clínica:** centros, gabinetes, doctores, horarios_atencion
+**Pacientes:** pacientes, contactos_emergencia, medicaciones, alergias, alertas_pac
+**Citas:** citas, tratamientos_cita, documentos_cita
+**Radiología:** estudios_radiologicos, imagenes_dicom, anotaciones
+**Facturación:** facturas, movimientos_banco, deudas
+**Comunicación:** conversaciones_whatsapp, plantillas_mensajes
+**IA:** automatizaciones, flujos_conversacionales, plantillas_ia
+**Inventario:** articulos, lotes, movimientos_stock
+
+**Relaciones principales:**
+```
+pacientes (15.000+)
+  ├── citas (47.000+)
+  ├── notas_soap
+  ├── documentos
+  ├── medicaciones
+  ├── estudios_radiologicos
+  └── facturas
+
+doctores
+  ├── citas (asignado_a)
+  └── gabinetes
+```
+
+### Migraciones Prisma
+```bash
+# Ver estado
+npm run db:status
+
+# Crear nueva
+npm run db:migrate -- --name describe_change
+
+# Aplicar
+npm run db:migrate:deploy
+```
+
+---
+
+## Seguridad
+
+### Auditoría & Compliance
+
+✅ **Implementado:**
+- JWT con expiración 15 minutos + 7 días (refresh)
+- Bcrypt 12-round para passwords
+- RBAC 6 roles con granularidad
+- Helmet.js (CSP, HSTS, X-Frame-Options)
+- CORS configurado (env variable)
+- Rate limiting express-rate-limit
+- Validaciones Zod en todas las rutas
+- Logging centralizado Winston
+- Proxy centralizado para credenciales
+
+⚠️ **Mejoras críticas (Roadmap P0):**
+1. **Token blacklist → Redis** (actualmente en memoria)
+2. **Auditoría de deletions** (soft deletes + audit_log)
+3. **CSRF token validation**
+4. **Rate limiter por usuario**
+5. **HSTS preload** en producción
+
+### Manejo de secrets
+
+**Variables sensibles (NUNCA en git):**
+- JWT_SECRET (min 32 bytes aleatorios)
+- GROQ_API_KEY, GEMINI_API_KEY
+- GMAIL_CLIENT_SECRET
+- POSTGRES_PASSWORD
+
+**Gestión:** `.env` en .gitignore, encriptado en EasyPanel
+
+### SQL Injection Prevention
+
+Todo usa Prisma ORM o prepared statements:
+```typescript
+// ✅ Seguro
+const user = await prisma.users.findUnique({ where: { id } });
+
+// ❌ NUNCA
+const user = await db.query(`SELECT * FROM users WHERE id = ${id}`);
+```
+
+---
+
+## Deployment & Infra
+
+### Producción (EasyPanel)
+
+**Stack:**
+- Traefik 3.6.7 (load balancer + HTTPS)
+- Backend Node.js + Frontend React (Nginx)
+- PostgreSQL 15 / pgvector
+- Evolution API v2.3.7 (WhatsApp)
+- Chatwoot v4.11.0 (bandeja unificada)
+- n8n v1.123.21 (30+ workflows)
+- Redis 7 (cache)
+- Orthanc (DICOM PACS)
+
+**URLs:**
+- Frontend: https://gestion.rubiogarciadental.com
+- Admin: https://9idlgv.easypanel.host
+
+### Deploy
+
+```bash
+# SSH al servidor
+ssh jmd@192.168.1.46
+
+cd /home/jmd/SmilePro-Studio
+bash deploy.sh
+
+# Componentes:
+#   1. git pull
+#   2. npm install
+#   3. npm run build
+#   4. docker compose build --no-cache --parallel
+#   5. docker compose down && docker compose up -d
+#   6. Espera healthchecks (30-120 seg)
+```
+
+### Healthchecks
+
+```
+backend:     GET /api/health → 200 OK
+db:          pg_isready
+orthanc:     wget http://localhost:8042/system
+frontend:    HTTP 200 /index.html
+```
+
+### Backups
+
+```bash
+# PostgreSQL manual
+docker exec smileprostudio-db pg_dump -U smilepro smilestudio > backup.sql
+
+# Google Drive: automático (Service Account)
+# n8n workflows: JSON en n8n-workflows/ + export UI
+```
+
+---
+
+## Troubleshooting
+
+### Auth issues
+
+**"Unauthorized — JWT expired"**
+- Sin auth refresh, token vencido
+- Verificar JWT_SECRET en backend/.env
+- `docker compose logs backend | grep jwt`
+- sessionStorage.clear() en DevTools
+
+**"CORS error — response blocked"**
+- FRONTEND_URL ≠ URL real del frontend
+- Backend .env: `CORS_ORIGIN=<url_correcta>`
+- Reiniciar backend
+
+### Database issues
+
+**"Connection refused — PostgreSQL:5432"**
+- Contenedor DB no inicia
+- `docker compose logs db`
+- `docker compose down && docker compose up -d db`
+
+**"FDW error — cannot connect to GELITE"**
+- Verificar conectividad: `ping bbddsql.servemp3.com`
+- backend/.env: ROMEXIS_HOST, ROMEXIS_PORT
+- Test: `psql -h bbddsql.servemp3.com -l`
+
+### WhatsApp issues
+
+**"Mensajes no aparecen en UI"**
+- Socket.io listener desincronizado
+- `docker compose logs backend | grep socket`
+- Reiniciar: `docker compose restart backend`
+
+**"Evolution API disconnected"**
+- QR vencido o sesión perdida
+- Escanear QR nuevo en WhatsApp UI
+- O reiniciar: `docker compose restart evolution-api`
+
+### IA issues
+
+**"Groq API error 401"**
+- GROQ_API_KEY inválida
+- Generar nueva en https://console.groq.com
+- Actualizar backend/.env
+
+**"Gemini quota exceeded"**
+- Fallback automático a OpenRouter
+- Esperar 24h para reset
+- Monitorear `/api/ai/metrics`
+
+### Performance issues
+
+**"Agenda lenta con muchas citas"**
+- Falta virtual scrolling
+- Usar React.memo() en citas
+- Filtrar en BD: `?from=YYYYMMDD&to=YYYYMMDD`
+
+**"Images DICOM lentas"**
+- Bundle size alto (600KB)
+- Pre-cargar Cornerstone en background
+- Comprimir radiografías a JPG
+
+---
+
+## Performance & Monitoring
+
+### Métricas clave
+
+| Métrica | Ideal | Actual | Status |
+|---------|-------|--------|--------|
+| **Bundle size (gzip)** | <400 KB | ~600 KB | ⚠️ Alto |
+| **Test coverage** | >80% | 0% | 🔴 Crítico |
+| **Uptime SLA** | 99.9% | ? | ❓ |
+
+### Monitoring
+
+**Logs:**
+```bash
+docker compose logs -f backend
+docker compose logs backend | grep "ERROR"
+```
+
+**Métricas IA:**
+```bash
+curl http://localhost:3000/api/ai/metrics
+# { "groq_tokens": 4521, "latency_avg_ms": 456, "success_rate": 98.3% }
+```
+
+**Future:** Sentry, Datadog, Prometheus + Grafana, ELK
+
+---
+
+## Known Issues & Roadmap
+
+### 🔴 CRÍTICO (Q2 2026)
+
+1. **Token blacklist en memoria** — No escala multi-instancia → Redis
+2. **Sin auditoría de deletions** — GDPR: soft deletes + audit_log
+3. **API keys en logs** — Audit completed, redactar credenciales
+
+### 🟡 ALTO (Q3 2026)
+
+4. **0% test coverage** — Target 80% unit + 20% e2e
+5. **Sin CSRF tokens** — Validación CSRF
+6. **Componentes sin memoization** — Renders innecesarios
+7. **Zod version mismatch** — Frontend 4.3.6 vs Backend 3.22.4
+
+### 🟢 MEDIANO (Q4 2026)
+
+8. **Sin virtual scrolling** — Listas >1000 items lentas
+9. **Bundle oversized** — 600 KB → 400 KB
+10. **Sin Swagger/OpenAPI** — API documentation
+11. **Socket.io sin throttling** — Potencial saturación
+
+### Ideas futuras
+
+- [ ] Multi-clínica (multi-tenancy)
+- [ ] Mobile app (React Native)
+- [ ] Offline mode (Service Worker)
+- [ ] Two-factor auth (2FA)
+- [ ] SSO (Active Directory)
+
+---
+
+## Contributing
+
+### Workflow
+
+1. Fork repository
+2. Create feature branch: `git checkout -b feature/description`
+3. Commit claro: `feat: add X` / `fix: Y` / `docs: Z`
+4. Push: `git push origin feature/description`
+5. Pull Request → review → merge
+
+### Código
+
+- ESLint + Prettier enforced
+- Prisma migrations para schema changes
+- NUNCA commit .env, API keys, datos sensibles
+- Tests unitarios para lógica crítica
+- Actualizar README si añades features
+
+---
+
+## FAQs
+
+### "¿Cómo cambio el logo?"
+Edita `public/brand/`, se referencia en App.tsx e index.html.
+
+### "¿Cómo agrego un nuevo módulo?"
+1. Crear vista en `src/views/`
+2. Agregar en `navigation.ts`
+3. Crear rutas backend `backend/src/modules/`
+4. Agregar ícono Lucide + estilos Tailwind
+
+### "¿Se sincronizan datos GELITE automáticamente?"
+Sí, FDW (Foreign Data Wrapper) crea vistas en tiempo real. Sin intermediarios.
+
+### "¿Sin Evolution API?"
+Sí funciona, módulo WhatsApp se deshabilita pero resto OK.
+
+### "¿Export de datos?"
+Dashboard y Gestoría permiten CSV/PDF. Datos también en Google Drive.
+
+### "¿Modo oscuro?"
+No actualmente. Planned con Tailwind `dark:` classes.
+
+### "¿Personalizar colores?"
+Sí, en `tailwind.config.js` — sección tema colors.
+
+---
+
+## Changelog
+
+### v2.0.0 (2 abr 2026) — Current
+- ✅ Arquitectura completa frontend + backend
+- ✅ 100+ modelos Prisma
+- ✅ 30+ workflows n8n
+- ✅ IA (Groq, Gemini, OpenRouter)
+- ✅ Evolution API + Chatwoot
+- ✅ DICOM Cornerstone3D
+- ⚠️ 0 tests, deuda técnica moderada
+
+### v1.0.0 (referencia histórica)
+- MVP con features básicos
+
+---
+
 ## Licencia
 
-Propietario — uso exclusivo **Rubio-García Dental / SmilePro Studio**.
-Prohibida la reproducción o distribución sin autorización expresa.
+Privado © 2026 Rubio García Dental. Derechos reservados.
+
+---
+
+## Soporte & Contacto
+
+- 🐛 **Bugs:** jmd@192.168.1.46 o GitLab issues
+- 📚 **Docs:** WEBHOOK_*.md, WHATSAPP_DEBUG.md
+- 🚀 **Deploy:** administrador servidor
+- 🤖 **IA Dental:** contactar dentista responsable
+
+---
+
+**Última actualización:** 2 de abril de 2026  
+**Versión README:** 2.3  
+**Estado:** Production-ready con observaciones críticas (ver Seguridad)  
+**Análisis exhaustivo:** Disponible en análisis-2026-04-02.md

@@ -1,0 +1,139 @@
+version: '3.9'
+
+# ─── SmilePro Studio · Docker Stack (compatible con EasyPanel) ─────────────
+# Nota: Docker Stack NO soporta depends_on, build, pull_policy, env_file
+# Solución: Usar imágenes pre-buildean, variables planas
+
+services:
+
+  # ── PostgreSQL 15 ──────────────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    restart: on-failure
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER:-smilepro}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smilepro}
+      POSTGRES_DB:       ${POSTGRES_DB:-smilepro}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-smilepro} -d ${POSTGRES_DB:-smilepro}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - smilepro
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+  # ── Backend Node.js ───────────────────────────────────────────────────────
+  backend:
+    image: smilepro-studio-backend:local
+    restart: on-failure
+    environment:
+      NODE_ENV:     production
+      PORT:         3000
+      POSTGRES_USER:     ${POSTGRES_USER:-smilepro}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smilepro}
+      POSTGRES_DB:       ${POSTGRES_DB:-smilepro}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-smilepro}:${POSTGRES_PASSWORD:-smilepro}@db:5432/${POSTGRES_DB:-smilepro}?schema=public
+      CORS_ORIGIN:  ${FRONTEND_URL:-https://gestion.rubiogarciadental.com}
+      # Backend env vars (cargar desde .env manualmente o aquí)
+      NODE_ENV: production
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+      EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-chatwoot_link}
+      EVOLUTION_INSTANCE_TOKEN: ${EVOLUTION_INSTANCE_TOKEN}
+      CHATWOOT_URL: ${CHATWOOT_URL}
+      CHATWOOT_ACCOUNT_ID: ${CHATWOOT_ACCOUNT_ID:-1}
+      CHATWOOT_INBOX_ID: ${CHATWOOT_INBOX_ID:-6}
+      CHATWOOT_TOKEN: ${CHATWOOT_TOKEN}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GMAIL_CLIENT_ID: ${GMAIL_CLIENT_ID}
+      GMAIL_CLIENT_SECRET: ${GMAIL_CLIENT_SECRET}
+      GMAIL_USER_EMAIL: ${GMAIL_USER_EMAIL}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      GDRIVE_FOLDER_ID: ${GDRIVE_FOLDER_ID}
+      GDRIVE_SA_KEY_JSON: ${GDRIVE_SA_KEY_JSON}
+      ROMEXIS_HOST: ${ROMEXIS_HOST}
+      ROMEXIS_PORT: ${ROMEXIS_PORT:-1433}
+      ROMEXIS_USER: ${ROMEXIS_USER}
+      ROMEXIS_PASS: ${ROMEXIS_PASS}
+      ROMEXIS_DB: ${ROMEXIS_DB}
+    volumes:
+      - uploads:/app/uploads
+      - ia-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+    command: sh -c "npx prisma migrate deploy && dumb-init node dist/server.js"
+    networks:
+      - smilepro
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      update_config:
+        parallelism: 1
+        delay: 10s
+
+  # ── Frontend Nginx + React ────────────────────────────────────────────────
+  frontend:
+    image: smilepro-studio-frontend:local
+    restart: on-failure
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    networks:
+      - smilepro
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+  # ── Orthanc — Servidor DICOM ──────────────────────────────────────────────
+  orthanc:
+    image: orthancteam/orthanc:latest
+    restart: on-failure
+    volumes:
+      - orthanc-data:/var/lib/orthanc/db
+      - ./orthanc.json:/etc/orthanc/orthanc.json:ro
+    ports:
+      - "127.0.0.1:4242:4242"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8042/system || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - smilepro
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+# ── Red interna ───────────────────────────────────────────────────────────────
+networks:
+  smilepro:
+    driver: bridge
+
+# ── Volúmenes persistentes ────────────────────────────────────────────────────
+volumes:
+  pgdata:
+  uploads:
+  ia-data:
+  orthanc-data:

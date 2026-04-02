@@ -1,0 +1,65 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: smilepro
+      POSTGRES_PASSWORD: smilepro
+      POSTGRES_DB: smilepro
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - smilepro-app
+    deploy:
+      labels:
+        - com.example.description='SmilePro Database'
+
+  backend:
+    image: smilepro-studio-backend:local
+    environment:
+      DATABASE_URL: postgresql://smilepro:smilepro@db:5432/smilepro?schema=public
+      NODE_ENV: production
+      PORT: 3000
+      CORS_ORIGIN: https://gestion.rubiogarciadental.com
+    ports:
+      - '3001:3000'
+    networks:
+      - smilepro-app
+    depends_on:
+      - db
+    deploy:
+      labels:
+        - com.example.description='SmilePro Backend'
+
+  frontend:
+    image: smilepro-studio-frontend:local
+    ports:
+      - '8080:80'
+    networks:
+      - smilepro-app
+    depends_on:
+      - backend
+    deploy:
+      labels:
+        - com.example.description='SmilePro Frontend'
+        - traefik.http.routers.smilepro.rule=Host(`gestion.rubiogarciadental.com`)
+        - traefik.http.services.smilepro.loadbalancer.server.port=80
+
+  orthanc:
+    image: orthancteam/orthanc:latest
+    ports:
+      - '4242:4242'
+    volumes:
+      - orthanc-data:/var/lib/orthanc/db
+      - ./orthanc.json:/etc/orthanc/orthanc.json:ro
+    networks:
+      - smilepro-app
+
+networks:
+  smilepro-app:
+    driver: bridge
+
+volumes:
+  pgdata:
+  orthanc-data:
