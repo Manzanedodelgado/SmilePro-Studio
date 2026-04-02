@@ -104,7 +104,7 @@ Construida con React 19 · TypeScript 5.8 · Vite 6 · Tailwind CSS, conectada a
 | Parser DICOM | dicom-parser | 1.8.21 |
 | Backend | Node.js 20 + Express 4 + TypeScript | ESM nativo, `tsx` en dev |
 | ORM | Prisma | 6.4.0 → PostgreSQL 16 |
-| Schema DB | 3.195 líneas, 100+ modelos | Herencia Gesden/GELITE + modelos nuevos |
+| Schema DB | 3.249 líneas, 168 modelos | Herencia Gesden/GELITE + modelos nuevos |
 | IA — WhatsApp | Groq `llama-3.3-70b-versatile` | Fallback: OpenRouter |
 | IA — Copiloto clínico | Gemini `gemini-2.5-flash-lite` | Fallback: OpenRouter |
 | IA — Visión (Rx) | Gemini `gemini-2.5-flash` | Análisis de radiografías |
@@ -412,13 +412,17 @@ src/
 │   ├── AutomationEditor.tsx         # Editor YAML/visual de flujos
 │   ├── Plantillas.tsx               # Plantillas WhatsApp, Email, SMS
 │   ├── DocumentosClinica.tsx        # Consentimientos y cuestionarios digitales
-│   └── IAChatbot.tsx                # Chat de prueba en tiempo real
+│   ├── IAChatbot.tsx                # Chat de prueba en tiempo real
+│   ├── CentinelaPanel.tsx           # Panel de monitorización Centinela
+│   └── MetricasComunicacion.tsx     # Métricas de comunicación y canales
 │
 ├── components/
 │   ├── Sidebar.tsx                  # Menú lateral expandible + widgets operativa
 │   ├── Header.tsx                   # Navegación global, búsqueda, notificaciones
 │   ├── ErrorBoundary.tsx            # Captura global de errores
-│   └── UI.tsx                       # Componentes base: StatCard, Badge, etc.
+│   ├── UI.tsx                       # Componentes base: StatCard, Badge, etc.
+│   ├── CommandPalette.tsx           # Paleta de comandos (⌘K / Ctrl+K)
+│   └── BudgetModal.tsx              # Modal de presupuestos rápido
 │
 ├── components/pacientes/
 │   ├── SOAPEditor.tsx               # Editor SOAP + EVA + análisis automático
@@ -429,9 +433,17 @@ src/
 │   ├── Documentos.tsx               # Consentimientos y PDFs clínicos
 │   ├── EntradasMedicas.tsx          # Medicamentos + alergias (Supabase/Vademecum)
 │   ├── AlertasPanel.tsx             # Alertas médicas, legales y financieras
+│   ├── AnamnesisPanel.tsx           # Anamnesis interactiva (formulario completo)
 │   ├── ContactosPanel.tsx           # Contactos de emergencia
-│   ├── QuestionnairePanel.tsx       # Anamnesis interactiva
-│   └── PatientSearchModal.tsx       # Búsqueda de pacientes + crear nuevo
+│   ├── QuestionnairePanel.tsx       # Cuestionario de salud embebido
+│   ├── PatientSearchModal.tsx       # Búsqueda de pacientes + crear nuevo
+│   ├── PostSOAPActions.tsx          # Acciones post-consulta (receta, seguimiento)
+│   ├── PresupuestoModal.tsx         # Modal de presupuestos en ficha paciente
+│   ├── RecetasTab.tsx               # Pestaña de recetas médicas
+│   ├── RomexisGallery.tsx           # Galería de imágenes Romexis
+│   ├── RomexisLaunchButton.tsx      # Botón para abrir Planmeca Romexis
+│   ├── hallazgos.ts                 # Catálogo de hallazgos clínicos
+│   └── toothPaths.ts                # Paths SVG de piezas dentales
 │
 ├── components/radiologia/
 │   ├── DicomViewer.tsx              # Visor DICOM Cornerstone3D (lazy)
@@ -445,25 +457,53 @@ src/
 │   ├── pacientes.service.ts         # Búsqueda y creación de pacientes
 │   ├── soap.service.ts              # Notas SOAP / historial clínico
 │   ├── odontograma.service.ts       # Persistencia odontograma
+│   ├── periodontograma.service.ts   # Persistencia sondaje periodontal
 │   ├── agenda-config.service.ts     # Catálogos dinámicos FDW
+│   ├── config-agenda.service.ts     # Configuración adicional de agenda
 │   ├── tratamientos.service.ts      # Catálogo con caché
+│   ├── tratamientos-pendientes.service.ts # Tratamientos pendientes por paciente
 │   ├── imagen.service.ts            # Gestión estudios radiológicos
 │   ├── dicom.service.ts             # Parser DICOM binario puro
-│   ├── cornerstone.init.ts          # Inicialización Cornerstone3D
 │   ├── romexis.service.ts           # Integración Planmeca Romexis
+│   ├── romexis-config.service.ts    # Configuración conexión Romexis
 │   ├── evolution.service.ts         # WhatsApp (Evolution API + Chatwoot)
+│   ├── whatsapp.service.ts          # Helpers de WhatsApp
 │   ├── ia-dental.service.ts         # Chat Groq LLaMA 3.3 vía proxy
 │   ├── ia-control.service.ts        # Pausa / reanuda chatbot IA Dental
 │   ├── automations.service.ts       # CRUD automatizaciones
+│   ├── workflow-engine.service.ts   # Motor de flujos conversacionales (64KB)
+│   ├── pre-cita-workflow.service.ts # Flujos automáticos pre-cita
+│   ├── recordatorios.service.ts     # Sistema de recordatorios programados
 │   ├── facturacion.service.ts       # Facturas, movimientos bancarios
+│   ├── invoice-parser.service.ts    # Parser de facturas con IA
 │   ├── inventario.service.ts        # Stock, lotes, trazabilidad
+│   ├── presupuestos.service.ts      # CRUD presupuestos (backend + localStorage)
+│   ├── recetas.service.ts           # Recetas médicas
 │   ├── supabase.service.ts          # Medicaciones y alergias (RLS)
 │   ├── gdrive.service.ts            # Fotos clínicas en Google Drive
 │   ├── gmail.service.ts             # OAuth Gmail, parsing facturas
 │   ├── notificaciones.service.ts    # Alertas operativas en tiempo real
 │   ├── audit.service.ts             # Logging de acciones de usuario
+│   ├── busqueda-unificada.service.ts # Búsqueda global cross-módulos
+│   ├── catalogs.service.ts          # Catálogos clínicos
+│   ├── clinical.service.ts          # Servicio clínico genérico
+│   ├── clinical-memory.service.ts   # Memoria contextual clínica
+│   ├── contactos.service.ts         # Gestión de contactos
+│   ├── documentos.service.ts        # Gestión de documentos clínicos
+│   ├── documentos-firmados.service.ts # Documentos con firma digital
+│   ├── firma-digital.service.ts     # Servicio de firma digital
+│   ├── questionnaire.service.ts     # Cuestionarios de salud
+│   ├── paciente-activo.ts           # Estado del paciente activo en sesión
 │   ├── logger.ts                    # Sistema de logs centralizado
 │   └── db.ts                        # authFetch + helpers PostgREST
+│
+├── centinela/
+│   ├── engine.ts                    # Motor de monitorización Centinela
+│   ├── simulator.ts                 # Simulador de alertas Centinela
+│   └── types.ts                     # Tipos del sistema Centinela
+│
+├── workers/
+│   └── dicom.worker.ts              # Web Worker para procesamiento DICOM
 │
 ├── context/
 │   └── AuthContext.tsx              # Proveedor de autenticación (JWT sessionStorage)
@@ -929,9 +969,10 @@ Al navegar entre módulos, `requestedNumPac` en `App.tsx` puede ser cualquiera d
 
 ### Módulos legacy vs. modernos en el backend
 
-- `backend/src/modules/pacientes/` — módulo legado (tablas Gesden directas)
 - `backend/src/modules/patients/` — módulo moderno (modelo `Patient` Prisma con UUID)
-- `backend/src/modules/legacy/` — rutas `/rest/v1/*` para compatibilidad Gesden
+- `backend/src/modules/legacy/` — rutas `/rest/v1/*` para compatibilidad Gesden (tablas Gesden directas)
+
+> **Nota:** No existe un módulo `pacientes/` separado. Las rutas legado se gestionan íntegramente desde `legacy/legacy.routes.ts`.
 
 ### Acceso a base de datos en desarrollo
 
