@@ -3247,3 +3247,37 @@ model PatientAllergy {
   @@index([numPac])
   @@map("patient_allergies")
 }
+
+// ── Audit Log (GDPR Compliance) ─────────────────────────────────────────────
+// Tracks all data mutations (CREATE, UPDATE, DELETE) with before/after snapshots.
+// Required for GDPR art. 17 (right to erasure) — proof that deletion occurred.
+model AuditLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  userEmail  String?  @map("user_email")
+  action     String                          // CREATE | UPDATE | DELETE
+  entity     String                          // patients | clinical_records | treatments...
+  entityId   String   @map("entity_id")      // ID of the affected record
+  dataBefore Json?    @map("data_before")    // Snapshot before change (null on CREATE)
+  dataAfter  Json?    @map("data_after")     // Snapshot after change (null on DELETE)
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ── JWT Blacklist ────────────────────────────────────────────────────────────
+// Formalizes the raw SQL table used for token revocation.
+// Primary storage is Redis (SETEX with TTL); this is the PostgreSQL fallback.
+model JwtBlacklist {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("jwt_blacklist")
+}

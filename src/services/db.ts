@@ -28,11 +28,16 @@ export const isDbConfigured = (): boolean => typeof API_URL === 'string';
 // Todos los servicios que llaman a endpoints protegidos deben usar esto.
 export const authFetch = (url: string, options: RequestInit = {}): Promise<Response> => {
     const token = sessionStorage.getItem('sb_auth_token') ?? '';
+    const csrfToken = sessionStorage.getItem('csrf_token') ?? '';
     const headers = new Headers(options.headers ?? {});
     if (!headers.has('Content-Type') && options.method && options.method !== 'GET') {
         headers.set('Content-Type', 'application/json');
     }
     if (token) headers.set('Authorization', `Bearer ${token}`);
+    // CSRF protection: include token on state-changing requests
+    if (csrfToken && options.method && options.method !== 'GET') {
+        headers.set('X-CSRF-Token', csrfToken);
+    }
     return fetch(url, { ...options, headers });
 };
 

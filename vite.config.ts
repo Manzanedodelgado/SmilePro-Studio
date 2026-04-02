@@ -32,12 +32,20 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
+    // Increase chunk size warning threshold (Cornerstone is large by nature)
+    chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
         manualChunks: {
-          react:      ['react', 'react-dom'],
-          lucide:     ['lucide-react'],
-          cornerstone:['@cornerstonejs/core', '@cornerstonejs/tools'],
+          // Core: always loaded (small)
+          react:       ['react', 'react-dom'],
+          // Icons: tree-shaken, loaded with UI
+          lucide:      ['lucide-react'],
+          // Heavy DICOM libs: loaded only when Radiología module is used (lazy)
+          cornerstone: ['@cornerstonejs/core', '@cornerstonejs/tools', '@cornerstonejs/dicom-image-loader'],
+          dicom:       ['dicom-parser'],
+          // Socket.io: loaded when real-time features init
+          socketio:    ['socket.io-client'],
         },
       },
     },

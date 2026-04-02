@@ -50,6 +50,12 @@ export const signIn = async (email: string, password: string): Promise<AuthSessi
             const data = await response.json();
             if (data.success && data.data) {
                 const result = data.data;
+
+                // Store CSRF token for mutation requests
+                if (result.csrfToken) {
+                    sessionStorage.setItem('csrf_token', result.csrfToken);
+                }
+
                 return {
                     access_token: result.accessToken,
                     refresh_token: result.refreshToken,
@@ -112,15 +118,18 @@ export const getUser = async (token: string): Promise<AuthUser | null> => {
 export const signOut = async (token: string): Promise<boolean> => {
     if (!token || token === 'dummy_access_token') return true;
     try {
+        const csrfToken = sessionStorage.getItem('csrf_token') ?? '';
         await fetch(`${API_BASE_URL}/auth/logout`, {
             method: 'POST',
             headers: {
                 ...headers,
-                Authorization: `Bearer ${token}`
+                Authorization: `Bearer ${token}`,
+                'X-CSRF-Token': csrfToken,
             },
         });
     } catch {
         // Silent — si falla la red el localStorage se limpia igual
     }
+    sessionStorage.removeItem('csrf_token');
     return true;
 };

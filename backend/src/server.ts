@@ -4,12 +4,15 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { config } from './config/index.js';
 import { logger } from './config/logger.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { initSocket } from './config/socket.js';
 import { startAutomationEngine } from './modules/ai/automation.engine.js';
+import { getRedis, closeRedis } from './config/redis.js';
+import { csrfProtection } from './middleware/csrf.js';
 
 // ─── Module Routes ──────────────────────────────────────
 import authRoutes from "./modules/auth/auth.routes";
@@ -38,11 +41,15 @@ initSocket(httpServer);
 // ─── Global Middleware ──────────────────────────────────
 app.use(helmet());
 app.use(cors({ origin: config.CORS_ORIGIN, credentials: true }));
+app.use(cookieParser());
 app.use(express.json({
     limit: '10mb',
     verify: (_req: any, _res, buf) => { (_req as any).rawBody = buf.toString(); },
 }));
 app.use(express.urlencoded({ extended: true }));
+
+// CSRF protection — validates X-CSRF-Token header on state-changing requests
+app.use('/api/', csrfProtection);
 
 // HTTP request logging
 app.use(morgan('short', {
@@ -72,6 +79,24 @@ app.get('/api/health', (_req, res) => {
         },
     });
 });
+
+// ─── Swagger/OpenAPI Documentation ──────────────────────
+// Serves interactive API docs at /api/docs
+// Uses dynamic import to avoid crash if swagger packages aren't installed
+(async () => {
+    try {
+        const swaggerUi = await import('swagger-ui-express');
+        const { swaggerSpec } = await import('./config/swagger.js');
+        app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+            customSiteTitle: 'SmilePro Studio API',
+            customCss: '.swagger-ui .topbar { display: none }',
+        }));
+        app.get('/api/docs.json', (_req, res) => res.json(swaggerSpec));
+        logger.info('[SWAGGER] API docs available at /api/docs');
+    } catch {
+        logger.warn('[SWAGGER] swagger-ui-express not installed — /api/docs disabled');
+    }
+})();
 
 // ─── API Routes ─────────────────────────────────────────
 app.use('/api/auth', authRoutes);
@@ -116,12 +141,14 @@ app.use(errorHandler);
 // ─── Start Server ───────────────────────────────────────
 httpServer.listen(config.PORT, () => {
     logger.info(`🦷 Smile Pro 2026 API running on port ${config.PORT} [${config.NODE_ENV}]`);
+    getRedis(); // Initialize Redis connection (JWT blacklist, cache)
     startAutomationEngine();
 });
 
 // ─── Graceful Shutdown ──────────────────────────────────
-const shutdown = (signal: string) => {
+const shutdown = async (signal: string) => {
     logger.info(`${signal} received — shutting down gracefully...`);
+    await closeRedis();
     httpServer.close(() => {
         logger.info('Server closed');
         process.exit(0);
@@ -154,3 +181,31 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
 export default app;
+
+// ── Uptime Kuma → WhatsApp Alert Webhook ──
+app.post('/api/uptime-webhook', async (req, res) => {
+    try {
+        const { msg, heartbeat, monitor } = req.body;
+        const alertText = heartbeat?.status === 0
+            ? `🔴 *CAÍDO*: ${monitor?.name || 'Servicio'}\n⏰ ${new Date().toLocaleString('es-ES')}\n📝 ${msg || 'Sin detalles'}`
+            : `🟢 *RECUPERADO*: ${monitor?.name || 'Servicio'}\n⏰ ${new Date().toLocaleString('es-ES')}\n📝 ${msg || 'Sin detalles'}`;
+
+        const evoResponse = await fetch('http://evolution-api:8080/message/sendText/chatwoot_link', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': '429683C4C977415CAAFCCE10F7D57E11',
+            },
+            body: JSON.stringify({
+                number: '34648085696',
+                text: alertText,
+            }),
+        });
+        const result = await evoResponse.json();
+        logger.info('[UPTIME-KUMA] Alert sent via WhatsApp', { monitor: monitor?.name, status: heartbeat?.status });
+        res.json({ success: true, result });
+    } catch (err: any) {
+        logger.error('[UPTIME-KUMA] Failed to send WhatsApp alert', { error: err.message });
+        res.status(500).json({ success: false, error: err.message });
+    }
+});

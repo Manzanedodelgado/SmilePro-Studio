@@ -2,6 +2,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { TreatmentsService } from './treatments.service';
 import { logger } from '../../config/logger.js';
+import { logAudit } from '../../middleware/audit.js';
 
 export class TreatmentsController {
     static async list(req: Request, res: Response, next: NextFunction) {
@@ -30,7 +31,12 @@ export class TreatmentsController {
     }
 
     static async remove(req: Request, res: Response, next: NextFunction) {
-        try { await TreatmentsService.delete(req.params.id); res.json({ success: true, data: { message: 'Tratamiento desactivado' } }); }
+        try {
+            const dataBefore = await TreatmentsService.findById(req.params.id).catch(() => null);
+            await TreatmentsService.delete(req.params.id);
+            logAudit({ req, action: 'DELETE', entity: 'treatments', entityId: req.params.id, dataBefore, dataAfter: { ...dataBefore as any, active: false } });
+            res.json({ success: true, data: { message: 'Tratamiento desactivado' } });
+        }
         catch (error) { next(error); }
     }
 }

@@ -1,6 +1,8 @@
 // ─── Clinical Controller ──────────────────────────────────
 import { Request, Response, NextFunction } from 'express';
 import { ClinicalService } from './clinical.service.js';
+import prisma from '../../config/database.js';
+import { logAudit } from '../../middleware/audit.js';
 
 export class ClinicalController {
     // ── Entradas médicas GELITE (TtosMed) ──────────────────
@@ -67,7 +69,15 @@ export class ClinicalController {
     // ── Eliminar nota SOAP ─────────────────────────────────
     static async deleteRecord(req: Request, res: Response, next: NextFunction) {
         try {
+            // GDPR: capture record before deletion
+            let dataBefore: unknown = null;
+            try { dataBefore = await prisma.clinicalRecord.findUnique({ where: { id: req.params.id } }); } catch {}
+
             await ClinicalService.deleteRecord(req.params.id);
+
+            // Audit: clinical record deletion
+            logAudit({ req, action: 'DELETE', entity: 'clinical_records', entityId: req.params.id, dataBefore });
+
             res.json({ success: true });
         } catch (error) { next(error); }
     }

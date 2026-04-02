@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { PatientsService } from './patients.service';
 import { logger } from '../../config/logger.js';
 import { createPatientFolder } from '../gdrive/gdrive.service';
+import { logAudit } from '../../middleware/audit.js';
 
 export class PatientsController {
     static async list(req: Request, res: Response, next: NextFunction) {
@@ -40,6 +41,11 @@ export class PatientsController {
                 });
             }
 
+            // Audit: patient creation
+            if (patient) {
+                logAudit({ req, action: 'CREATE', entity: 'pacientes', entityId: patient.NumPac ?? String(patient.IdPac), dataAfter: patient });
+            }
+
             res.status(201).json({ success: true, data: patient });
         } catch (error) { next(error); }
     }
@@ -55,8 +61,16 @@ export class PatientsController {
 
     static async remove(req: Request, res: Response, next: NextFunction) {
         try {
+            // GDPR: capture record before deletion for audit trail
+            let dataBefore: unknown = null;
+            try { dataBefore = await PatientsService.findById(req.params.id); } catch {}
+
             await PatientsService.delete(req.params.id);
             logger.info(`Paciente eliminado: ${req.params.id}`);
+
+            // Audit: patient deletion with full record snapshot
+            logAudit({ req, action: 'DELETE', entity: 'pacientes', entityId: req.params.id, dataBefore });
+
             res.json({ success: true, data: { message: 'Paciente eliminado' } });
         } catch (error) { next(error); }
     }

@@ -204,14 +204,15 @@ const PatientSearchModal: React.FC<PatientSearchModalProps> = ({ isOpen, onClose
                                         </span>
                                     </div>
 
-                                    {/* Patient list */}
-                                    <div className="py-1">
-                                        {filtered.map((p, idx) => (
+                                    {/* Patient list — windowed rendering for large result sets */}
+                                    <div className="py-1" style={{ maxHeight: '45vh', overflowY: 'auto' }}>
+                                        {filtered.slice(0, 100).map((p, idx) => (
                                             <button 
                                                 key={p.numPac} 
                                                 onClick={() => { onSelect(p); onClose(); }}
                                                 onMouseEnter={() => setSelectedIdx(idx)}
                                                 className={`w-full flex items-center gap-3 px-5 py-3 text-left transition-colors ${idx === selectedIdx ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+                                                style={{ contentVisibility: 'auto', containIntrinsicSize: '0 56px' }}
                                             >
                                                 {/* Avatar */}
                                                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-[13px] font-black flex-shrink-0 ${idx === selectedIdx ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'bg-slate-100 text-slate-500'}`}>
@@ -246,6 +247,11 @@ const PatientSearchModal: React.FC<PatientSearchModalProps> = ({ isOpen, onClose
                                                 <ChevronRight className={`w-4 h-4 flex-shrink-0 ${idx === selectedIdx ? 'text-blue-500' : 'text-slate-300'}`} />
                                             </button>
                                         ))}
+                                        {filtered.length > 100 && (
+                                            <div className="px-5 py-3 text-center text-[11px] text-slate-400 font-medium bg-slate-50/50 border-t border-slate-100">
+                                                Mostrando 100 de {filtered.length} resultados. Refina tu búsqueda para ver más.
+                                            </div>
+                                        )}
                                     </div>
 
                                     {filtered.length === 0 && !searching && (

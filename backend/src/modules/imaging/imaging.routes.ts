@@ -6,6 +6,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { authenticate } from '../../middleware/auth';
+import { logAudit } from '../../middleware/audit.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -119,12 +120,15 @@ router.put('/studies/:id', (req: Request, res: Response) => {
 
 // DELETE /api/imaging/studies/:id
 router.delete('/studies/:id', (req: Request, res: Response) => {
+    const dataBefore = _studies.find(s => s.id === req.params.id);
     const before = _studies.length;
     _studies = _studies.filter(s => s.id !== req.params.id);
     if (_studies.length === before) {
         return res.status(404).json({ success: false, error: { message: 'Estudio no encontrado' } });
     }
     saveToDisk();
+    // Audit: imaging study deletion
+    logAudit({ req, action: 'DELETE', entity: 'imaging_studies', entityId: req.params.id, dataBefore });
     res.json({ success: true, data: { id: req.params.id } });
 });
 

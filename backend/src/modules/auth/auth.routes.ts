@@ -17,15 +17,111 @@ const loginLimiter = rateLimit({
 
 const router = Router();
 
-// Public
+/**
+ * @swagger
+ * /auth/login:
+ *   post:
+ *     summary: Login con email y contraseña
+ *     tags: [Authentication]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/LoginRequest'
+ *     responses:
+ *       200:
+ *         description: Login exitoso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoginResponse'
+ *       429:
+ *         description: Demasiados intentos de login
+ */
 router.post('/login', loginLimiter, validate(loginSchema), AuthController.login);
+
+/**
+ * @swagger
+ * /auth/refresh:
+ *   post:
+ *     summary: Renovar tokens con refresh token
+ *     tags: [Authentication]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [refreshToken]
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Tokens renovados
+ */
 router.post('/refresh', validate(refreshTokenSchema), AuthController.refresh);
 
-// Authenticated
+/**
+ * @swagger
+ * /auth/me:
+ *   get:
+ *     summary: Obtener perfil del usuario autenticado
+ *     tags: [Authentication]
+ *     responses:
+ *       200:
+ *         description: Perfil del usuario
+ *       401:
+ *         description: Token inválido o expirado
+ */
 router.get('/me', authenticate, AuthController.me);
+
+/**
+ * @swagger
+ * /auth/logout:
+ *   post:
+ *     summary: Cerrar sesión (revocar token)
+ *     tags: [Authentication]
+ *     responses:
+ *       200:
+ *         description: Sesión cerrada — token añadido a blacklist
+ */
 router.post('/logout', authenticate, AuthController.logout);
 
-// Admin only
+/**
+ * @swagger
+ * /auth/register:
+ *   post:
+ *     summary: Registrar nuevo usuario (solo admin)
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password, name]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 minLength: 8
+ *               name:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *                 enum: [admin, dentist, reception, hygienist, auxiliary, manager]
+ *     responses:
+ *       201:
+ *         description: Usuario registrado
+ *       403:
+ *         description: Solo administradores pueden registrar usuarios
+ */
 router.post('/register', authenticate, requireRole('admin'), validate(registerSchema), AuthController.register);
 
 export default router;

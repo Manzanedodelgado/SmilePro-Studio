@@ -1331,22 +1331,22 @@ curl http://localhost:3000/api/ai/metrics
 
 ### 🔴 CRÍTICO (Q2 2026)
 
-1. **Token blacklist en memoria** — No escala multi-instancia → Redis
-2. **Sin auditoría de deletions** — GDPR: soft deletes + audit_log
+1. ~~**Token blacklist en memoria**~~ ✅ **RESUELTO** — Redis primary (SETEX + TTL) + PostgreSQL fallback (`config/redis.ts`)
+2. ~~**Sin auditoría de deletions**~~ ✅ **RESUELTO** — Modelo `AuditLog` en Prisma + `middleware/audit.ts` integrado en todas las rutas DELETE (patients, clinical, treatments, imaging). Cumple GDPR art. 17.
 3. **API keys en logs** — Audit completed, redactar credenciales
 
 ### 🟡 ALTO (Q3 2026)
 
-4. **0% test coverage** — Target 80% unit + 20% e2e
-5. **Sin CSRF tokens** — Validación CSRF
+4. ~~**0% test coverage**~~ 🔧 **EN PROGRESO** — Jest + ts-jest configurado (`jest.config.ts`), 3 suites de tests: `auth.service.test.ts`, `auth.middleware.test.ts`, `audit.middleware.test.ts`
+5. ~~**Sin CSRF tokens**~~ ✅ **RESUELTO** — Double Submit Cookie pattern (`middleware/csrf.ts`), generación en login, validación en mutaciones, frontend envía `X-CSRF-Token`
 6. **Componentes sin memoization** — Renders innecesarios
 7. **Zod version mismatch** — Frontend 4.3.6 vs Backend 3.22.4
 
 ### 🟢 MEDIANO (Q4 2026)
 
-8. **Sin virtual scrolling** — Listas >1000 items lentas
-9. **Bundle oversized** — 600 KB → 400 KB
-10. **Sin Swagger/OpenAPI** — API documentation
+8. ~~**Sin virtual scrolling**~~ ✅ **RESUELTO** — Patient search limita DOM a 100 items + CSS `content-visibility: auto` para rendering eficiente
+9. ~~**Bundle oversized**~~ 🔧 **OPTIMIZADO** — `manualChunks` refinado: cornerstone+dicom-loader separados, socket.io chunk propio, `chunkSizeWarningLimit` configurado
+10. ~~**Sin Swagger/OpenAPI**~~ ✅ **RESUELTO** — `swagger-jsdoc` + `swagger-ui-express` en `/api/docs` con schemas OpenAPI 3.0 para Auth y Patients
 11. **Socket.io sin throttling** — Potencial saturación
 
 ### Ideas futuras
