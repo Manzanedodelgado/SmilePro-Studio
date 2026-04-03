@@ -1,15 +1,24 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# SmilePro Studio · Docker Compose (Clean)
+# Creado: 2026-04-03 — Reemplaza el compose anterior con referencias rotas
+#
+# Volúmenes preservados: docker_pgdata, smilepro_uploads, orthanc-data
+# Deploy: docker compose up -d
+# ═══════════════════════════════════════════════════════════════════════════════
+
 services:
 
-  # ── PostgreSQL 16 (Consolidado: smilestudio + chatwoot + evolution + n8n) ──
-  db:
+  # ── PostgreSQL 16 ──────────────────────────────────────────────────────────
+  postgres:
     image: pgvector/pgvector:pg16
+    container_name: smilepro-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: smilestudio
-      POSTGRES_PASSWORD: '751ec9815be7bbc02e027c3e1bbe2078'
-      POSTGRES_DB: smilestudio
+      POSTGRES_USER: ${POSTGRES_USER:-smilestudio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smilepro2026!}
+      POSTGRES_DB: ${POSTGRES_DB:-smilestudio}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - smilepro_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U smilestudio -d smilestudio"]
       interval: 10s
@@ -19,9 +28,10 @@ services:
     networks:
       - smilepro
 
-  # ── Redis 7 (Consolidado: backend/0, chatwoot/1, evolution/2, n8n/3) ──
+  # ── Redis 7 ────────────────────────────────────────────────────────────────
   redis:
     image: redis:7
+    container_name: smilepro-redis
     restart: unless-stopped
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass smilepro2026redis
     volumes:
@@ -34,12 +44,13 @@ services:
     networks:
       - smilepro
 
-  # ── Backend Node.js ──
+  # ── Backend Node.js ────────────────────────────────────────────────────────
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
       target: production
+    container_name: smilepro-backend
     restart: unless-stopped
     image: smilepro-studio-backend:local
     pull_policy: never
@@ -47,7 +58,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: "3000"
-      DATABASE_URL: postgresql://smilestudio:751ec9815be7bbc02e027c3e1bbe2078@db:5432/smilestudio?schema=public
+      DATABASE_URL: postgresql://smilestudio:751ec9815be7bbc02e027c3e1bbe2078@postgres:5432/smilestudio?schema=public
       CORS_ORIGIN: https://gestion.rubiogarciadental.com
       REDIS_URL: redis://default:smilepro2026redis@redis:6379/0
     volumes:
@@ -55,7 +66,7 @@ services:
       - ia-data:/app/data
       - backend-logs:/app/logs
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -68,15 +79,20 @@ services:
     command: >-
       sh -c "for f in prisma/migrations/*.sql; do npx prisma db execute --file $$f --schema prisma/schema.prisma 2>/dev/null || true; done && dumb-init node dist/server.js"
     labels:
-      - traefik.enable=false
+      - traefik.enable=true
+      - traefik.http.routers.backend.rule=Host(`gestion.rubiogarciadental.com`) && PathPrefix(`/api`)
+      - traefik.http.routers.backend.entrypoints=websecure
+      - traefik.http.routers.backend.tls.certresolver=le
+      - traefik.http.services.backend.loadbalancer.server.port=3000
     networks:
       - smilepro
 
-  # ── Frontend Nginx + React ──
+  # ── Frontend Nginx + React ─────────────────────────────────────────────────
   frontend:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: smilepro-frontend
     restart: unless-stopped
     image: smilepro-studio-frontend:local
     pull_policy: never
@@ -94,9 +110,10 @@ services:
     networks:
       - smilepro
 
-  # ── Evolution API (WhatsApp) ──
+  # ── Evolution API (WhatsApp) ───────────────────────────────────────────────
   evolution-api:
     image: evoapicloud/evolution-api:v2.3.7
+    container_name: smilepro-evolution
     restart: unless-stopped
     environment:
       SERVER_TYPE: http
@@ -104,7 +121,7 @@ services:
       SERVER_URL: https://smileprostudio-evolution-api.9idlgv.easypanel.host
       AUTHENTICATION_API_KEY: 429683C4C977415CAAFCCE10F7D57E11
       AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "false"
-      DATABASE_CONNECTION_URI: postgres://smilestudio:751ec9815be7bbc02e027c3e1bbe2078@db:5432/evolution_api
+      DATABASE_CONNECTION_URI: postgres://smilestudio:751ec9815be7bbc02e027c3e1bbe2078@postgres:5432/evolution_api
       DATABASE_PROVIDER: postgresql
       DATABASE_CONNECTION_CLIENT_NAME: evolution_api
       CACHE_REDIS_ENABLED: "true"
@@ -116,7 +133,7 @@ services:
       CHATWOOT_BOT_CONTACT: "true"
       CHATWOOT_MESSAGE_DELETE: "true"
       CHATWOOT_MESSAGE_READ: "true"
-      CHATWOOT_IMPORT_DATABASE_CONNECTION_URI: postgres://smilestudio:751ec9815be7bbc02e027c3e1bbe2078@db:5432/chatwoot?sslmode=disable
+      CHATWOOT_IMPORT_DATABASE_CONNECTION_URI: postgres://smilestudio:751ec9815be7bbc02e027c3e1bbe2078@postgres:5432/chatwoot?sslmode=disable
       CHATWOOT_IMPORT_PLACEHOLDER_MEDIA_MESSAGE: "true"
       WEBHOOK_GLOBAL_ENABLED: "true"
       WEBHOOK_GLOBAL_URL: http://backend:3000/api/communication/webhook/evolution
@@ -148,7 +165,7 @@ services:
       - evolution-instances:/evolution/instances
       - evolution-store:/evolution/store
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -161,15 +178,16 @@ services:
     networks:
       - smilepro
 
-  # ── Chatwoot (Rails) ──
+  # ── Chatwoot ───────────────────────────────────────────────────────────────
   chatwoot:
     image: chatwoot/chatwoot:v4.11.0
+    container_name: smilepro-chatwoot
     restart: unless-stopped
     environment:
       RAILS_ENV: production
       SECRET_KEY_BASE: 106c7ef711cd5371477750de6a2c1443
       FRONTEND_URL: https://smileprostudio-chatwoot.9idlgv.easypanel.host
-      POSTGRES_HOST: db
+      POSTGRES_HOST: postgres
       POSTGRES_USERNAME: smilestudio
       POSTGRES_PASSWORD: '751ec9815be7bbc02e027c3e1bbe2078'
       POSTGRES_DATABASE: chatwoot
@@ -178,7 +196,7 @@ services:
       REDIS_OPENSSL_VERIFY_MODE: none
     command: bundle exec rails s -p 3000 -b 0.0.0.0
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -191,15 +209,16 @@ services:
     networks:
       - smilepro
 
-  # ── Chatwoot Sidekiq (Workers) ──
+  # ── Chatwoot Sidekiq ───────────────────────────────────────────────────────
   chatwoot-sidekiq:
     image: chatwoot/chatwoot:v4.11.0
+    container_name: smilepro-chatwoot-sidekiq
     restart: unless-stopped
     environment:
       RAILS_ENV: production
       SECRET_KEY_BASE: 106c7ef711cd5371477750de6a2c1443
       FRONTEND_URL: https://smileprostudio-chatwoot.9idlgv.easypanel.host
-      POSTGRES_HOST: db
+      POSTGRES_HOST: postgres
       POSTGRES_USERNAME: smilestudio
       POSTGRES_PASSWORD: '751ec9815be7bbc02e027c3e1bbe2078'
       POSTGRES_DATABASE: chatwoot
@@ -208,20 +227,21 @@ services:
       REDIS_OPENSSL_VERIFY_MODE: none
     command: bundle exec sidekiq -C config/sidekiq.yml
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     networks:
       - smilepro
 
-  # ── n8n (Workflows) ──
+  # ── n8n ────────────────────────────────────────────────────────────────────
   n8n:
     image: n8nio/n8n:1.123.21
+    container_name: smilepro-n8n
     restart: unless-stopped
     environment:
       DB_TYPE: postgresdb
-      DB_POSTGRESDB_HOST: db
+      DB_POSTGRESDB_HOST: postgres
       DB_POSTGRESDB_PORT: "5432"
       DB_POSTGRESDB_DATABASE: n8n
       DB_POSTGRESDB_USER: smilestudio
@@ -231,14 +251,15 @@ services:
     volumes:
       - n8n-data:/home/node/.n8n
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
     networks:
       - smilepro
 
-  # ── Traefik (Reverse Proxy + SSL) ──
+  # ── Traefik ────────────────────────────────────────────────────────────────
   traefik:
     image: traefik:3.6.7
+    container_name: smilepro-traefik
     restart: unless-stopped
     command:
       - --providers.docker=true
@@ -258,9 +279,10 @@ services:
     networks:
       - smilepro
 
-  # ── Orthanc (DICOM) ──
+  # ── Orthanc (DICOM) ────────────────────────────────────────────────────────
   orthanc:
     image: orthancteam/orthanc:latest
+    container_name: smilepro-orthanc
     restart: unless-stopped
     volumes:
       - orthanc-data:/var/lib/orthanc/db
@@ -276,12 +298,13 @@ services:
     networks:
       - smilepro
 
-  # ── Backups automáticos ──
+  # ── Backups automáticos ────────────────────────────────────────────────────
   pgbackup:
     image: prodrigestivill/postgres-backup-local
+    container_name: smilepro-pgbackup
     restart: unless-stopped
     environment:
-      POSTGRES_HOST: db
+      POSTGRES_HOST: postgres
       POSTGRES_DB: smilestudio,chatwoot,evolution_api,n8n
       POSTGRES_USER: smilestudio
       POSTGRES_PASSWORD: '751ec9815be7bbc02e027c3e1bbe2078'
@@ -292,14 +315,15 @@ services:
     volumes:
       - ./backups:/backups
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
     networks:
       - smilepro
 
-  # ── Uptime Kuma (Monitoring Dashboard) ──
+  # ── Uptime Kuma ────────────────────────────────────────────────────────────
   uptime-kuma:
     image: louislam/uptime-kuma:1
+    container_name: smilepro-uptime-kuma
     restart: unless-stopped
     volumes:
       - uptime-kuma-data:/app/data
@@ -312,17 +336,29 @@ networks:
   smilepro:
     driver: bridge
 
+# ═════════════════════════════════════════════════════════════════════════════
+# VOLÚMENES — Clonados limpios sin referencias a containers fantasma
+# ═════════════════════════════════════════════════════════════════════════════
 volumes:
-  pgdata:
+  smilepro_pgdata:
     external: true
-    name: docker_pgdata
+    name: smilepro_pgdata
   redis-data:
   uploads:
+    external: true
+    name: sp_uploads
   ia-data:
+    external: true
+    name: sp_ia_data
   orthanc-data:
+    external: true
+    name: sp_orthanc
   evolution-instances:
   evolution-store:
   n8n-data:
   letsencrypt:
   backend-logs:
+    external: true
+    name: sp_logs
   uptime-kuma-data:
+
