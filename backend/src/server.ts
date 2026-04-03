@@ -14,6 +14,9 @@ import { startAutomationEngine } from './modules/ai/automation.engine.js';
 import { getRedis, closeRedis } from './config/redis.js';
 import { csrfProtection } from './middleware/csrf.js';
 
+// ─── Initialization ─────────────────────────────────────
+import { ensureDefaultUsersExist } from './lib/seed-users.js';
+
 // ─── Module Routes ──────────────────────────────────────
 import authRoutes from "./modules/auth/auth.routes";
 import { authenticate } from "./middleware/auth.js";
@@ -24,7 +27,8 @@ import treatmentsRoutes from './modules/treatments/treatments.routes';
 import clinicalRoutes from './modules/clinical/clinical.routes';
 import questionnairesRoutes from './modules/clinical/questionnaires.routes';
 import accountingRoutes from './modules/accounting/accounting.routes';
-import communicationRoutes from './modules/communication/communication.routes';
+// Lazy-load communication to avoid circular dependency with socket.io
+let communicationRoutes: any = null;
 import aiRoutes from './modules/ai/ai.routes';
 import imagingRoutes from './modules/imaging/imaging.routes';
 import adminRoutes from './modules/admin/admin.routes';
@@ -107,7 +111,13 @@ app.use('/api/treatments', treatmentsRoutes);
 app.use('/api/clinical/questionnaires', questionnairesRoutes);
 app.use("/api/clinical", authenticate, clinicalRoutes);
 app.use('/api/accounting', accountingRoutes);
-app.use('/api/communication', communicationRoutes);
+// Communication routes will be registered after Socket.io init to avoid circular dependencies
+app.use('/api/communication', (req, res, next) => {
+    if (!communicationRoutes) {
+        return res.status(503).json({ success: false, error: { message: 'Communication service not ready' } });
+    }
+    communicationRoutes(req, res, next);
+});
 app.use('/api/ai', aiRoutes);
 app.use('/api/imaging', imagingRoutes);
 app.use('/api/admin', adminRoutes);
@@ -142,7 +152,28 @@ app.use(errorHandler);
 httpServer.listen(config.PORT, () => {
     logger.info(`🦷 Smile Pro 2026 API running on port ${config.PORT} [${config.NODE_ENV}]`);
     getRedis(); // Initialize Redis connection (JWT blacklist, cache)
-    startAutomationEngine();
+    
+    // Lazy load communication routes after Socket.io to avoid circular dependency
+    setImmediate(async () => {
+        try {
+            // Initialize default users if they don't exist
+            await ensureDefaultUsersExist();
+            
+            // Load communication routes
+            const { default: commRoutes } = await import('./modules/communication/communication.routes.js');
+            const { setEmitWA } = await import('./modules/communication/communication.controller.js');
+            const { emitWA } = await import('./config/socket.js');
+            
+            communicationRoutes = commRoutes;
+            setEmitWA(emitWA);
+            logger.info('[CommunicationService] Loaded with Socket.io integration');
+            
+            // Load automation engine
+            startAutomationEngine();
+        } catch (err: any) {
+            logger.error('[Initialization] Failed to load services:', err.message);
+        }
+    });
 });
 
 // ─── Graceful Shutdown ──────────────────────────────────
